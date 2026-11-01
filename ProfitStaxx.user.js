@@ -953,7 +953,7 @@
   function marketAssist(){
     if(!/\/page\.php$/i.test(location.pathname)||!location.search.includes('sid=ItemMarket'))return;
     let p;try{p=JSON.parse(sessionStorage.getItem('profitstaxx-market-intent-v1')||'null');}catch(_){return;}
-    const correctItem=()=>{const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\\d+)(?:&|$)/);return match&&Number(match[1])===p.id;};
+    const correctItem=()=>{const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\d+)(?:&|$)/);return match&&Number(match[1])===p.id;};
     if(!p||!Number.isInteger(p.id)||!Number.isInteger(p.qty)||p.qty<1||p.qty>1000000||now()-p.at>600000||!correctItem())return;
     const box=document.createElement('div');box.id='ps-market-assist';box.style.cssText='position:fixed;z-index:2147483639;right:12px;bottom:12px;max-width:310px;background:#08192d;color:#e8f7ff;border:1px solid #54d7fa;border-radius:12px;padding:12px;font:13px system-ui;box-shadow:0 5px 28px #000a';
     const title=document.createElement('b');title.textContent='ProfitStaxx · '+p.name+' × '+p.qty;
