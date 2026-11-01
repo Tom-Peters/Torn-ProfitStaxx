@@ -612,7 +612,7 @@
     } catch(e){console.warn('[ProfitStaxx] Native storage unavailable; falling back');}
     state.storage='browser';
     const data={};
-    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','dailyReviews']){
+    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','dailyReviews','inventoryOwned','inventoryAt']){
       try{data[key]=JSON.parse(localStorage.getItem(KEY_PREFIX+key)||'null');}catch(e){data[key]=null;}
     }
     return data;
