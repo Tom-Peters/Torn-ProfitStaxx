@@ -1,5 +1,14 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-01 — automatic foreground intelligence (standard 2026.11.01.4)
+
+- **ProfitStaxx 1.16.0:** Recorded open item positions join watched-item scans automatically; quick refresh preferentially checks aged owned-item quotes. Local-only timestamps retain automatic API-check backoff across navigation, and the fast-scan interval is eight minutes.
+- **Company Helper 1.16.0:** All visible TornPDA pages can trigger a bounded read-only company refresh every 15 minutes. Official Torn continuation links allow incremental automatic training-news and incoming-money history imports (at most one extra page per eligible refresh). Invalid/missing cursors halt safe backfill, preserving manual review and de-duplication.
+- **Happy Jump preview 0.25.0:** Verifies owned Torn points automatically with `user/money` during supported full and light updates; settings retain a fallback only when data is missing or stale. Current overdose, real training logs and stat snapshots continue to sync without manual acknowledgement.
+- All changes are read-only, permission-gated and foreground-only. No market buy, gym train, company wage/order, item use or employee payment action is submitted. No API keys or personal account data are published.
+- Release requires ordinary CI and Happy Jump preview/snapshot parity; visual TornPDA device behaviour remains a separate acceptance check.
+
+
 - 2026-11-01 — **ProfitStaxx 1.7.0** adds public Torn stock quotes, stock-benefit block cost and limited-access owned-share / claim-ready dividend information; fixed cash dividend annualisation; 12-category realised-income tracking in TornPDA native storage with JSON backups; and user-led Torn revenue links. No stock transaction is automated.
 - **Company Helper 1.9.1** adds distinct-day estimated profit history, three-observation loss warnings and a direct ProfitStaxx income handoff (without pretending operating models are realised payouts).
 - **Happy Jump preview 0.18.1** adds the cost-of-training-versus-preserved-capital decision card; v0.18.1 immutable snapshot retained beside the permanent preview URL. Stable installer unchanged.
