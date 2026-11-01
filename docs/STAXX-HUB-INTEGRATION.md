@@ -1,4 +1,4 @@
-# StaxxHub 2.1 integration
+# StaxxHub 2.2 integration
 
 Author: IamEEKY. Read-only visual launcher for Torn PDA. The canonical implementation lives in `shared/staxx-hub.js` and is bundled directly into each participating userscript. No remote `@require` dependency is needed.
 
@@ -92,6 +92,32 @@ The Reorder control exposes touch-friendly Up/Down arrows and saves preferred or
 To add a new Torn repository to the suite: copy the standard `AGENTS.md`, bundle the **canonical** `shared/staxx-hub.js`, register events, then add the active entry to `suite/manifest.json` in Torn-ProfitStaxx. The shared cross-repository GitHub Actions workflow reads that manifest and detects out-of-sync code daily and on relevant pushes.
 
 **Shared source of truth:** `docs/TORN-SUITE-STANDARD.md` and `docs/TORN-SUITE-CHANGELOG.md` in Torn-ProfitStaxx. These are instructions for future work, not a remote auto-update mechanism for already-installed scripts.
+
+
+## Actionable individual alerts (v2.2)
+
+Tool notifications can now include individual alert descriptors. Use stable, non-sensitive identifiers and a concise next action, not a full imported record:
+
+```js
+document.dispatchEvent(new CustomEvent('staxx:notice', {detail:{
+  id:'profit', count:1, level:'warning',
+  summary:'1 market opportunity needs review',
+  alerts:[{id:'deal-123',title:'Review buying 100 medical items',detail:'Live price must be checked before buying'}]
+}}));
+```
+
+The Hub renders one button per alert. Clicking it sends `staxx:open` with `{id:'profit',alertId:'deal-123'}` and closes the sidebar. Every participating tool must open its **Alerts** view, focus the matching element and show a clear action path. If the tool has to navigate to its native Torn route first (Company Helper), carry the `alertId` in session storage and consume it once on arrival. Generic tool buttons still open normally with no alert id. Older notifications without `alerts` still show basic text.
+
+Individual alerts are cached only as brief labels/descriptions, and cannot encode arbitrary URLs or scripts in their IDs. The hub does not itself click, purchase, train or make Torn API calls.
+
+### User-led Torn navigation and form preparation
+- Tool-level action cards should offer **one primary next-step button** and show why it matters.
+- Prefer verified Torn routes. ProfitStaxx uses `/page.php?sid=ItemMarket#/market/view=search&itemID=<id>`.
+- When the user explicitly taps a purchase-preparation button, ProfitStaxx stages the item ID, proposed quantity, upper modeled unit price and age for up to ten minutes in same-origin `sessionStorage`.
+- On arrival, it must verify item ID and find **one** visible, enabled, clearly buy-related quantity field. Never override a user-changed field. If ambiguous, offer a copy-quantity fallback rather than guessing.
+- **No purchasing:** never click Buy, submit forms, select a seller, accept a trade or alter Torn gameplay state. User verifies current listing cost, available units and manually confirms the purchase.
+- Happy Jump links to Gym, Items and Points Building; Company Helper links to its specific internal decision views. Only navigate to verified pages.
+- Distinguish recommended, due, overdue and optional actions from observed data. Show saved-data freshness and protect all existing read-only API behaviour.
 
 ## Visual system
 
