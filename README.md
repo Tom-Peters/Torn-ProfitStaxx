@@ -36,6 +36,7 @@ You can also use a compatible browser userscript manager. TornPDA is the primary
 | Museum plushie / flower arbitrage | Yes |
 | Manually record pre-owned Museum items | Yes |
 | 10-point set calculations and points quotes | Yes |
+| Museum batch optimiser (1–25 sets, market depth-aware) | Yes |
 | Local trade ledger and weighted average cost | Yes |
 | Realised P&L and estimated open positions | Yes |
 | CSV ledger export and JSON backup/restore | Yes |
@@ -52,7 +53,7 @@ You can also use a compatible browser userscript manager. TornPDA is the primary
 - Suggested quantity is capped by listing quantity, available capital, per-item exposure and per-trade exposure.
 - Deals are filtered by minimum expected net ROI, minimum expected total profit, number of market offers and quote age.
 - Badge counts only opportunities from market quotes checked within the last eight minutes. A price may have changed before the player manually opens the market.
-- Museum economic profit counts the *market value of owned components* as an opportunity cost. "Cash to complete" separately deducts locally recorded owned components.
+- Museum supports batches of 1–25 complete sets. It consumes market listing quantities from cheapest to more expensive price tiers and rejects insufficient available depth. Economic profit counts the *market value of owned components* as an opportunity cost. "Cash to complete" separately deducts locally recorded owned components.
 - Ledger uses weighted-average purchase cost. It does not auto-detect purchases or sales; only entries you record are considered realised profit.
 - Points revenue is based on the **lowest currently listed asking price** for points, not a guaranteed execution price.
 - The scanner is deliberately rate limited to one item request every 2.5 seconds and uses a 3-minute default overall interval. Torn may cache Item Market prices for ~30 seconds.
