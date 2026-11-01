@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.01** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.01.1** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -14,7 +14,7 @@ This file is the single source of truth for *cross-script* behaviour, design and
 
 ## Non-negotiable rules
 - **Public attribution:** `IamEEKY` only in author credits, README examples, commit message authored metadata and docs. Keep real API keys, employee data and user-specific transactions OUT of GitHub. Existing repository URL namespaces are unchanged.
-- **Read-only Torn interactions:** No automated gameplay actions, no browser HTTP writes to Torn. User-driven script buttons may perform permitted **local** calculations, preference persistence and client navigation only.
+- **Read-only Torn interactions:** No automated gameplay actions, no browser HTTP writes to Torn. User-driven buttons may perform local calculations, preference persistence, client navigation and guarded preparation of visible form fields. Never submit a purchase, consume an item, train, approve a payment, transfer funds or trigger any other game-state change automatically. Never override a field the player has edited.
 - **Torn PDA first:** Single JavaScript userscripts with `@match` for `www.torn.com` and `torn.com`, and stable `@updateURL`/`@downloadURL` where available. Avoid external runtime dependencies, remote `@require` and assumptions about page layout.
 - **Data correctness:** Do not fabricate API data, countdowns, gains or historical numbers. Clearly differentiate factual snapshots, stale last-seen data, projections, estimates and currently due actions. Never delete user local data on a render failure.
 - **No regressions:** Keep existing functional pages, training ledgers, employee payment allocation, overdose handling, market analysis, key management and restore behaviour. Update narrow features without replacing the domain logic.
@@ -40,12 +40,21 @@ The Happy Jump **stable** installer remains deliberately pinned and must not be 
 
 ### Event contract
 - `staxx:register` and `staxx:ping`: discover tools and restore current availability.
-- `staxx:open`, `staxx:closeall`, `staxx:panel`: open one tool and report visibility accurately.
-- `staxx:notice`: `{id,count,level,summary,items,dueAt?}`; `dueAt` is UNIX epoch **milliseconds** and must come from a real due time, not a guessed estimate. Levels: info/warning/urgent.
+- `staxx:open`, `staxx:closeall`, `staxx:panel`: open one tool and report visibility accurately. A targeted alert uses `staxx:open` with `{id,alertId}` so the recipient opens its Alerts tab and focuses that exact issue. Preserve the alert destination across a same-origin page transition, e.g. Company Helper opening `/companies.php`.
+- `staxx:notice`: `{id,count,level,summary,items,dueAt?,alerts?:[{id,title,detail}]}`. Each alert id must be stable, tool-local, safe alphanumeric/hyphen and navigate to a matching in-tool action card. Older tools may omit `alerts`, retaining their existing generic open-tool behaviour. `dueAt` is optional; UNIX epoch **milliseconds**, from a real due time, not a guessed estimate. Levels: info/warning/urgent.
 - `staxx:summary`: `{id,headline,metrics:[{label,value}],updated}`; publish concise, verified figures. `updated` is source observation time in UNIX epoch milliseconds where available.
 - Notifications are **per tool**. Dismiss silences the current alert fingerprint until it changes; snooze supports 15m, 1h, 4h, 24h and custom 1–10080 minutes. Snoozes and tool order persist locally. Use local-only timers to refresh countdown labels and expire snoozes.
 - Seven-day overview trends use only stored real daily observations, with missing days clearly marked. ProfitStaxx: fresh qualifying deals; Company: star rating; Happy Jump: 24h projected stat gain (**forecast**, not realized stats). Never backfill fake history.
 - New tools must register an explicit id and provide their own handlers, data and alerts. Unknown scripts cannot be discovered simply from Torn PDA's installed script list.
+
+## Action-first navigation and decision hierarchy
+- Every active tool must expose an obvious **Alerts** control in its top navigation or header. A sidebar alert must open **the matching alert card**, not merely the tool homepage.
+- Separate **DO NOW / NEXT / OPTIONAL** as applicable, based on verified data. Each alert card states the concrete action, key quantity/threshold, source freshness, and one prominent next-step control.
+- Prefer one-click deep links to supported Torn pages (Item Market, Gym, Items, Points Building, Company). Do not guess URLs or claim a destination input was filled unless confirmed on device.
+- Where safe and useful, allow a user-initiated **prepare form** action. It may stage item ID and quantity in local session storage for a brief window and enter the quantity into a single clearly identified **buy quantity** field on the correct Torn item page. If no unambiguous field is found, show a copy/manual fallback. The player checks listing price/availability and presses Buy.
+- Market quote values are advisory snapshots, not guarantees. Do not select an arbitrary seller, exceed user quantity, prefill price, click Buy or bypass confirmation.
+- A tool-specific action can route to its own relevant section before offering a Torn game-page shortcut. Prefer manual final confirmation for all game-affecting operations.
+- Keep panel-focus, staged form data and alert identity minimal and short-lived. Never expose private data in public repos or cross-tool notifications.
 
 ## Required change process
 1. Read the CURRENT standard, suite changelog, integration guide, relevant repository `AGENTS.md` and source/test files.
