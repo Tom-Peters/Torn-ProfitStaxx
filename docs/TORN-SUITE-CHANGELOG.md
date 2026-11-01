@@ -1,5 +1,11 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-01 — Company Helper 1.20.0 paid-training alert eligibility (standard 2026.11.01.6)
+
+- Company Helper no longer raises a paid-train alert just because employees have outstanding confirmed purchases. An alert now requires a verified nonzero available train bank and at least one oldest-first allocation to an eligible employee.
+- Training debt remains visible in the ledger when availability is zero, unknown or not allocatable. Company badge, Alerts view and StaxxHub action feeds use the same actionable queue. Independent train-storage risk and pending-payment alerts are preserved.
+- No changes to the shared Hub implementation or other userscripts; no automated company training or gameplay writes.
+
 ## 2026-11-01 — touch-safe StaxxHub v2.7 (standard 2026.11.01.5)
 
 - Removed inline native-page Next Action cards on touch and narrow layouts, including TornPDA desktop-scaled mobile pages. Existing tool actions remain accessible through the shared S drawer, which does not interrupt gym controls.
