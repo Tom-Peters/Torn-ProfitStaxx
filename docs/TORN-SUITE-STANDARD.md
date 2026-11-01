@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.01.1** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.01.2** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -65,6 +65,15 @@ The Happy Jump **stable** installer remains deliberately pinned and must not be 
 6. Run every affected repository's CI and the cross-repo hub sync workflow. Fix failures; don't claim device runtime is tested if only CI was run.
 7. Document meaningful cross-tool changes in the suite changelog. Keep stable raw GitHub installer URLs.
 8. If a feature needs game-state writes, external services, sensitive data or new API scopes, stop and seek explicit authorization.
+
+## Mandatory next-action experience (StaxxHub 2.3)
+
+- Every active tool publishes `staxx:actions` with up to 12 clear, ranked, meaningful tasks whenever verified data changes.
+- Cross-tool queue shows six highest priority actions, sorted **urgent → now → soon → review → optional**, then actual due timestamp and bounded confidence/priority.
+- An action has a stable ID, plain-language imperative, quantitative context when available, data freshness or uncertainty note, and an actual one-tap route to its corresponding tool Alerts card. Do not render dead links.
+- Never confuse a forecast, asking price, investment upside or stale observation with an actual completed game action or executable order.
+- If no reliable data exists, the correct primary action is Refresh or Recheck, not speculative advice.
+- All business/game mutations remain user-confirmed inside Torn. A user-initiated DOM quantity prefill is allowed only after unambiguous verification of item, route and input; no auto-click or automatic purchase.
 
 ## Current active version mapping
 The exact versions change independently:
