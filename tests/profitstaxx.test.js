@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -278,4 +278,33 @@ test('deal risk flags derive from observed history and ask competition, not fict
  assert.ok(r.flags.some(x=>x.includes('Crowded')));
  assert.ok(r.flags.some(x=>x.includes('Thin')));
  assert.equal(r.level,'High');
+});
+
+test('daily top-five queue stays within time and protected cash and never counts review as realised income',()=>{
+  const {state,dailyPlanV111}=harness();
+  state.settings.capital=100000000;
+  state.settings.reservePct=50;
+  state.settings.dailyReviewMinutes=5;
+  state.settings.bankPrincipal=10000000;
+  state.settings.bankApr=6;
+  state.settings.rentalAssetValue=20000000;
+  state.settings.rentalNetWeekly=100000;
+  const p=dailyPlanV111();
+  assert.ok(p.items.length<=5);
+  assert.ok(p.committed<=p.spendable+1e-6);
+  assert.ok(p.activeMinutes<=5);
+  assert.ok(p.items.some(x=>x.category==='passive'));
+  if(p.items.length){state.dailyReviews[p.day]={[p.items[0].id]:true};}
+  const after=dailyPlanV111();
+  assert.equal(after.items[0].reviewed,true);
+  assert.equal(state.income.length,0,'review tracking must not fabricate completed income');
+});
+test('ProfitStaxx diagnostics are non-sensitive and report statuses, not stored keys',()=>{
+  const {state,safeProfitDiagnosticsV111}=harness();
+  state.settings.key='TEST-SECRET-VALUE';
+  const report=safeProfitDiagnosticsV111();
+  assert.ok(report.tool==='ProfitStaxx');
+  assert.ok('lastFullScanMinutes' in report);
+  assert.ok(!JSON.stringify(report).includes('TEST-SECRET-VALUE'));
+  assert.ok(!('settings' in report));
 });
