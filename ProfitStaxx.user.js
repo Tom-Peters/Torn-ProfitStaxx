@@ -925,9 +925,15 @@
       travelState.rows=rows;travelState.at=now();
       // Scan only a capped, diverse set of fresh shelf candidates: item-market reads remain rate-limited.
       if(apiKey()){
-        const ids=[...new Set(rows.filter(x=>x.quantity>0&&x.observed>now()-30*60000)
-          .sort((a,b)=>b.quantity-a.quantity||b.reporters-a.reporters).map(x=>x.id))].slice(0,16);
         await loadCatalog();
+        const catalogById=new Map(Object.values(state.catalog).map(x=>[x.id,x]));
+        // Catalog market values only prioritise which item gets a fresh Torn quote.
+        // They are NEVER used in displayed profit, opportunity rankings or allocation.
+        const cap=clamp(Math.floor(number(state.settings.travelCapacity)||10),1,200);
+        const candidates=rows.filter(x=>x.quantity>0&&x.observed>now()-30*60000)
+          .map(x=>({...x,roughProfit:Math.max(0,number(catalogById.get(x.id)?.value)*.95-x.cost)*Math.min(x.quantity,cap)}))
+          .sort((a,b)=>b.roughProfit-a.roughProfit||b.reporters-a.reporters||b.quantity-a.quantity);
+        const ids=[...new Set(candidates.map(x=>x.id))].slice(0,16);
         let index=0;
         for(const id of ids){
           if(document.hidden)break;
@@ -949,7 +955,7 @@
   function renderTravel(){
     const rows=travelRows(),fresh=rows.filter(x=>x.valid),priced=rows.filter(x=>x.net!==null).length;
     let h='<div class="card"><h3>Foreign-shop profit scanner</h3>'+
-      '<p class="muted">Optional third-party public observation data from Torn Tracker, used only when you press Scan abroad. No API key, identity or stored trading record is sent. Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
+      '<p class="muted">Optional third-party public observation data from Torn Tracker, used only when you press Scan abroad. No API key, identity or stored trading record is sent. Data by torn-tracker.com contributors (CC BY 4.0). Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
       '<form id="ps_travelsettings"><div class="duo">'+field('travelCapacity','Carry capacity (items)',state.settings.travelCapacity||10)+
       field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+'</div>'+
       '<div class="field"><label>Round-trip minutes by destination (country=minutes; include shop time)</label>'+
