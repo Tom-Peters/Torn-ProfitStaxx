@@ -1,5 +1,10 @@
 # Torn Staxx Suite — Shared Change Log
 
+- 2026-11-01 — **ProfitStaxx 1.7.0** adds public Torn stock quotes, stock-benefit block cost and limited-access owned-share / claim-ready dividend information; fixed cash dividend annualisation; 12-category realised-income tracking in TornPDA native storage with JSON backups; and user-led Torn revenue links. No stock transaction is automated.
+- **Company Helper 1.9.1** adds distinct-day estimated profit history, three-observation loss warnings and a direct ProfitStaxx income handoff (without pretending operating models are realised payouts).
+- **Happy Jump preview 0.18.1** adds the cost-of-training-versus-preserved-capital decision card; v0.18.1 immutable snapshot retained beside the permanent preview URL. Stable installer unchanged.
+- **Shared StaxxHub 2.4** stock-market context and updated ProfitStaxx labels are now identical in all three active bundles and canonical source.
+
 All shared changes are documented here. This log is **not** a feed of user-specific Torn data.
 
 ## 2026-11-01 — StaxxHub 2.4 / decision intelligence across Torn
