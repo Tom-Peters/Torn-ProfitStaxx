@@ -6,6 +6,7 @@ on:
       - 'shared/staxx-hub.js'
       - 'ProfitStaxx.user.js'
       - 'scripts/check-suite-sync.mjs'
+      - 'suite/manifest.json'
       - '.github/workflows/staxx-suite-sync.yml'
   workflow_dispatch:
   schedule:
