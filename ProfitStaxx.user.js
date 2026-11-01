@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.10.0
+// @version      1.11.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -476,7 +476,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.10.0';
+  const VERSION = '1.11.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -492,10 +492,10 @@
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'scan',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},
-    travelCapacity:10,travelMinProfit:100000,travelMinutes:''};
+    travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,
-    tab:'scan',rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
+    tab:'scan',dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
   let lastRenderedTab=null;
@@ -512,7 +512,7 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','dailyReviews']);
         state.storage='TornPDA';
         return data||{};
       }
@@ -528,7 +528,7 @@
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
       trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan,
       travelRows:travelState.rows,travelAt:travelState.at,
-      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt};
+      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,dailyReviews:state.dailyReviews};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
         await PDA_storage.setMany(data);
@@ -1095,6 +1095,57 @@
         route:'rent',summary:'User-entered property figures · vacancies not modelled'});
     return entries.sort((a,b)=>b.score-a.score||b.net-a.net);
   }
+
+  // Daily review queue: choose distinct, priced opportunities and never treat proposals as completed earnings.
+  function dailyPlanV111(){
+    const day=new Date().toISOString().slice(0,10),settings=state.settings,
+      budget=Math.max(1,number(settings.dailyReviewMinutes)||15),
+      spendable=Math.max(0,number(settings.capital)*(1-number(settings.reservePct)/100)-openCost()),
+      candidates=incomeCandidates().filter(x=>x&&x.net>0&&x.cost>0&&x.score>=20);
+    const categories=new Map(),items=[];let activeMinutes=0,committed=0;
+    // First pass: diversity across sources, second pass: best remaining cash/time fit.
+    const sorted=candidates.sort((a,b)=>(b.score+(b.category==='active'?8:0))-(a.score+(a.category==='active'?8:0))||b.net-a.net);
+    const picked=new Set();
+    for(const diverse of [true,false]){
+      for(const x of sorted){
+        if(items.length>=5)break;
+        if(picked.has(x.id)||diverse&&(categories.get(x.kind)||0)>=1)continue;
+        const minutes=x.minutes>0?x.minutes:0;
+        if(minutes&&activeMinutes+minutes>budget)continue;
+        // Principal of manually-entered property/bank scenarios need not belong to trading funds.
+        const liquid=x.kind!=='bank'&&x.kind!=='rent';
+        if(liquid&&committed+x.cost>spendable)continue;
+        const selected={...x,kind:x.kind,needsCash:liquid,reviewed:!!state.dailyReviews?.[day]?.[x.id]};
+        items.push(selected);picked.add(x.id);
+        categories.set(x.kind,(categories.get(x.kind)||0)+1);
+        activeMinutes+=minutes;
+        if(liquid)committed+=x.cost;
+      }
+    }
+    return {day,budget,spendable,activeMinutes,committed,items,observedAt:state.lastScan};
+  }
+  function renderDailyPlanV111(){
+    const plan=dailyPlanV111(),done=plan.items.filter(x=>x.reviewed).length;
+    let html='<div class="card" id="ps-alert-daily-plan"><h3>Today · five profit decisions</h3>'+
+      '<p class="muted">A short, risk-aware review queue across priced income sources. Scores are heuristics. Passive options show a 30-day cashflow equivalent, whereas item flips and travel are one-off opportunities; they cannot be summed as a daily income forecast.</p>'+
+      '<form id="ps_daily_limits"><div class="duo">'+field('dailyReviewMinutes','Time available today (min)',plan.budget)+
+      field('dailyReviewCap','Maximum reviewed opportunities',5,'number','disabled')+'</div><button class="btn secondary" type="submit">Save time budget</button></form>'+
+      '<div class="statrow"><div class="stat"><small>Reviewed today</small><b>'+done+'/'+plan.items.length+'</b></div>'+
+      '<div class="stat"><small>Modelled active time</small><b>'+plan.activeMinutes+' / '+plan.budget+' min</b></div></div>'+
+      '<p class="muted">Working cash model: '+fmt(plan.spendable)+' · selected short-list commitments '+fmt(plan.committed)+'. The model does not know your current Torn wallet or confirm buy/sell fills.</p></div>';
+    if(!plan.items.length)html+='<div class="empty">No supported candidates fit your time and protected cash. Refresh the separate Deals, Travel or Stocks data; never trade just to fill a quota.</div>';
+    for(const [i,x] of plan.items.entries()){
+      const mark=x.reviewed?'Reviewed (not bought)':'Mark reviewed';
+      html+='<div class="card"><div class="line"><h3>'+(i+1)+'. '+esc(x.label)+'</h3><span class="pill">'+x.score+'/100</span></div>'+
+        '<div class="line"><span>Cash exposure</span><b>'+fmt(x.cost)+'</b></div>'+
+        '<div class="line"><span>Indicative net · '+esc(x.period)+'</span><b class="positive">'+fmt(x.net)+'</b></div>'+
+        '<p class="muted">'+esc(x.summary)+' · '+(x.minutes?x.minutes+' active minutes estimated':'No active duration confirmed')+'</p>'+
+        '<div class="toolbar"><button class="btn" data-action="rank-open" data-rank-id="'+esc(x.id)+'">Review in Torn</button>'+
+        '<button class="btn secondary" data-daily-review="'+esc(x.id)+'">'+mark+'</button></div></div>';
+    }
+    return html+notice('Review status is stored locally per UTC date, and never treated as a completed transaction or receipt. Use Ledger or Income to record actual results.');
+  }
+
   function renderRankings(){
     const rows=incomeCandidates(),filter=state.rankFilter||'all',shown=rows.filter(x=>filter==='all'||x.category===filter);
     let h='<div class="card"><h3>One dashboard · best options to review</h3><p class="muted">A single ranked shortlist across active and passive income. Scores combine indicative ROI, payoff size, active time where known and source quality. They do not annualise a one-off trade or imply a chance of profit.</p>'+
@@ -1305,6 +1356,9 @@
   }
   function profitNextActions(){
     const fresh=activeDealAlerts(),exits=exitSignals(),actions=[];
+    const daily=dailyPlanV111();
+    if(daily.items.length)actions.push({id:'daily-plan',title:'Review '+daily.items.length+' best money-making options today',
+      detail:daily.items.filter(x=>!x.reviewed).length+' not yet reviewed · '+daily.activeMinutes+' modelled active minutes · manual checks only',status:'review',priority:76});
     if(dueDividends().length)actions.push({id:'stock-claim',title:'Collect available stock dividends',detail:dueDividends().map(x=>x.acronym).join(', ')+' · withdraw manually on Torn',status:'now',priority:95});
     for(const x of stockSignals().slice(0,4))actions.push({id:x.id,title:x.title,detail:x.why,status:'review',priority:x.priority});
     const stale=!state.lastScan||now()-state.lastScan>8*60000;
@@ -1542,11 +1596,11 @@
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
-    const tabs=['alerts','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings'];
-    const labels=['Alerts '+noticeCount,'Best','Deals','Travel','Stocks','Capital','Charts','Income','Museum','Ledger','Settings'];
+    const tabs=['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings'];
+    const labels=['Alerts '+noticeCount,'Today','Best','Deals','Travel','Stocks','Capital','Charts','Income','Museum','Ledger','Settings'];
     const active=state.tab;
     const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
-      active==='portfolio'?renderPortfolio():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():renderSettings();
+      active==='portfolio'?renderPortfolio():active==='daily'?renderDailyPlanV111():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():renderSettings();
     // Preserve the actual inner scroll container across progressive scans and any other renders.
     // TornPDA WebView otherwise snaps to the beginning when shell.innerHTML is replaced.
     const previousBody=shell.querySelector('.body'),previousTabs=shell.querySelector('.tabs');
@@ -1608,6 +1662,7 @@
         if(!Array.isArray(parsed.trades)||typeof parsed.settings!=='object')throw new Error('Not a valid ProfitStaxx backup.');
         if(!confirm('Replace your current local ledger and settings with this backup?'))return;
         if(Array.isArray(parsed.income))putMoney(parsed.income.filter(x=>x&&Number.isFinite(Number(x.net))&&Number(x.at)>0));
+        if(parsed.dailyReviews&&typeof parsed.dailyReviews==='object'&&!Array.isArray(parsed.dailyReviews))state.dailyReviews=parsed.dailyReviews;
          state.trades=parsed.trades.filter(t=>t&&Number.isInteger(Number(t.itemId))&&['buy','sell'].includes(t.side)&&Number(t.qty)>0&&Number(t.price)>0);
         state.settings=Object.assign({},DEFAULTS,parsed.settings,{key:state.settings.key});
         await persist();render();
@@ -1616,8 +1671,13 @@
     input.click();
   }
   function onClick(event){
-    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id],button[data-stock-clear],button[data-rank-filter],button[data-chart-days]');
+    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id],button[data-stock-clear],button[data-rank-filter],button[data-chart-days],button[data-daily-review]');
     if(!el)return;
+    if(el.dataset.dailyReview){const id=el.dataset.dailyReview,d=new Date().toISOString().slice(0,10);
+      const keys=Object.keys(state.dailyReviews||{}).filter(k=>k>=new Date(now()-8*86400000).toISOString().slice(0,10));
+      state.dailyReviews=Object.fromEntries(keys.map(k=>[k,state.dailyReviews[k]]));
+      const record=state.dailyReviews[d]||{};record[id]=!record[id];state.dailyReviews[d]=record;
+      persist();render();return;}
     if(el.dataset.chartDays){state.chartDays=[7,30,90].includes(Number(el.dataset.chartDays))?Number(el.dataset.chartDays):30;render();return;}
     if(el.dataset.rankFilter){state.rankFilter=['all','active','passive'].includes(el.dataset.rankFilter)?el.dataset.rankFilter:'all';render();return;}
     if(el.dataset.tab){state.tab=el.dataset.tab;render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
@@ -1668,7 +1728,7 @@
       case 'incomepage':{const row=incomeRoutes.find(x=>x[0]===el.dataset.source);if(row)location.assign('https://www.torn.com'+row[2]);break;}
       case 'export':exportFile('profitstaxx-trades.csv',exportCSV(),'text/csv;charset=utf-8');break;
       case 'backup':exportFile('profitstaxx-backup.json',JSON.stringify({
-        version:VERSION,trades:state.trades,income:moneyRecords(),settings:Object.assign({},state.settings,{key:''})},null,2),'application/json');break;
+        version:VERSION,trades:state.trades,income:moneyRecords(),dailyReviews:state.dailyReviews,settings:Object.assign({},state.settings,{key:''})},null,2),'application/json');break;
       case 'import':importBackup();break;
       case 'savekey':{
         const key=shell.querySelector('#ps_key').value.trim();
@@ -1694,6 +1754,10 @@
       const source=String(f.get('source'));if(!incomeRoutes.some(x=>x[0]===source))return;
       const records=moneyRecords();records.push({id:now()+'_'+Math.random().toString(36).slice(2,6),at:now(),source,net:a-b,minutes,note:String(f.get('note')||'').slice(0,100)});
       putMoney(records);render();
+    }else if(event.target.id==='ps_daily_limits'){
+      event.preventDefault();const f=new FormData(event.target),minutes=Number(f.get('dailyReviewMinutes'));
+      if(!Number.isFinite(minutes)||minutes<1||minutes>240){alert('Enter between 1 and 240 minutes.');return;}
+      state.settings.dailyReviewMinutes=minutes;persist();render();
     }else if(event.target.id==='ps_allocation'){
       event.preventDefault();const f=new FormData(event.target),keys=['allocMarket','allocTravel','allocStock','allocBank'];
       const inputs=keys.map(k=>Number(f.get(k)));
@@ -1747,7 +1811,7 @@
     root.appendChild(shell);
     render();
   }
-  document.addEventListener('staxx:open',e=>{if(e.detail?.id==='profit'){state.open=true;if(e.detail.alertId){state.tab=e.detail.alertId==='stock-claim'?'stocks':'alerts';state.alertFocus=e.detail.alertId==='stock-claim'?'':String(e.detail.alertId);}render();}else if(state.open){state.open=false;render();}});
+  document.addEventListener('staxx:open',e=>{if(e.detail?.id==='profit'){state.open=true;if(e.detail.alertId){state.tab=e.detail.alertId==='stock-claim'?'stocks':e.detail.alertId==='daily-plan'?'daily':'alerts';state.alertFocus=['stock-claim','daily-plan'].includes(e.detail.alertId)?'':String(e.detail.alertId);}render();}else if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:closeall',()=>{if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:ping',()=>document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit'}})));
   function marketAssist(){
@@ -1797,6 +1861,7 @@
        state.stockHistory=loaded.stockHistory&&typeof loaded.stockHistory==='object'&&!Array.isArray(loaded.stockHistory)?loaded.stockHistory:{};
        state.stockCache=Array.isArray(loaded.stockCache)?loaded.stockCache:[];
        state.stockCacheAt=number(loaded.stockCacheAt);
+       state.dailyReviews=loaded.dailyReviews&&typeof loaded.dailyReviews==='object'&&!Array.isArray(loaded.dailyReviews)?loaded.dailyReviews:{};
        stockState.all=state.stockCache;stockState.at=state.stockCacheAt;
        if(!state.income.length){try{const prev=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');if(Array.isArray(prev)&&prev.length){state.income=prev.slice(-1000);persist();}}catch(_){}}
       state.catalog=loaded.catalog||{};
