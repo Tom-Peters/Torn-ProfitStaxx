@@ -1,3 +1,11 @@
+## v1.17.0 — faster evidence-based foreground market autopilot
+
+- **Fresh quick-scan quotes stay eligible** for the ranked action queue even when the previous comprehensive scan is older than eight minutes. Each suggested deal still requires an independently observed quote less than eight minutes old.
+- **Open positions get priority:** when a recorded holding's asking-price observation is stale, the foreground scheduler prioritises a bounded quick scan before another lengthy full scan, subject to persistent throttling.
+- **Autopilot health panel:** watched-quote freshness, stale holdings and last full/quick attempts are visible without manual investigation.
+- **Portfolio estimates:** stale observed asking prices no longer masquerade as fresh estimated sell valuations. Trades are never placed automatically.
+- The userscript metadata and runtime display now both report v1.17.0. Existing install URL and shared StaxxHub remain unchanged.
+
 ## v1.16.0 — stronger foreground automation
 
 - Recorded **open trading positions automatically join the watched-item pool**, even when removed from a manual watchlist. The fast scan prioritises old quotes for recorded holdings before other watched items.
