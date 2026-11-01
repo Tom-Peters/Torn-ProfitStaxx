@@ -83,7 +83,7 @@
     document.documentElement.append(css, root);
 
     const entries = [
-      {id:"profit",label:"ProfitStaxx",icon:"PS",desc:"Markets · Museum · Ledger"},
+      {id:"profit",label:"ProfitStaxx",icon:"PS",desc:"Markets · Stocks · Income"},
       {id:"company",label:"Company Helper",icon:"CO",desc:"Staff · Training · Growth"},
       {id:"happy",label:"Happy Jump",icon:"HJ",desc:"Gym · Schedule · Recovery"}
     ];
@@ -239,6 +239,7 @@
       if(path==="/gym.php")return {id:"happy",name:"Gym"};
       if(path==="/companies.php")return {id:"company",name:"Company"};
       if(path==="/page.php"&&/\bsid=itemmarket\b/i.test(String(location.search||"")))return {id:"profit",name:"Item Market"};
+      if(path==="/page.php"&&/\bsid=stocks\b/i.test(String(location.search||"")))return {id:"profit",name:"Stock Market"};
       return null;
     }
     function contextEnabled(){return safeRead("staxx-hub-context-v1",true)!==false;}
@@ -877,6 +878,7 @@
   }
   function profitNextActions(){
     const fresh=activeDealAlerts(),exits=exitSignals(),actions=[];
+    if(dueDividends().length)actions.push({id:'stock-claim',title:'Collect available stock dividends',detail:dueDividends().map(x=>x.acronym).join(', ')+' · withdraw manually on Torn',status:'now',priority:95});
     const stale=!state.lastScan||now()-state.lastScan>8*60000;
     if(stale)actions.push({id:'refresh-scan',title:'Refresh market prices before trading',detail:'Quotes are missing or older than 8 minutes.',status:'now',priority:90});
     else for(const d of fresh.slice(0,3))actions.push({
@@ -964,7 +966,7 @@
   function renderAlerts(){
     const list=activeDealAlerts();
     const exits=exitSignals();
-    return '<div class="card" id="ps-alert-refresh-scan"><h3>What should I do next?</h3><p>'+esc(state.lastScan?'Last market scan '+age(state.lastScan):'No confirmed scan yet')+'. Check prices on Torn before deciding to trade.</p><button class="btn secondary" data-action="scan">↻ Refresh opportunities</button></div>'+
+    return (dueDividends().length?'<div class="card" id="ps-alert-stock-claim"><h3>Stock dividends ready</h3><p>'+dueDividends().map(x=>esc(x.acronym)).join(', ')+'</p><button class="btn" data-action="stockpage">Collect manually on Torn</button></div>':'')+'<div class="card" id="ps-alert-refresh-scan"><h3>What should I do next?</h3><p>'+esc(state.lastScan?'Last market scan '+age(state.lastScan):'No confirmed scan yet')+'. Check prices on Torn before deciding to trade.</p><button class="btn secondary" data-action="scan">↻ Refresh opportunities</button></div>'+
       (list.length?list.slice(0,30).map(x=>'<div class="card" id="ps-alert-deal-'+Number(x.id)+'"><h3>BUY · '+esc(x.name)+'</h3><p><b>Quantity:</b> up to '+Math.floor(x.qty)+' · <b>maximum:</b> '+fmt(x.buy)+'/unit.</p><p><b>Capital required:</b> '+fmt(x.buy*x.qty)+' · <b>Score:</b> '+Math.floor(x.score)+'/100</p><p class="positive">Potential profit '+fmt(x.profit)+' · '+pct(x.roi)+' estimated ROI after modelled fees</p><p class="muted">Buy only at or below the suggested cap. Re-check inventory, listings and prices.</p><button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Open market · prepare '+Math.floor(x.qty)+'</button></div>').join(''):'<div class="empty">No fresh qualifying buy opportunities — do not force a trade.</div>')+
       (exits.length?'<div class="card"><h3>Positions worth reviewing for sale</h3><p class="muted">Estimated from current asking prices, less a 5% market selling fee. Not an executable bid.</p></div>'+exits.slice(0,10).map(x=>'<div class="card" id="ps-alert-exit-'+Number(x.itemId)+'"><h3>SELL REVIEW · '+esc(x.name)+'</h3><p><b>Recorded holdings:</b> '+Math.floor(x.qty)+' · <b>breakeven ask:</b> '+fmt(x.breakeven)+'/unit</p><p class="positive">Indicative gain '+fmt(x.upside)+' · '+pct(x.roi)+' based on asking prices</p><button class="btn secondary" data-action="market-view" data-id="'+Number(x.itemId)+'">Inspect live market listings</button></div>').join(''):'');
   }
@@ -1082,15 +1084,16 @@
     if(!root)return;
     if(lastHubPanelState!==state.open){lastHubPanelState=state.open;
       document.dispatchEvent?.(new CustomEvent('staxx:panel',{detail:{id:'profit',open:state.open}}));}
-    const valid=activeDealAlerts();
-    if(badge){badge.textContent=valid.length?String(Math.min(99,valid.length)):'';badge.style.display=valid.length?'block':'none';}
-    document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:valid.length,level:valid.length?'warning':'info',summary:valid.length+' profitable opportunities above your threshold',items:valid.slice(0,3).map(d=>String(d.name||d.itemName||'Market opportunity')),alerts:valid.slice(0,30).map(d=>({id:'deal-'+Number(d.id),title:'Buy up to '+Math.floor(d.qty)+' '+String(d.name||'items'),detail:'Estimated profit '+fmt(d.profit)+' · max '+fmt(d.buy)+'/unit'}))}}));
+    const valid=activeDealAlerts(),claims=dueDividends(),noticeCount=valid.length+claims.length;
+    if(badge){badge.textContent=noticeCount?String(Math.min(99,noticeCount)):'';badge.style.display=noticeCount?'block':'none';}
+    document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:noticeCount,level:claims.length?'urgent':valid.length?'warning':'info',summary:claims.length+' dividends ready · '+valid.length+' market opportunities',items:claims.slice(0,2).map(x=>'Collect '+x.acronym+' dividend').concat(valid.slice(0,3).map(d=>String(d.name||d.itemName||'Market opportunity'))),alerts:[...claims.map(x=>({id:'stock-claim',title:'Claim '+x.acronym+' dividend',detail:'Ready for withdrawal in Torn Stock Exchange'})),...valid.slice(0,25).map(d=>({id:'deal-'+Number(d.id),title:'Buy up to '+Math.floor(d.qty)+' '+String(d.name||'items'),detail:'Estimated profit '+fmt(d.profit)+' · max '+fmt(d.buy)+'/unit'}))]}}));
     document.dispatchEvent?.(new CustomEvent('staxx:actions',{detail:{id:'profit',items:profitNextActions(),updated:state.lastScan||now()}}));
     const summaryPortfolio=portfolio();
     document.dispatchEvent?.(new CustomEvent('staxx:summary',{detail:{id:'profit',headline:state.lastScan?'Last scan '+age(state.lastScan):'Awaiting market scan',metrics:[
       {label:'Fresh deals',value:state.lastScan?String(valid.length):'Not scanned'},
       {label:'Recorded invested',value:human(summaryPortfolio.invested)},
-      {label:'Realised P/L',value:fmt(summaryPortfolio.realised)}
+      {label:'Realised P/L',value:fmt(summaryPortfolio.realised)},
+      {label:'30d other income',value:fmt(moneyRecords().filter(x=>x.at>=now()-30*86400000).reduce((n,x)=>n+Number(x.net||0),0))}
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
@@ -1127,7 +1130,8 @@
         const parsed=JSON.parse(await file.text());
         if(!Array.isArray(parsed.trades)||typeof parsed.settings!=='object')throw new Error('Not a valid ProfitStaxx backup.');
         if(!confirm('Replace your current local ledger and settings with this backup?'))return;
-        state.trades=parsed.trades.filter(t=>t&&Number.isInteger(Number(t.itemId))&&['buy','sell'].includes(t.side)&&Number(t.qty)>0&&Number(t.price)>0);
+        if(Array.isArray(parsed.income))putMoney(parsed.income.filter(x=>x&&Number.isFinite(Number(x.net))&&Number(x.at)>0));
+         state.trades=parsed.trades.filter(t=>t&&Number.isInteger(Number(t.itemId))&&['buy','sell'].includes(t.side)&&Number(t.qty)>0&&Number(t.price)>0);
         state.settings=Object.assign({},DEFAULTS,parsed.settings,{key:state.settings.key});
         await persist();render();
       }catch(e){alert('Import failed: '+e.message);}
@@ -1168,7 +1172,7 @@
       case 'incomepage':{const row=incomeRoutes.find(x=>x[0]===el.dataset.source);if(row)location.assign('https://www.torn.com'+row[2]);break;}
       case 'export':exportFile('profitstaxx-trades.csv',exportCSV(),'text/csv;charset=utf-8');break;
       case 'backup':exportFile('profitstaxx-backup.json',JSON.stringify({
-        version:VERSION,trades:state.trades,settings:Object.assign({},state.settings,{key:''})},null,2),'application/json');break;
+        version:VERSION,trades:state.trades,income:moneyRecords(),settings:Object.assign({},state.settings,{key:''})},null,2),'application/json');break;
       case 'import':importBackup();break;
       case 'savekey':{
         const key=shell.querySelector('#ps_key').value.trim();
@@ -1223,7 +1227,7 @@
     root.appendChild(shell);
     render();
   }
-  document.addEventListener('staxx:open',e=>{if(e.detail?.id==='profit'){state.open=true;if(e.detail.alertId){state.tab='alerts';state.alertFocus=String(e.detail.alertId);}render();}else if(state.open){state.open=false;render();}});
+  document.addEventListener('staxx:open',e=>{if(e.detail?.id==='profit'){state.open=true;if(e.detail.alertId){state.tab=e.detail.alertId==='stock-claim'?'stocks':'alerts';state.alertFocus=e.detail.alertId==='stock-claim'?'':String(e.detail.alertId);}render();}else if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:closeall',()=>{if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:ping',()=>document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit'}})));
   function marketAssist(){
