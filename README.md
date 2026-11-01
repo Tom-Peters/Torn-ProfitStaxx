@@ -4,6 +4,20 @@
 
 A mobile-first userscript for Torn Item Market deals, stock benefit blocks, cash dividend opportunities, Museum conversions, a trading ledger and a multi-source realised-income tracker. All in-game purchases, sales and claims remain user-confirmed.
 
+## ProfitStaxx 1.9.0 · new command centre
+
+This version adds five major areas alongside the existing Deal, Museum and Ledger screens:
+
+- **Best** — mixed item-flip, travel, Museum, fixed-cash-stock, bank and rental opportunities ranked by an explicit heuristic (payoff, indicative ROI, review time, source confidence). Active one-off gains are **not** presented as recurring income; the periods are displayed on every result.
+- **Travel** — **opt-in** public foreign-stock observation scanner (Torn Tracker, data by torn-tracker.com contributors, CC BY 4.0). On demand it reads reported stock, then uses your Torn API key **only with Torn** for a capped 16-item resale-price scan. Older shelf observations or old Torn asks are withheld from confirmed-margin recommendations. Enter your own travel capacity and real round-trip minutes by country to compare per-hour returns. No API key is sent to Torn Tracker.
+- **Stocks** — per-stock buy-below / sell-above price targets, visible StaxxHub notifications, auto-refresh at most every ten minutes **while Torn is open** if at least one target is configured; sampled trend history limited to 90 days. Never submits orders.
+- **Charts** — interactive 7, 30 and 90-day realised profit charts reconstructed from weighted-average-cost ledger sales and manual income entries. Groups income by category and includes losses; unrealised prices are excluded.
+- **Capital** — protected cash reserve, pre-existing recorded open item positions, four adjustable cash-weight buckets (Item Market, travel, stock benefits and bank), cash caps and unallocated cash. It is a model, not a bank/broker balance or an optimal portfolio guarantee.
+
+**Scroll issue resolved:** Progressive scans no longer reset the scroll position in every ProfitStaxx tab; the current form, focused field and horizontal tab-bar position are restored between display updates. It is still necessary to verify the behaviour in TornPDA's actual WebView.
+
+**Limitations:** Torn Tracker observations can disappear before travel. Foreign feeds and permissioned Torn API responses need a real on-device check. Other earnings (crime, contracts, revives, company, property) have manual income tracking and relevant links, not complete live optimisers. Current quotes and asking-price heuristics never establish a guaranteed sale.
+
 ## Install on TornPDA (remote URL)
 
 **Important:** Select the **Remote URL / Configure** option in TornPDA's userscript manager and paste the **raw JavaScript URL below**. Do not use the GitHub repository page (`github.com/Tom-Peters/Torn-ProfitStaxx`) or the GitHub file viewer (`github.com/.../blob/...`). Those return HTML and TornPDA may report **"No header available"**.
