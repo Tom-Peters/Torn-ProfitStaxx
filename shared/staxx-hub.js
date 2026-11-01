@@ -1,4 +1,4 @@
-/* StaxxHub v2.1 · shared Torn PDA launcher · IamEEKY · no external dependencies */
+/* StaxxHub v2.2 · shared Torn PDA launcher · IamEEKY · no external dependencies */
 (function () {
   "use strict";
   if (typeof location === "undefined" || typeof document === "undefined" ||
@@ -49,6 +49,7 @@
       '#staxx-hub-drawer .staxx-alert.urgent .staxx-alert-title{color:#ff9bad!important}',
       '#staxx-hub-drawer .staxx-alert span{display:block;color:#daecf9;font-size:12px;margin:5px 0;overflow-wrap:anywhere}',
       '#staxx-hub-drawer .staxx-alert small{display:block;color:#91aec6;font-size:11px;margin:4px 0}',
+      '#staxx-hub-drawer .staxx-alert-item{display:block;width:100%;margin:7px 0 3px;padding:9px 10px;background:#123c60;border:1px solid #427b9f;color:#e3f5ff;border-radius:8px;text-align:left;font-size:12px;font-weight:750;line-height:1.35;min-height:38px}#staxx-hub-drawer .staxx-alert-item:focus-visible{outline:2px solid #54d7fa}#staxx-hub-drawer .staxx-alert-description{padding:0 3px 3px}',
       '#staxx-hub-drawer .staxx-alert-actions{display:flex;gap:7px;margin-top:10px}',
       '#staxx-hub-drawer .staxx-snooze-menu{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}#staxx-hub-drawer .staxx-snooze-menu button{background:#174463;border:1px solid #3e7593;border-radius:7px;padding:6px 8px;min-height:32px;font-size:11px}#staxx-hub-drawer .staxx-snooze-menu input{background:#071d32;border:1px solid #527b9b;border-radius:7px;color:#fff;min-width:56px;width:64px;padding:6px;font-size:12px}#staxx-hub-drawer .staxx-snooze-menu label{display:flex;align-items:center;gap:4px;color:#bfd9ec;font-size:11px}#staxx-hub-drawer .staxx-due{font-size:11px;color:#b8e4ff!important;font-weight:700}#staxx-hub-drawer .staxx-spark{display:flex;align-items:end;gap:3px;height:40px;margin:11px 0 4px}#staxx-hub-drawer .staxx-spark span{flex:1;min-width:0;max-width:30px;border-radius:3px 3px 0 0;background:linear-gradient(#50d5f8,#17649c)}#staxx-hub-drawer .staxx-spark span.missing{background:#1e3a52;height:3px!important}#staxx-hub-drawer .staxx-trendnote{font-size:10px!important;color:#9ab5cf!important}#staxx-hub-drawer .staxx-alert-actions button{background:#1c3e5b;border:1px solid #365978;border-radius:8px;padding:6px 9px;font-size:11px;flex:1;min-height:32px}',
       '#staxx-hub-drawer .staxx-empty{color:#9db7cd;background:#0c243e;border:1px dashed #305473;border-radius:10px;font-size:11px;padding:14px 10px}',
@@ -126,9 +127,9 @@
       if(control.dismissed===n.fingerprint || Number(control.snoozeUntil)>Date.now())return null;
       return n;
     }
-    function openTool(id){
+    function openTool(id,alertId){
       if(id==="company"&&!/^\/companies\.php$/i.test(location.pathname)){
-        try{sessionStorage.setItem("staxx-open-company","1");}catch(_){}
+        try{sessionStorage.setItem("staxx-open-company","1");if(alertId)sessionStorage.setItem("staxx-open-company-alert",alertId);}catch(_){}
         location.assign(location.origin+"/companies.php");return;
       }
       if(!active[id]){
@@ -137,7 +138,7 @@
       }
       panelOpen=true;setExpanded(false);launcherVisibility();
       document.dispatchEvent(new CustomEvent("staxx:closeall"));
-      document.dispatchEvent(new CustomEvent("staxx:open",{detail:{id}}));
+      document.dispatchEvent(new CustomEvent("staxx:open",{detail:{id,alertId:alertId||null}}));
     }
     function timeUntil(ms) {
       if(!Number.isFinite(ms)||ms<=0)return "";
@@ -239,7 +240,16 @@
         const title=node("button","staxx-alert-title",e.label+" · "+n.count+" alert"+(n.count===1?"":"s"));
         title.type="button";title.dataset.openStaxx=e.id;card.append(title);
         card.append(node("span","",n.summary||"Needs attention"));
-        for(const item of n.items.slice(0,2))card.append(node("small","",item));
+        if(Array.isArray(n.alerts)&&n.alerts.length){
+          for(const item of n.alerts.slice(0,8)){
+            const go=node("button","staxx-alert-item",item.title);
+            go.type="button";go.dataset.openAlertTool=e.id;go.dataset.openAlertId=item.id;
+            go.title=item.detail||item.title;
+            card.append(go);
+            if(item.detail)card.append(node("small","staxx-alert-description",item.detail));
+          }
+          if(n.alerts.length>8)card.append(node("small","",String(n.alerts.length-8)+" more — open the tool's Alerts tab"));
+        }else for(const item of n.items.slice(0,2))card.append(node("small","",item));
         if(n.cached)card.append(node("small","","Last observed on a previous page"));
         if(n.dueAt){const countdown=node("small","staxx-due",timeUntil(n.dueAt));card.append(countdown);}
         const buttons=node("div","staxx-alert-actions");
@@ -280,6 +290,7 @@
       if(b.hasAttribute("data-arrange")){
         arrangeShown=!arrangeShown;b.setAttribute("aria-pressed",String(arrangeShown));b.textContent=arrangeShown?"Done":"Reorder";render();return;
       }
+      if(b.dataset.openAlertTool){openTool(b.dataset.openAlertTool,b.dataset.openAlertId);return;}
       if(b.dataset.openStaxx){openTool(b.dataset.openStaxx);return;}
       if(b.hasAttribute("data-overview")){overviewShown=!overviewShown;render();return;}
       if(b===toggle){if(Date.now()<suppressClickUntil)return;setExpanded(true);return;}
@@ -328,8 +339,9 @@
       const n={count,summary:String(d.summary||"").slice(0,180),
         items:Array.isArray(d.items)?d.items.slice(0,5).map(x=>String(x).slice(0,160)):[],
         level:["urgent","warning","info"].includes(d.level)?d.level:"info",cached:false};
+      n.alerts=Array.isArray(d.alerts)?d.alerts.slice(0,30).filter(x=>x&&/^[a-z][a-z0-9-]{0,63}$/.test(String(x.id||""))).map(x=>({id:String(x.id),title:String(x.title||x.id).slice(0,100),detail:String(x.detail||"").slice(0,190)})):[];
       n.dueAt=Number.isFinite(Number(d.dueAt))&&Number(d.dueAt)>0?Number(d.dueAt):null;
-      n.fingerprint=JSON.stringify([n.count,n.summary,n.items,n.level,n.dueAt]);
+      n.fingerprint=JSON.stringify([n.count,n.summary,n.items,n.alerts,n.level,n.dueAt]);
       if(JSON.stringify(notices[id])!==JSON.stringify(n)){notices[id]=n;remember();render();}
     });
     document.addEventListener("staxx:summary",e=>{
