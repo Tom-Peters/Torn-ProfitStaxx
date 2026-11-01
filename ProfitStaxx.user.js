@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.8.0
+// @version      1.9.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -476,7 +476,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.8.0';
+  const VERSION = '1.9.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -789,7 +789,7 @@
         if(!(Number(item.id)>0&&number(item.market?.price)>0))continue;
         const id=String(item.id),old=state.stockHistory[id]||[];
         if(!old.length||Math.floor(old[old.length-1].at/3600000)!==bucket)old.push({at:stockState.at,price:number(item.market.price)});
-        state.stockHistory[id]=old.filter(x=>x.at>now()-90*86400000).slice(-1500);
+        state.stockHistory[id]=old.filter(x=>x.at>now()-90*86400000).slice(-2200);
       }
       state.stockCache=stockState.all;state.stockCacheAt=stockState.at;
       persist();
@@ -1060,7 +1060,8 @@
     }
     if(stockState.at&&now()-stockState.at<30*60000){
       for(const s of stockRows().filter(x=>x.annualYield!==null&&x.block*x.p>0)){
-        const missing=s.need>0?s.need:s.block,cost=missing*s.p;
+        if(s.need<=0)continue;
+        const cost=s.need*s.p;
         const payout=dividendCash[s.acronym],income=payout?payout[0]*30/payout[1]:0;
         if(!income||cost>remaining)continue;
         add({id:'stock-'+s.id,kind:'stock',label:s.acronym+' first/next cash benefit',category:'passive',
@@ -1120,7 +1121,8 @@
     }
     if(stockState.at&&now()-stockState.at<30*60000)for(const r of stockRows().filter(x=>x.annualYield!==null)){
       if(items.some(x=>x.bucket===2))break;
-      const units=r.need>0?r.need:r.block,price=units*r.p;
+      if(r.need<=0)continue;
+      const price=r.need*r.p;
       const payout=dividendCash[r.acronym];if(payout)propose(2,'stocks',r.acronym+' benefit block',price,payout[0]*30/payout[1],
         '30-day equivalent after eligibility','Share price risk; income assumes reward cadence only after activation');
     }
@@ -1521,9 +1523,13 @@
     if(previousBody&&lastRenderedTab)scrollPositions[lastRenderedTab]=previousBody.scrollTop;
     const tabScroll=previousTabs?previousTabs.scrollLeft:0;
     const focused=root.activeElement;
-    const edit=focused&&shell.contains(focused)&&/^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)?{
-      id:focused.id,name:focused.name,value:focused.value,start:focused.selectionStart,end:focused.selectionEnd,
-      checked:focused.type==='checkbox'?focused.checked:null,tab:lastRenderedTab}:null;
+    let edit=null;
+    if(focused&&shell.contains(focused)&&/^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)){
+      let start=null,end=null;
+      try{start=focused.selectionStart;end=focused.selectionEnd;}catch(_){}
+      edit={id:focused.id,name:focused.name,value:focused.value,start,end,
+        checked:focused.type==='checkbox'?focused.checked:null,tab:lastRenderedTab};
+    }
     shell.innerHTML='<div class="panel" role="dialog" aria-modal="true" aria-label="ProfitStaxx">'+
       '<div class="heading"><div><div class="brand">Profit<span style="color:#54d7fa">Staxx</span></div><div class="sub">Profit intelligence · v'+VERSION+'</div></div>'+
       '<button class="close" data-action="close">Close ×</button></div>'+
@@ -1654,6 +1660,7 @@
       if(!stockRows().some(x=>String(x.id)===id)||![buy,sell].every(x=>Number.isFinite(x)&&x>=0&&x<=1e15)){alert('Invalid price target');return;}
       state.settings.stockTargets=state.settings.stockTargets||{};
       if(!buy&&!sell)delete state.settings.stockTargets[id];else state.settings.stockTargets[id]={buy,sell};persist();render();
+      if(Object.keys(state.settings.stockTargets).length&&now()-stockState.at>10*60000)refreshStocks();
     }else if(event.target.id==='ps_travelsettings'){
       event.preventDefault();const f=new FormData(event.target);
       state.settings.travelCapacity=clamp(Math.floor(number(f.get('travelCapacity'))||10),1,200);
@@ -1757,8 +1764,11 @@
     render();
     // Pure API reads only, and only while the Torn tab is foreground/visible.
     scanTimer=setInterval(()=>{
-      if(document.hidden||state.busy||!apiKey())return;
-      scan({manual:false});
+      if(document.hidden||!apiKey())return;
+      if(!state.busy)scan({manual:false});
+      if(Object.keys(state.settings.stockTargets||{}).length&&now()-stockState.at>=10*60000&&!stockState.loading){
+        refreshStocks();
+      }
     },30000);
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
   }
