@@ -9,7 +9,7 @@ function harness({touch=false,width=1000,parentWidth=650,items=[{id:"train-ready
  let inserted=0,removed=0,queries=0;
  const anchor={parentElement:{getBoundingClientRect:()=>({width:parentWidth})},closest:()=>null,insertAdjacentElement:()=>{inserted++;}};
  const old={remove:()=>{removed++;},dataset:{fingerprint:"old"},previousElementSibling:null};
- const node=(tag,cls,value)=>({tag,cls,value,dataset:{},setAttribute(){},append(){}});
+ const node=(tag,cls,value)=>({tag,cls,value,dataset:{},setAttribute(){},append(){},addEventListener(){}});
  const context={
   document:{documentElement:{clientWidth:width},getElementById:()=>old,querySelector:()=>{queries++;return anchor;}},
   root:{querySelector:()=>null},currentContext:()=>({id:"happy",name:"Gym"}),contextEnabled:()=>true,
