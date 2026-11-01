@@ -39,6 +39,13 @@ Version: 1.0.0 | Owner attribution: IamEEKY | Scope: every Torn script/tool in t
 - Show last verified update age. Cache the latest summary across page navigation without pretending the tool is running on another page.
 - Optional compact next-action strip: keep opt-in/off by default until approved.
 
+## Actionable alert implementation standard
+- Treat the newer canonical `docs/TORN-SUITE-STANDARD.md` as the definitive cross-repository rulebook. This constitution captures standing principles and points to that source.
+- Every alert in the sidebar links to its specific in-tool Alerts card through `staxx:open {id, alertId}`; older tools retain generic open fallback.
+- Put one prominent, plain-language next action on each relevant screen. Surface the needed quantity/threshold, verified age and what the player should do, not just an abstract forecast.
+- Link to a verified Torn page, and, for a specific **user-initiated** market action, safely prepare only a clearly matched quantity field. No Torn gameplay writes, automatic purchase, item usage or training.
+- If destination-field detection is ambiguous, refuse automatic entry and offer copy/manual instructions. Always leave final confirmation to the player.
+
 ## Tool-specific invariants
 - ProfitStaxx: maintain trading opportunity thresholds, market data handling, existing portfolio ledger and read-only UI.
 - Company Helper: preserve staff allocation, wages, training ledger including purchased/owed/free trains, star growth, finance guardrails, history imports and read-only API. Never silently assign paid trains in-game.
@@ -57,4 +64,5 @@ Version: 1.0.0 | Owner attribution: IamEEKY | Scope: every Torn script/tool in t
 - [ ] Explain what was changed, which versions to install and what needs Torn PDA testing.
 
 ## Change log
+- 1.1.0 (2026-11-01): Per-alert navigation, actionable tool views and guarded user-led field preparation; defer detailed event contracts to the canonical suite standard.
 - 1.0.0 (2026-11-01): Established shared Staxx design, Hub lifecycle, snooze/countdown/trends/reordering requirements, integration and release discipline.
