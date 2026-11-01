@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         ProfitStaxx - Torn Trading Intelligence
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
-// @version      1.0.0
+// @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
+// @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
+// @version      1.0.1
 // @description  Read-only market intelligence, Museum arbitrage and manual profit ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -18,7 +20,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.1';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
