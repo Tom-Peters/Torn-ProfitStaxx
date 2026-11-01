@@ -1,3 +1,8 @@
+## v1.14.0 — automatic live quantities for watched items
+
+- Inventory auto-sync now captures the core watched trading items as well as museum plushies and flowers. Market opportunities display verified current ownership when a complete Torn inventory snapshot is fresh.
+- Counts are informational and do not imply a sale, purchase price, or realised profit. Ledger entries and purchases remain under user control.
+
 # ProfitStaxx
 
 ## v1.13.0 — StaxxHub smart sync and wallet-aware risk
