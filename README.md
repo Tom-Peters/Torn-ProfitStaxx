@@ -1,5 +1,11 @@
 # ProfitStaxx
 
+## v1.12.0 — automatic read-only data and inventory
+
+- **Visible-only automatic intelligence:** A bounded single-task scheduler checks full Item Market prices roughly hourly, stale watched items in short batches, foreign stock observations around every 20 minutes, and stock prices around every 10 minutes. It only operates with an API key while Torn is foregrounded, and backs off failed full scans instead of repeating them on every timer tick.
+- **Automatic museum counts:** Reads the current, complete paginated `user/inventory` response (up to 2,000 rows) to count your own flowers and plushies. Excludes faction-owned inventory and labels other locations as excluded. Failed/partial scans never turn missing data into zero holdings; saved local counts remain the fallback. An explicit **Sync owned flowers & plushies** button remains for immediate checks.
+- **No automatic in-game purchases:** Market buy handoff still requires reviewing listings and tapping Buy in Torn. Travel sightings, asking prices and future income remain estimates.
+
 ## v1.11.0 — five money-making decisions, diagnostics and StaxxHub v2.5
 
 - **Today:** An actionable, prioritised shortlist of up to five supported profit opportunities that fit a user-entered time budget and protected trading cash. Each item links to a manual review action, retains an explicitly labelled return period, and can be marked **reviewed** without generating fictitious realised profits. UTC-day review marks are stored locally and included in backups.
