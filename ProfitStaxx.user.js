@@ -32,7 +32,7 @@
     {name:'Flower set',points:10,items:['Dahlia','Orchid','African Violet','Cherry Blossom','Peony','Ceibo Flower','Edelweiss','Crocus','Heather','Tribulus Omanense','Banana Orchid']}
   ];
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,
-    bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},
+    bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'scan'};
   const state={settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
@@ -262,17 +262,33 @@
     }catch(e){state.status='Scan failed';state.error=e.message;console.warn('[ProfitStaxx] Scan issue: '+e.message);}
     finally{state.busy=false;render();}
   }
+  function bookCost(offers,amount){
+    let remaining=Math.max(0,Math.floor(amount)),sum=0;
+    if(!remaining)return 0;
+    for(const offer of offers||[]){
+      const take=Math.min(remaining,Math.floor(number(offer.qty)));
+      sum+=take*number(offer.price);
+      remaining-=take;
+      if(!remaining)return sum;
+    }
+    return null;
+  }
   function recipeResults(){
+    const batch=clamp(Math.floor(number(state.settings.museumBatch)||1),1,25);
     return RECIPES.map(r=>{
       const rows=r.items.map(name=>{const item=getItem(name),q=item&&state.quotes[item.id];
-        return {name,id:item&&item.id,price:q&&q.offers[0]&&q.offers[0].price||0,
-          owned:Math.floor(number((state.settings.museumOwned||{})[name])),at:q&&q.at||0};});
-      const ready=rows.every(x=>x.price>0);
-      const cost=ready?rows.reduce((s,x)=>s+x.price,0):0;
-      const missingCost=ready?rows.reduce((s,x)=>s+(x.owned>=1?0:x.price),0):0;
-      const proceeds=r.points*state.pointsPrice*(1-number(state.settings.pointFee)/100);
+        const owned=Math.floor(number((state.settings.museumOwned||{})[name]));
+        const price=q&&q.offers[0]&&q.offers[0].price||0;
+        const needed=Math.max(0,batch-owned);
+        const cash=q?bookCost(q.offers,needed):null;
+        const ownedOpportunity=Math.min(batch,owned)*price;
+        return {name,id:item&&item.id,price,owned,needed,cash,opportunity:ownedOpportunity,at:q&&q.at||0};});
+      const ready=rows.every(x=>x.price>0&&x.cash!==null);
+      const missingCost=ready?rows.reduce((s,x)=>s+x.cash,0):0;
+      const cost=ready?rows.reduce((s,x)=>s+x.cash+x.opportunity,0):0;
+      const proceeds=r.points*batch*state.pointsPrice*(1-number(state.settings.pointFee)/100);
       const profit=ready&&state.pointsPrice>0?proceeds-cost:null;
-      return {name:r.name,points:r.points,rows,cost,missingCost,proceeds,profit,
+      return {name:r.name,points:r.points,batch,rows,cost,missingCost,proceeds,profit,
         roi:profit!==null&&cost?profit/cost*100:null,ready};
     });
   }
@@ -356,18 +372,20 @@
     html+=notice('Each complete flower or plushie set = 10 points. Cash cost assumes buying one of every component on the Item Market. Points revenue uses the current lowest ASK, not guaranteed sale proceeds.');
     for(const r of recipeResults()){
       html+='<div class="card"><h3>'+esc(r.name)+'</h3>'+
+        '<div class="line"><span>Sets modeled</span><strong>'+r.batch+'</strong></div>'+
         '<div class="line"><span>Full economic cost</span><strong>'+fmt(r.cost)+'</strong></div>'+
         '<div class="line"><span>Cash to complete with holdings</span><strong>'+fmt(r.missingCost)+'</strong></div>'+
         '<div class="line"><span>Points value ('+r.points+')</span><strong>'+fmt(r.proceeds)+'</strong></div>'+
         '<div class="line"><span>Estimated spread</span><strong class="'+(r.profit>0?'positive':'negative')+'">'+(r.profit===null?'Incomplete':fmt(r.profit))+'</strong></div>'+
         '<div class="line"><span>Estimated ROI</span><strong>'+ (r.roi===null?'—':pct(r.roi))+'</strong></div>'+
+        '<div class="line"><span>Capital limit check</span><span>'+(r.missingCost>number(state.settings.capital)*number(state.settings.maxTradePct)/100?'<span class="negative">Above single-trade cap</span>':'Within single-trade cap')+'</span></div>'+
         '<details><summary class="muted">Component prices and missing data</summary>';
       for(const item of r.rows)html+='<div class="line"><span>'+esc(item.name)+'</span><span>'+fmt(item.price)+
         ' · Owned '+item.owned+' <button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="-1">−</button> '+
         '<button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="1">+</button></span></div>';
       html+='</details></div>';
     }
-    html+=notice('This models full-set purchases only. Use +/− to record existing museum components locally. Cash needed reflects these holdings; profit includes their opportunity cost. Conversions stay manual.');
+    html+=notice('This models full-set purchases only. Use +/− to record existing museum components locally. Cash needed reflects these holdings; profit includes their opportunity cost. Batch prices use available order-book quantities and are not guaranteed. Conversions stay manual.');
     return html;
   }
   function renderPortfolio(){
@@ -416,6 +434,7 @@
       '<div class="duo">'+field('maxItemPct','Maximum per item (%)',s.maxItemPct)+field('reservePct','Keep cash uninvested (%)',s.reservePct)+'</div>'+
       '<div class="duo">'+field('minRoi','Minimum net ROI (%)',s.minRoi)+field('minProfit','Minimum total profit ($)',s.minProfit)+'</div>'+
       '<div class="duo">'+field('bazaarDiscount','Bazaar discount versus ask (%)',s.bazaarDiscount)+field('pointFee','Point sale fee (%)',s.pointFee)+'</div>'+
+      '<div class="duo">'+field('museumBatch','Museum batch size (1–25)',s.museumBatch||1)+ '<div class="notice">Multi-set pricing consumes cheapest available offers first; missing stock blocks an estimate.</div></div>'+
       '<div class="duo">'+field('alertThreshold','FAB profit badge threshold ($)',s.alertThreshold)+field('scanInterval','Scan interval (seconds)',s.scanInterval)+'</div>'+
       '<div class="field"><label>Preferred exit method</label><select name="method">'+
       ['best','bazaar','market'].map(x=>'<option value="'+x+'" '+(s.method===x?'selected':'')+'>'+esc(x)+'</option>').join('')+
@@ -513,10 +532,10 @@
       event.preventDefault();
       const f=new FormData(event.target),s=state.settings;
       for(const key of ['capital','maxTradePct','maxItemPct','reservePct','minRoi','minProfit',
-        'bazaarDiscount','pointFee','alertThreshold','scanInterval'])s[key]=number(f.get(key));
+        'bazaarDiscount','pointFee','alertThreshold','scanInterval','museumBatch'])s[key]=number(f.get(key));
       s.maxTradePct=clamp(s.maxTradePct,0.1,100);s.maxItemPct=clamp(s.maxItemPct,0.1,100);
       s.reservePct=clamp(s.reservePct,0,99);s.bazaarDiscount=clamp(s.bazaarDiscount,0,99);
-      s.pointFee=clamp(s.pointFee,0,50);s.scanInterval=clamp(s.scanInterval,90,3600);
+      s.pointFee=clamp(s.pointFee,0,50);s.scanInterval=clamp(s.scanInterval,90,3600);s.museumBatch=clamp(Math.floor(s.museumBatch||1),1,25);
       s.method=['best','bazaar','market'].includes(f.get('method'))?f.get('method'):'best';
       s.watchNames=[...new Set(String(f.get('watchNames')||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean))].slice(0,40);
       persist();state.status='Settings saved';render();
