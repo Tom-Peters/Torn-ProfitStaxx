@@ -34,14 +34,15 @@ You can also use a compatible browser userscript manager. TornPDA is the primary
 
 ### First run
 
-1. Open Torn in TornPDA. Confirm the **PS** button appears near the bottom-right.
+1. Open Torn in TornPDA, then open **StaxxHub** and select **ProfitStaxx** (the legacy PS button is intentionally hidden when the unified launcher is active).
 2. Tap **PS > Settings** and set your trading capital, maximum exposure, preferred resale method, and watchlist.
 3. TornPDA normally injects your existing API key automatically. If not, enter a restricted/custom Torn API key **in the app**, never in the GitHub source.
-4. Open **Deals > Refresh opportunities** to perform the first scan.
+4. Open **Deals > Refresh opportunities** to perform the first scan. Then use **Best** for ranked cross-source options, **Capital** for an allocation scenario and **Charts** for realised profit history.
 5. Use the linked Torn market page to **manually** inspect and buy any candidate.
 6. Record actual buys and sells in **Ledger** so the tool can measure *realised* profit.
 7. Open **Stocks > Refresh stocks** to load real stock quotes. Personal holdings and claim-ready dividends require a Limited-access API key that authorises `user/stocks`.
-8. Open **Income** to record completed returns from bank interest, stock dividends, company payouts, rental income, travel importing, crimes, services, bounties and other sources. Record each realised earning only once.
+8. Open **Travel > Scan abroad** for an optional, one-time third-party public observation scan. Enter your own travel capacity and per-country round-trip minutes. Open **Stocks** to set share-price buy/sell alerts.
+9. Open **Income** to record completed returns from bank interest, stock dividends, company payouts, rental income, travel importing, crimes, services, bounties and other sources. Record each realised earning only once.
 
 ## Features
 
