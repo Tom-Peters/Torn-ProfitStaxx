@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.5.0
+// @version      1.6.0
 // @description  Read-only market intelligence, Museum arbitrage and manual profit ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -422,7 +422,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -772,6 +772,76 @@
     });
     return actions;
   }
+
+  // Advisory only: asking-price history is NOT a record of completed sales.
+  function priceHistoryQuality(itemId){
+    const raw=(state.snapshots[itemId]||[]).filter(x=>x&&Number(x.at)>now()-7*86400000&&Number(x.reference)>0);
+    const buckets=new Map();
+    for(const x of raw)buckets.set(Math.floor(Number(x.at)/1800000),Number(x.reference));
+    const prices=[...buckets.values()].filter(x=>x>0),n=prices.length;
+    if(!n)return {n:0,label:'No price history',trend:null,spread:null};
+    const ordered=prices.slice().sort((a,b)=>a-b),median=ordered[Math.floor(n/2)];
+    const trend=n>=2?100*(prices[n-1]-prices[0])/prices[0]:null;
+    const spread=n>=3?100*(ordered[Math.floor(n*.75)]-ordered[Math.floor(n*.25)])/median:null;
+    const label=n<3?'Low · few snapshots':n<8?'Developing · '+n+' samples':'Moderate · '+n+' samples';
+    return {n,label,trend,spread,median};
+  }
+  function marketLiquiditySignal(d){
+    const q=state.quotes[d.id],offers=q?.offers||[];
+    const competing=offers.filter(o=>o.price<=d.reference*1.02).reduce((v,o)=>v+number(o.qty),0);
+    const ratio=competing/Math.max(1,d.qty);
+    return {competing,ratio,label:ratio>=5?'Crowded asks':ratio>=2?'Some competing asks':'Limited near-price asks'};
+  }
+  function allocationPlan(){
+    const available=Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost());
+    let remaining=available;
+    const ranked=deals().filter(d=>now()-d.at<8*60000).map(d=>{
+      const history=priceHistoryQuality(d.id),liquidity=marketLiquiditySignal(d);
+      const confidence=history.n>=8?.85:history.n>=3?.65:.4;
+      const efficiency=d.buy>0?d.unitProfit/d.buy:0;
+      return {...d,history,liquidity,weight:d.score*confidence*efficiency};
+    }).sort((a,b)=>b.weight-a.weight||b.profit-a.profit);
+    const allocations=[];
+    for(const d of ranked){
+      const qty=Math.max(0,Math.min(Math.floor(d.qty),Math.floor(remaining/d.buy)));
+      if(!qty)continue;
+      const cost=qty*d.buy,profit=qty*d.unitProfit;
+      // Three minutes per reviewed opportunity is a user-planning assumption, not observed execution time.
+      const reviewMinutes=3;
+      allocations.push({...d,allocQty:qty,allocCost:cost,allocProfit:profit,reviewMinutes});
+      remaining=Math.max(0,remaining-cost);
+    }
+    return {available,remaining,allocations,profit:allocations.reduce((n,d)=>n+d.allocProfit,0)};
+  }
+  function allocationPanel(){
+    const plan=allocationPlan(),rows=plan.allocations;
+    let out='<div class="card"><h3>Capital allocator · risk-weighted shortlist</h3>'+
+      '<div class="statrow"><div class="stat"><small>Deployable cash</small><b>'+fmt(plan.available)+'</b></div>'+
+      '<div class="stat"><small>Remaining reserve</small><b>'+fmt(plan.remaining)+'</b></div></div>'+
+      '<p class="muted">Respects your cash reserve, existing recorded holdings, per-trade and per-item limits. Allocations are suggestions, not placed orders. Estimated profit '+fmt(plan.profit)+' assumes modelled resale at asking-derived reference prices.</p>';
+    if(!rows.length)out+='<p>No fresh qualifying allocations. Refresh the scan or preserve cash.</p>';
+    for(const d of rows.slice(0,6))out+='<div class="line"><strong>'+esc(d.name)+' × '+d.allocQty+'</strong><span>'+fmt(d.allocCost)+' / est. +'+fmt(d.allocProfit)+'</span></div>'+
+      '<small class="muted">Modelled '+fmt(d.allocProfit/d.reviewMinutes)+'/review minute (assumes '+d.reviewMinutes+' min of active review; excludes unknown sale waiting time) · '+esc(d.history.label)+' · '+esc(d.liquidity.label)+'</small>'+
+      '<div><button class="btn secondary" data-action="market-buy" data-id="'+Number(d.id)+'">Inspect and prepare market</button></div>';
+    return out+'</div>';
+  }
+  function sellTimingPanel(){
+    const ps=portfolio().positions.filter(p=>p.qty>0&&p.cost>0);
+    if(!ps.length)return '';
+    let out='<div class="card"><h3>Sell timing · asking-price monitor</h3>'+
+      '<p class="muted">Compares observed asking prices, not completed sales or available buyers. Check the live market before listing.</p>';
+    for(const p of ps.slice(0,12)){
+      const q=state.quotes[p.itemId],h=priceHistoryQuality(p.itemId);
+      if(!q||now()-Number(q.at)>8*60000||!h.n)continue;
+      const current=number(q.reference),basis=p.cost/Math.max(1,p.qty)/.95;
+      const profit=p.qty*(current*.95)-p.cost;
+      const direction=h.trend===null?'Insufficient history':h.trend>3?'Asks rising':h.trend< -3?'Asks falling':'Asks broadly flat';
+      out+='<div class="line"><b>'+esc(p.name)+'</b><span>'+fmt(current)+' ask · '+esc(direction)+'</span></div>'+
+        '<small class="muted">After 5% fee: '+fmt(profit)+' modeled gain · break-even ask '+fmt(basis)+' · '+esc(h.label)+(h.spread!==null?' · historical ask IQR '+h.spread.toFixed(1)+'%':'')+'</small>'+
+        '<div><button class="btn secondary" data-action="market-view" data-id="'+Number(p.itemId)+'">Check live market</button></div>';
+    }
+    return out+'</div>';
+  }
   function renderAlerts(){
     const list=activeDealAlerts();
     const exits=exitSignals();
@@ -783,6 +853,7 @@
     const d=deals().filter(x=>now()-x.at<8*60000),p=portfolio();
     const pick=d[0];
     let html=pick?'<div class="card"><h3>Best opportunity to review</h3><p><b>'+esc(pick.name)+'</b> · up to '+Math.floor(pick.qty)+' units</p><p>Capital '+fmt(pick.qty*pick.buy)+' · modeled gain <span class="positive">'+fmt(pick.profit)+'</span> · '+pct(pick.roi)+' ROI</p><button class="btn" data-action="market-buy" data-id="'+Number(pick.id)+'">Review live listing and prepare quantity</button></div>':'';
+    html+=allocationPanel();
     html+='<div class="statrow"><div class="stat"><small>Working capital</small><b>'+human(state.settings.capital)+'</b></div>'+
       '<div class="stat"><small>Recorded invested</small><b>'+human(p.invested)+'</b></div></div>';
     html+='<div class="toolbar"><button class="btn" data-action="scan" '+(state.busy?'disabled':'')+'>'+
@@ -798,6 +869,7 @@
         '<div class="line"><span class="muted">Reference ask '+fmt(x.reference)+'</span><span>'+pct(x.roi)+' estimated ROI</span></div>'+
         '<div class="line"><span class="muted">Best modeled exit</span><span>'+esc(x.method==='bazaar'?'Bazaar (slower sale possible)':'Item Market')+'</span></div>'+
         '<div class="line"><span class="muted">Market net / Bazaar net per unit</span><span>'+fmt(x.marketNet)+' / '+fmt(x.bazaarNet)+'</span></div>'+
+        '<p class="muted">'+esc(priceHistoryQuality(x.id).label)+' · '+esc(marketLiquiditySignal(x).label)+(priceHistoryQuality(x.id).trend===null?'':' · ask trend '+pct(priceHistoryQuality(x.id).trend))+'</p>'+ 
         '<div class="line"><span class="muted">Competition depth: '+x.depth+' units · '+age(x.at)+'</span>'+
         '<button class="btn secondary" data-action="market-buy" data-id="'+Number(x.id)+'">Market · '+Math.floor(x.qty)+' units</button></div>'+
         '<div class="meter"><i style="width:'+x.score+'%"></i></div></div>';
@@ -832,6 +904,7 @@
     let html='<div class="statrow"><div class="stat"><small>Realised profit</small><b class="'+(p.realised>=0?'positive':'negative')+'">'+fmt(p.realised)+'</b></div>'+
       '<div class="stat"><small>Open cost basis</small><b>'+fmt(p.invested)+'</b></div></div>';
     html+=notice('Realised P&L uses weighted-average cost for recorded buy/sell transactions. Estimates on open stock are excluded from realised profits.');
+    html+=sellTimingPanel();
     html+='<div class="card"><h3>Log a trade</h3><form id="ps_trade"><div class="duo"><div class="field"><label>Side</label>'+
       '<select name="side"><option value="buy">Bought</option><option value="sell">Sold</option></select></div>'+
       '<div class="field"><label>Sale method</label><select name="method"><option value="bazaar">Bazaar (0%)</option><option value="market">Item Market (5%)</option><option value="direct">Direct trade (0%)</option></select></div></div>'+
