@@ -1,4 +1,4 @@
-/* StaxxHub v2.2 · shared Torn PDA launcher · IamEEKY · no external dependencies */
+/* StaxxHub v2.3 · shared Torn PDA launcher · IamEEKY · no external dependencies */
 (function () {
   "use strict";
   if (typeof location === "undefined" || typeof document === "undefined" ||
@@ -14,7 +14,7 @@
       '<aside id="staxx-hub-drawer" aria-label="Staxx tools and notifications" hidden>' +
       '<header class="staxx-head"><div><strong>Staxx<span>Hub</span></strong><small>YOUR TORN COMMAND CENTRE</small></div><button type="button" data-hub-close aria-label="Close sidebar">×</button></header>' +
       '<div class="staxx-scroll"><button class="staxx-overview-switch" type="button" data-overview>▦ &nbsp; Combined overview</button>' +
-      '<section id="staxx-hub-overview" hidden></section><div class="staxx-label"><h3>YOUR TOOLS</h3><button type="button" data-arrange aria-pressed="false">Reorder</button></div><div id="staxx-hub-tools"></div>' +
+      '<section id="staxx-hub-overview" hidden></section><div class="staxx-label"><h3>WHAT TO DO NEXT</h3><span>Prioritised</span></div><section id="staxx-hub-tasks" aria-label="Prioritised Torn actions"></section><div class="staxx-label"><h3>YOUR TOOLS</h3><button type="button" data-arrange aria-pressed="false">Reorder</button></div><div id="staxx-hub-tools"></div>' +
       '<div class="staxx-label"><h3>NOTIFICATIONS</h3><span id="staxx-hub-total"></span></div>' +
       '<div id="staxx-hub-alerts"></div><p class="staxx-foot">Read-only signals · Alerts use last known data · Drag the S tab vertically to reposition</p>' +
       '</div></aside>';
@@ -57,6 +57,7 @@
       '#staxx-hub-drawer .staxx-overview-card b{color:#83dbfa;font-size:12px}#staxx-hub-drawer .staxx-overview-card p{margin:5px 0;color:#d4eafa;font-size:11px}',
       '#staxx-hub-drawer .staxx-overview-card dl{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0 0}',
       '#staxx-hub-drawer .staxx-overview-card dt{font-size:10px;color:#96b6cf}#staxx-hub-drawer .staxx-overview-card dd{font-size:13px;font-weight:750;margin:0;overflow-wrap:anywhere}',
+      '#staxx-hub-drawer .staxx-task{width:100%;text-align:left;display:block;border:1px solid #315b79;border-radius:10px;background:#102b46;color:#eef8ff;padding:10px;margin-bottom:8px;line-height:1.45}#staxx-hub-drawer .staxx-task.urgent{border-color:#e56785}#staxx-hub-drawer .staxx-task.soon{border-color:#ae8450}#staxx-hub-drawer .staxx-task b{display:block;font-size:12px}#staxx-hub-drawer .staxx-task small{display:block;font-size:10px;color:#8fb7d2;margin-top:4px}#staxx-hub-drawer .staxx-task .staxx-step{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;color:#67dfff;margin-bottom:4px}#staxx-hub-drawer .staxx-task:focus-visible{outline:2px solid #67dfff}',
       '#staxx-hub-drawer .staxx-foot{font-size:10px;color:#6d90ab;margin-top:17px}'
     ].join("");
     document.documentElement.append(css, root);
@@ -66,11 +67,11 @@
       {id:"company",label:"Company Helper",icon:"CO",desc:"Staff · Training · Growth"},
       {id:"happy",label:"Happy Jump",icon:"HJ",desc:"Gym · Schedule · Recovery"}
     ];
-    const active = Object.create(null), notices = Object.create(null), summaries = Object.create(null), controls = Object.create(null);
+    const active = Object.create(null), notices = Object.create(null), summaries = Object.create(null), controls = Object.create(null), actionSets=Object.create(null);
     let trends=Object.create(null), arrangeShown=false;
     const toggle=root.querySelector("#staxx-hub-toggle"),veil=root.querySelector("#staxx-hub-veil"),drawer=root.querySelector("#staxx-hub-drawer");
     const tools=root.querySelector("#staxx-hub-tools"),alerts=root.querySelector("#staxx-hub-alerts"),bubble=root.querySelector("#staxx-hub-count");
-    const overview=root.querySelector("#staxx-hub-overview"),overviewButton=root.querySelector("[data-overview]");
+    const overview=root.querySelector("#staxx-hub-overview"),overviewButton=root.querySelector("[data-overview]"),taskList=root.querySelector("#staxx-hub-tasks");
     let expanded=false, panelOpen=false, overviewShown=false, moving=null, suppressClickUntil=0;
     const openPanels=new Set();
     const idOk = v=>typeof v==="string" && /^[a-z][a-z0-9-]{0,31}$/.test(v);
@@ -78,7 +79,7 @@
     function safeRead(key, fallback) {try {const v=JSON.parse(localStorage.getItem(key)||"null");return v===null?fallback:v;}catch(_){return fallback;}}
     function saveLocal(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch(_){}}
     function remember(){
-      try{sessionStorage.setItem("staxx-hub-state-v2",JSON.stringify({at:Date.now(),notices,summaries}));}catch(_){}
+      try{sessionStorage.setItem("staxx-hub-state-v2",JSON.stringify({at:Date.now(),notices,summaries,actionSets}));}catch(_){}
     }
     try {
       const known=safeRead("staxx-hub-registry-v2",[]);
@@ -91,6 +92,7 @@
       if(old&&Date.now()-old.at<4*3600000){
         for(const id of Object.keys(old.notices||{}))if(idOk(id)){const n=old.notices[id];if(n&&Number(n.count)>=0)notices[id]=Object.assign({},n,{cached:true});}
         for(const id of Object.keys(old.summaries||{}))if(idOk(id)){const d=old.summaries[id];if(d&&typeof d==="object")summaries[id]=d;}
+        for(const id of Object.keys(old.actionSets||{}))if(idOk(id)){const d=old.actionSets[id];if(d&&Array.isArray(d.items))actionSets[id]={items:d.items.slice(0,8),updated:d.updated,cached:true};}
       }
     }catch(_){}
     for(const e of entries)controls[e.id]=safeRead("staxx-hub-alert-control-"+e.id,{});
@@ -210,6 +212,30 @@
       overviewButton.classList.toggle("selected",overviewShown);
       overviewButton.setAttribute("aria-expanded",String(overviewShown));
     }
+    function renderTasks(){
+      if(!taskList)return;
+      taskList.replaceChildren();
+      const rows=[];
+      for(const e of entries){
+        const set=actionSets[e.id],control=controls[e.id]||{};
+        if(!set||!Array.isArray(set.items)||Number(control.snoozeUntil)>Date.now())continue;
+        for(const a of set.items)rows.push({...a,owner:e.id,tool:e.label,cached:Boolean(set.cached),updated:set.updated});
+      }
+      const rank={urgent:4,now:3,soon:2,review:1,optional:0};
+      rows.sort((a,b)=>(rank[b.status]??0)-(rank[a.status]??0)||(Number(a.dueAt)||Infinity)-(Number(b.dueAt)||Infinity)||(Number(b.priority)||0)-(Number(a.priority)||0));
+      for(const item of rows.slice(0,6)){
+        const btn=node("button","staxx-task "+(item.status==="urgent"?"urgent":item.status==="soon"?"soon":""));
+        btn.type="button";btn.dataset.openAlertTool=item.owner;btn.dataset.openAlertId=item.id;
+        btn.append(node("span","staxx-step",(item.cached?"LAST OBSERVED · ":"")+(item.status==="urgent"?"ACT NOW":item.status==="now"?"DO NEXT":item.status==="soon"?"UPCOMING":item.status==="review"?"REVIEW":"OPTIONAL")+" · "+item.tool),
+          node("b","",item.title));
+        if(item.detail)btn.append(node("small","",item.detail));
+        if(item.dueAt)btn.append(node("small","",timeUntil(item.dueAt)));
+        if(item.cached)btn.append(node("small","","Verify current Torn data before acting"));
+        taskList.append(btn);
+      }
+      if(!rows.length)taskList.append(node("p","staxx-empty","No verified next steps yet. Open a tool to refresh its data."));
+      else if(rows.length>6)taskList.append(node("p","staxx-foot",String(rows.length-6)+" more recommendations inside your tools"));
+    }
     function render(){
       tools.replaceChildren();alerts.replaceChildren();
       let total=0,maxLevel=0,visible=0,muted=0;
@@ -266,6 +292,7 @@
         card.append(menu);alerts.append(card);
       }
       if(!visible)alerts.append(node("p","staxx-empty",muted?"Alerts dismissed or snoozed. New alerts will still appear.":"Nothing needs your attention right now."));
+      renderTasks();
       showOverview();
       launcherVisibility();
     }
@@ -343,6 +370,17 @@
       n.dueAt=Number.isFinite(Number(d.dueAt))&&Number(d.dueAt)>0?Number(d.dueAt):null;
       n.fingerprint=JSON.stringify([n.count,n.summary,n.items,n.alerts,n.level,n.dueAt]);
       if(JSON.stringify(notices[id])!==JSON.stringify(n)){notices[id]=n;remember();render();}
+    });
+    document.addEventListener("staxx:actions",e=>{
+      const d=e.detail||{},id=d.id;if(!idOk(id)||!entries.some(x=>x.id===id))return;
+      const items=Array.isArray(d.items)?d.items.slice(0,12).filter(a=>a&&/^[a-z][a-z0-9-]{0,63}$/.test(String(a.id||""))).map(a=>({
+        id:String(a.id),title:String(a.title||"Review action").slice(0,100),detail:String(a.detail||"").slice(0,160),
+        status:["urgent","now","soon","review","optional"].includes(a.status)?a.status:"review",
+        priority:Math.max(0,Math.min(100,Number(a.priority)||0)),
+        dueAt:Number.isFinite(Number(a.dueAt))&&Number(a.dueAt)>0?Number(a.dueAt):null
+      })):[];
+      const next={items,updated:Number(d.updated)||Date.now(),cached:false};
+      if(JSON.stringify(actionSets[id])!==JSON.stringify(next)){actionSets[id]=next;remember();render();}
     });
     document.addEventListener("staxx:summary",e=>{
       const d=e.detail||{},id=d.id;if(!idOk(id)||!entries.some(x=>x.id===id))return;
