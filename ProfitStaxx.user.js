@@ -485,7 +485,7 @@
     {name:'Plushie set',points:10,items:['Jaguar Plushie','Lion Plushie','Panda Plushie','Monkey Plushie','Chamois Plushie','Wolverine Plushie','Nessie Plushie','Red Fox Plushie','Camel Plushie','Kitten Plushie','Teddy Bear Plushie','Sheep Plushie','Stingray Plushie']},
     {name:'Flower set',points:10,items:['Dahlia','Orchid','African Violet','Cherry Blossom','Peony','Ceibo Flower','Edelweiss','Crocus','Heather','Tribulus Omanense','Banana Orchid']}
   ];
-  const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,
+  const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'scan'};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
@@ -857,7 +857,7 @@
       if(!qty)continue;
       const cost=qty*d.buy,profit=qty*d.unitProfit;
       // Three minutes per reviewed opportunity is a user-planning assumption, not observed execution time.
-      const reviewMinutes=3;
+      const reviewMinutes=clamp(number(state.settings.reviewMinutes)||3,0.5,60);
       allocations.push({...d,allocQty:qty,allocCost:cost,allocProfit:profit,reviewMinutes});
       remaining=Math.max(0,remaining-cost);
     }
@@ -867,7 +867,7 @@
     const plan=allocationPlan(),rows=plan.allocations;
     let out='<div class="card"><h3>Capital allocator · risk-weighted shortlist</h3>'+
       '<div class="statrow"><div class="stat"><small>Deployable cash</small><b>'+fmt(plan.available)+'</b></div>'+
-      '<div class="stat"><small>Remaining reserve</small><b>'+fmt(plan.remaining)+'</b></div></div>'+
+      '<div class="stat"><small>Unallocated cash</small><b>'+fmt(plan.remaining)+'</b></div></div>'+
       '<p class="muted">Respects your cash reserve, existing recorded holdings, per-trade and per-item limits. Allocations are suggestions, not placed orders. Estimated profit '+fmt(plan.profit)+' assumes modelled resale at asking-derived reference prices.</p>';
     if(!rows.length)out+='<p>No fresh qualifying allocations. Refresh the scan or preserve cash.</p>';
     for(const d of rows.slice(0,6))out+='<div class="line"><strong>'+esc(d.name)+' × '+d.allocQty+'</strong><span>'+fmt(d.allocCost)+' / est. +'+fmt(d.allocProfit)+'</span></div>'+
@@ -997,7 +997,8 @@
       '<div class="duo">'+field('minRoi','Minimum net ROI (%)',s.minRoi)+field('minProfit','Minimum total profit ($)',s.minProfit)+'</div>'+
       '<div class="duo">'+field('bazaarDiscount','Bazaar discount versus ask (%)',s.bazaarDiscount)+field('pointFee','Point sale fee (%)',s.pointFee)+'</div>'+
       '<div class="duo">'+field('museumBatch','Museum batch size (1–25)',s.museumBatch||1)+ '<div class="notice">Multi-set pricing consumes cheapest available offers first; missing stock blocks an estimate.</div></div>'+
-      '<div class="duo">'+field('alertThreshold','FAB profit badge threshold ($)',s.alertThreshold)+field('scanInterval','Scan interval (seconds)',s.scanInterval)+'</div>'+
+      '<div class="duo">'+field('alertThreshold','FAB profit badge threshold ($)',s.alertThreshold)+field('scanInterval','Scan interval (seconds)',s.scanInterval)+'</div>'+ 
+      '<div class="duo">'+field('reviewMinutes','Estimated minutes of active work per deal',s.reviewMinutes||3)+'</div>'+
       '<div class="field"><label>Preferred exit method</label><select name="method">'+
       ['best','bazaar','market'].map(x=>'<option value="'+x+'" '+(s.method===x?'selected':'')+'>'+esc(x)+'</option>').join('')+
       '</select></div><div class="field"><label>Items to monitor (one exact Torn item name per line)</label>'+
@@ -1118,10 +1119,10 @@
       event.preventDefault();
       const f=new FormData(event.target),s=state.settings;
       for(const key of ['capital','maxTradePct','maxItemPct','reservePct','minRoi','minProfit',
-        'bazaarDiscount','pointFee','alertThreshold','scanInterval','museumBatch'])s[key]=number(f.get(key));
+        'bazaarDiscount','pointFee','alertThreshold','scanInterval','museumBatch','reviewMinutes'])s[key]=number(f.get(key));
       s.maxTradePct=clamp(s.maxTradePct,0.1,100);s.maxItemPct=clamp(s.maxItemPct,0.1,100);
       s.reservePct=clamp(s.reservePct,0,99);s.bazaarDiscount=clamp(s.bazaarDiscount,0,99);
-      s.pointFee=clamp(s.pointFee,0,50);s.scanInterval=clamp(s.scanInterval,90,3600);s.museumBatch=clamp(Math.floor(s.museumBatch||1),1,25);
+      s.pointFee=clamp(s.pointFee,0,50);s.scanInterval=clamp(s.scanInterval,90,3600);s.museumBatch=clamp(Math.floor(s.museumBatch||1),1,25);s.reviewMinutes=clamp(s.reviewMinutes||3,0.5,60);
       s.method=['best','bazaar','market'].includes(f.get('method'))?f.get('method'):'best';
       s.watchNames=[...new Set(String(f.get('watchNames')||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean))].slice(0,40);
       persist();state.status='Settings saved';render();
