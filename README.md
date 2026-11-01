@@ -1,3 +1,9 @@
+## v1.15.0 — Market Pulse and trade risk sandbox
+
+- **Market Pulse:** Highlights 3%+ movements in saved lowest asking-price observations from watched items, using a recently scanned point and a separate earlier sample. Each row opens the live market for manual checking. Changes are not completed sale prices or trading signals.
+- **Trade Stress Test:** Shows estimated profit/loss for the top fresh qualifying deal when resale asking prices drop 0%, 5% or 10%, with a conservative 5% market selling fee and an explicit break-even estimate. Includes an optional, player-confirmed buy-quantity preparation shortcut.
+- Both features are read-only and keep existing cash/exposure protections. Historical quotes remain samples, not orders or fills.
+
 ## v1.14.0 — automatic live quantities for watched items
 
 - Inventory auto-sync now captures the core watched trading items as well as museum plushies and flowers. Market opportunities display verified current ownership when a complete Torn inventory snapshot is fresh.
