@@ -86,6 +86,7 @@ function mounted(){
     '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section','[data-diagnostics]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
   }))q[name]=new Element(tag);
   q["[data-overview]"].setAttribute("data-overview","");
+  q["[data-diagnostics]"].setAttribute("data-diagnostics","");
   q["[data-arrange]"].setAttribute("data-arrange","");
   const doc={
     readyState:'complete',hidden:false,mounted:null,__selectors:q,
