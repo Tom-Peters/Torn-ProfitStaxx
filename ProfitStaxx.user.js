@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.3.0
+// @version      1.3.1
 // @description  Read-only market intelligence, Museum arbitrage and manual profit ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -372,7 +372,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.3.0';
+  const VERSION = '1.3.1';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -809,7 +809,7 @@
     document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:valid.length,level:valid.length?'warning':'info',summary:valid.length+' profitable opportunities above your threshold',items:valid.slice(0,3).map(d=>String(d.name||d.itemName||'Market opportunity'))}}));
     const summaryPortfolio=portfolio();
     document.dispatchEvent?.(new CustomEvent('staxx:summary',{detail:{id:'profit',headline:state.lastScan?'Last scan '+age(state.lastScan):'Awaiting market scan',metrics:[
-      {label:'Fresh deals',value:String(valid.length)},
+      {label:'Fresh deals',value:state.lastScan?String(valid.length):'Not scanned'},
       {label:'Recorded invested',value:human(summaryPortfolio.invested)},
       {label:'Realised P/L',value:fmt(summaryPortfolio.realised)}
     ],updated:state.lastScan||now()}}));
