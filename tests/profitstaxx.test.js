@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -179,4 +179,79 @@ test('income comparison keeps user-entered bank and rental cashflows separate fr
   assert.match(html,/13,000,000/,'rental scenario annualises reported weekly net');
   assert.match(html,/1,000,000/,'active return per hour is derived from the ledger');
   assert.equal(moneyRecords()[0].net,2000000);
+});
+
+test('scroll restoration is per-tab and numeric field selection does not crash renders',()=>{
+  assert.match(source,/scrollPositions=Object\.create\(null\)/);
+  assert.match(source,/scrollPositions\[lastRenderedTab\]=previousBody\.scrollTop/);
+  assert.match(source,/body\.scrollTop=scrollPositions\[active\]\|\|0/);
+  assert.match(source,/try\{start=focused\.selectionStart;end=focused\.selectionEnd;\}catch/);
+  assert.match(source,/focus\(\{preventScroll:true\}\)/);
+});
+test('foreign shop feed requires observed quantities and current Torn resale quote',()=>{
+  const {parseTravelFeed,travelState,travelRows,state}=harness(),t=Date.now();
+  const rows=parseTravelFeed({countries:[{country:'mex',name:'Mexico',items:[
+    {item_id:206,name:'Xanax',cost:100,quantity:40,observed_at:new Date(t-60000).toISOString(),reporters:3},
+    {item_id:-1,name:'bad',cost:0,quantity:9}
+  ]}]});
+  assert.equal(rows.length,1);
+  travelState.rows=rows;state.settings.travelCapacity=20;state.settings.maxTradePct=100;
+  state.quotes[206]={id:206,at:t,reference:180,offers:[]};
+  const deal=travelRows()[0];
+  assert.equal(deal.quantityBuy,20);
+  assert.equal(deal.spent,2000);
+  assert.equal(deal.net,1420);
+  assert.equal(deal.valid,true);
+  state.quotes[206].at=t-9*60000;
+  assert.equal(travelRows()[0].valid,false,'Old market asking prices must not count as executable deals');
+});
+test('stock watch alerts use fresh quotes and explicit per-stock buy/sell levels',()=>{
+  const {state,stockState,stockSignals}=harness();
+  stockState.all=[{id:2,name:'Example',acronym:'TCT',market:{price:20},bonus:{requirement:1000}}];
+  stockState.at=Date.now();
+  state.settings.stockTargets={'2':{buy:25,sell:30}};
+  assert.equal(stockSignals()[0].id,'stock-buy-2');
+  stockState.all[0].market.price=40;
+  assert.equal(stockSignals()[0].id,'stock-sell-2');
+  stockState.at=Date.now()-31*60000;
+  assert.equal(stockSignals().length,0);
+});
+test('cross-source ranking excludes stale prices and will not fabricate active profit',()=>{
+  const {state,travelState,incomeCandidates,stockState}=harness();
+  state.quotes={};travelState.rows=[];stockState.at=0;
+  state.settings.bankPrincipal=100000000;state.settings.bankApr=6;
+  const r=incomeCandidates();
+  assert.ok(r.some(x=>x.id==='bank'&&x.category==='passive'));
+  assert.ok(!r.some(x=>x.category==='active'));
+  assert.ok(r.every(x=>x.score>=0&&x.score<=100));
+});
+test('four-way capital allocation cannot overspend deployable money or count held stock block as a new purchase',()=>{
+  const {state,stockState,multiCapitalPlan}=harness();
+  state.settings.capital=100000000;
+  state.settings.reservePct=50;
+  state.settings.allocMarket=25;state.settings.allocTravel=25;state.settings.allocStock=25;state.settings.allocBank=25;
+  state.settings.bankApr=8;
+  stockState.all=[{id:2,acronym:'TCT',name:'Example',market:{price:10000},bonus:{requirement:100}}];
+  stockState.owned=[{id:2,shares:100,bonus:{increment:0}}];
+  stockState.at=Date.now();
+  const p=multiCapitalPlan();
+  assert.equal(p.liquid,50000000);
+  assert.ok(p.items.every(x=>x.source!=='stocks'),'No extra stock purchase when held shares already satisfy target block');
+  assert.ok(p.spent.every((x,i)=>x<=p.limits[i]+1e-6));
+  assert.ok(p.spent.reduce((n,x)=>n+x,0)+p.unallocated<=p.liquid+1e-6);
+});
+test('realised history reflects weighted-average cost and fees, never hypothetical open-position gains',()=>{
+  const {state,realisedEvents,profitHistory}=harness();
+  const t=Date.now();
+  state.trades=[
+    {itemId:12,name:'Sample',side:'buy',qty:10,price:100,at:t-3500},
+    {itemId:12,name:'Sample',side:'sell',qty:4,price:200,fee:5,at:t-1500}
+  ];
+  state.income=[{source:'travel',net:20,at:t-1000}];
+  const events=realisedEvents();
+  assert.equal(events.length,2);
+  assert.equal(events.find(x=>x.source==='Item trades (ledger)').net,360);
+  const p=profitHistory(7);
+  assert.equal(p.total,380);
+  assert.equal(p.sources.size,2);
 });
