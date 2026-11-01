@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -313,4 +313,29 @@ test('balanced daily recommendations require travel time and reject high-risk it
  assert.match(source,/if\(x\.kind==='travel'&&!minutes\)continue/);
  assert.match(source,/dealRisk\(observed\)\.level==='High'/);
  assert.match(source,/if\(minutes&&activeMinutes\+minutes>budget\)continue/);
+});
+
+test('automatic inventory counts override manual estimates only while a verified snapshot is fresh',()=>{
+ const {state,liveMuseumOwnedV112,museumOwnedCountV112}=harness();
+ state.settings.museumOwned={'Jaguar Plushie':4};
+ assert.equal(museumOwnedCountV112('Jaguar Plushie'),4);
+ state.inventoryOwned={'Jaguar Plushie':2};
+ state.inventoryAt=Date.now();
+ assert.equal(liveMuseumOwnedV112(),true);
+ assert.equal(museumOwnedCountV112('Jaguar Plushie'),2);
+ assert.equal(museumOwnedCountV112('Lion Plushie'),0);
+ state.inventoryAt=Date.now()-61*60000;
+ assert.equal(liveMuseumOwnedV112(),false);
+ assert.equal(museumOwnedCountV112('Jaguar Plushie'),4);
+});
+test('automatic read-only data scheduler enforces independent cooldowns and visible-only work',()=>{
+ assert.match(source,/async function autoTickV112\(/);
+ assert.match(source,/autoTickRunningV112\|\|document\.hidden/);
+ assert.match(source,/time-autoChecksV112\.full>=45\*60000/);
+ assert.match(source,/time-autoChecksV112\.travel>=20\*60000/);
+ assert.match(source,/time-autoChecksV112\.stocks>=10\*60000/);
+ assert.match(source,/time-autoChecksV112\.inventory>=30\*60000/);
+ assert.match(source,/for\(let offset=0;offset<2000;offset\+=250\)/);
+ assert.match(source,/if\(!complete\)throw Error/);
+ assert.match(source,/if\(entry\.faction_owned\)continue/);
 });
