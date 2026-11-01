@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -116,4 +116,34 @@ test('Museum batch planner consumes price levels and owned stock',()=>{
 test('HTML escaping protects item labels',()=>{
   const {esc}=harness();
   assert.equal(esc('<svg onload="boom">&'), '&lt;svg onload=&quot;boom&quot;&gt;&amp;');
+});
+
+test('seven-day ask history shows evidence strength without treating asks as sales',()=>{
+  const {state,priceHistoryQuality,marketLiquiditySignal}=harness();
+  const now=Date.now();
+  state.snapshots[12]=[{at:now-900000,reference:110},{at:now-500000,reference:120},{at:now-100000,reference:105}];
+  const h=priceHistoryQuality(12);
+  assert.ok(h.n>=1&&h.n<=3);
+  assert.match(h.label,/snapshot|sample|Developing|Moderate/i);
+  const liquidity=marketLiquiditySignal({id:12,qty:2,reference:120});
+  assert.equal(liquidity.competing,0);
+  assert.equal(liquidity.label,'Limited near-price asks');
+});
+test('capital allocator respects deployable funds and per-item constraints',()=>{
+  const {state,allocationPlan}=harness();
+  const now=Date.now();
+  state.settings.capital=1000000;
+  state.settings.reservePct=50;
+  state.settings.maxTradePct=10;
+  state.settings.maxItemPct=20;
+  state.settings.minProfit=1;
+  state.settings.minRoi=1;
+  state.quotes[12]={id:12,name:'Test medical item',reference:130,at:now,
+    offers:[{price:100,qty:999},...Array.from({length:8},()=>({price:130,qty:999}))]};
+  state.snapshots[12]=[{at:now-3600000,reference:125},{at:now,reference:130}];
+  const p=allocationPlan();
+  assert.ok(p.available<=500000);
+  assert.ok(p.allocations.length<=1);
+  assert.ok(p.allocations.every(x=>x.allocQty>=1&&x.allocCost<=100000+1e-6));
+  assert.ok(p.allocations.reduce((n,x)=>n+x.allocCost,0)<=p.available+1e-6);
 });
