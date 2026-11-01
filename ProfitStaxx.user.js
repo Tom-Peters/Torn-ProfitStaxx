@@ -886,7 +886,7 @@
       return {...x,quantityBuy:quantity,spent:cost,net,roi:net!==null&&cost>0?100*net/cost:null,
         perHour:net!==null&&mins>0?net*60/mins:null,roundTripMinutes:mins,
         saleReference:resale,quoteAt:fresh?q.at:0,observationAge:ageMs,
-        valid:ageMs<=30*60000&&quantity>0&&net!==null&&net>0};
+        valid:ageMs>=-5*60000&&ageMs<=30*60000&&quantity>0&&net!==null&&net>0};
     }).sort((a,b)=>(Number(b.valid)-Number(a.valid))||(b.perHour??b.net??-1)-(a.perHour??a.net??-1));
   }
   async function publicTravelGet(){
@@ -962,7 +962,7 @@
   function renderTravel(){
     const rows=travelRows(),fresh=rows.filter(x=>x.valid),priced=rows.filter(x=>x.net!==null).length;
     let h='<div class="card"><h3>Foreign-shop profit scanner</h3>'+
-      '<p class="muted">Optional third-party public observation data from Torn Tracker, used only when you press Scan abroad. No API key, identity or stored trading record is sent. Data by torn-tracker.com contributors (CC BY 4.0). Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
+      '<p class="muted">Optional third-party public observation data from Torn Tracker, used only when you press Scan abroad. No API key, identity or stored trading record is sent. <a href="https://torn-tracker.com/guide/website/developer-api/" target="_blank" rel="noopener noreferrer">Data: torn-tracker.com contributors</a> (CC BY 4.0). Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
       '<form id="ps_travelsettings"><div class="duo">'+field('travelCapacity','Carry capacity (items)',state.settings.travelCapacity||10)+
       field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+'</div>'+
       '<div class="field"><label>Round-trip minutes by destination (country=minutes; include shop time)</label>'+
