@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.6.0
+// @version      1.7.0
 // @description  Read-only market intelligence, Museum arbitrage and manual profit ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -474,7 +474,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.6.0';
+  const VERSION = '1.7.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -748,6 +748,73 @@
         roi:profit!==null&&cost?profit/cost*100:null,ready};
     });
   }
+
+  // Live Torn Stock Market and local revenue ledger. No transactions are submitted.
+  const dividendCash={CNC:[80000000,31],GRN:[4000000,31],IOU:[12000000,31],TMI:[25000000,31],TCT:[1000000,31],TSB:[50000000,31]};
+  const incomeRoutes=[['market','Item Market / Bazaar','/page.php?sid=ItemMarket'],['stocks','Stock Market','/page.php?sid=stocks'],
+    ['bank','Bank interest','/bank.php'],['rent','Property rental','/properties.php'],['company','Company income / wages','/companies.php'],
+    ['travel','Travel importing','/travelagency.php'],['crimes','Crimes / OC','/loader.php?sid=crimes'],
+    ['bounty','Bounty hunting','/bounties.php'],['revive','Reviving / services','/hospitalview.php'],
+    ['museum','Museum arbitrage','/museum.php'],['points','Points trading','/pmarket.php'],['other','Other earned income','/city.php']];
+  const stockState={all:[],owned:[],at:0,ownedAt:0,loading:false,error:''};
+  function moneyRecords(){try{const v=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');return Array.isArray(v)?v:[]}catch(_){return []}}
+  function putMoney(rows){try{localStorage.setItem('profitstaxx_income_v1',JSON.stringify(rows.slice(-1000)))}catch(_){alert('Income storage is full or unavailable.')}}
+  function stockRows(){
+    const mine=new Map(stockState.owned.map(x=>[Number(x.id),x]));
+    return stockState.all.filter(x=>number(x.market?.price)>0).map(x=>{
+      const own=mine.get(Number(x.id)),shares=number(own?.shares),p=number(x.market.price),block=number(x.bonus?.requirement);
+      const cash=dividendCash[x.acronym],annualYield=cash&&block?100*cash[0]*365/cash[1]/(block*p):null;
+      const increments=number(own?.bonus?.increment);
+      const next=block*(x.bonus?.passive?1:Math.pow(2,Math.min(25,increments)));
+      return {...x,own,shares,p,block,annualYield,increment:increments,need:Math.max(0,next-shares)};
+    }).sort((a,b)=>(b.annualYield??-1)-(a.annualYield??-1));
+  }
+  function dueDividends(){return stockState.ownedAt&&now()-stockState.ownedAt<1800000?stockRows().filter(x=>x.own?.bonus?.available===true):[]}
+  async function refreshStocks(){
+    if(stockState.loading||!apiKey())return;
+    stockState.loading=true;stockState.error='';render();
+    try{
+      const rows=await api('torn/stocks');
+      if(!Array.isArray(rows.stocks))throw Error('Invalid stock quote response.');
+      stockState.all=rows.stocks;stockState.at=now();
+      try{const mine=await api('user/stocks');if(!Array.isArray(mine.stocks))throw Error('Invalid holdings response.');
+        stockState.owned=mine.stocks;stockState.ownedAt=now();}
+      catch(e){stockState.owned=[];stockState.ownedAt=0;
+        stockState.error='Prices loaded, but personal holdings require a Limited-access key with user/stocks: '+e.message;}
+    }catch(e){stockState.error=e.message}
+    finally{stockState.loading=false;render()}
+  }
+  function renderStockPanel(){
+    const rows=stockRows(),due=dueDividends();
+    let h='<div class="toolbar"><button class="btn" data-action="stockrefresh" '+(stockState.loading?'disabled':'')+'>'+(stockState.loading?'Refreshing…':'Refresh stocks')+
+      '</button><button class="btn secondary" data-action="stockpage">Open Torn stock exchange</button></div>'+
+      notice('Block costs and share prices are from Torn API v2. Annual yield is shown only for fixed cash dividends; price appreciation is excluded. Selling shares incurs a 0.1% fee.');
+    if(stockState.error)h+=notice(stockState.error,true);
+    if(!rows.length)return h+'<div class="empty">Press Refresh to load live stocks.</div>';
+    h+='<div class="statrow"><div class="stat"><small>Market value of owned shares</small><b>'+(stockState.ownedAt?fmt(rows.reduce((n,x)=>n+x.shares*x.p,0)):'Limited key needed')+'</b></div>'+
+      '<div class="stat"><small>Ready dividends</small><b>'+(stockState.ownedAt?due.length:'—')+'</b></div></div>';
+    if(due.length)h+='<div class="card" id="ps-alert-stock-claim"><h3>Collect dividends</h3><p>'+due.map(x=>esc(x.acronym)).join(', ')+'</p><button class="btn" data-action="stockpage">Collect on Torn</button></div>';
+    for(const x of rows)h+='<div class="card"><div class="line"><strong>'+esc(x.acronym)+' · '+esc(x.name)+'</strong><span class="pill">'+(x.annualYield===null?'Unpriced bonus':pct(x.annualYield)+' cash yield')+'</span></div>'+
+      '<div class="line"><span>Share / first benefit block</span><b>'+fmt(x.p)+' / '+fmt(x.p*x.block)+'</b></div>'+
+      '<p class="muted">'+esc(x.bonus?.description||'No benefit description')+'</p>'+
+      (stockState.ownedAt?'<p>Owned '+Math.floor(x.shares).toLocaleString('en-US')+' · active increments '+x.increment+
+        (x.own?.bonus?.available?' · <b class="positive">Claim now</b>':'')+'</p><p class="muted">Next benefit: '+Math.floor(x.need).toLocaleString('en-US')+' more shares, about '+fmt(x.need*x.p)+'.</p>':'')+
+      '<button class="btn secondary" data-action="stockpage">Inspect stock</button></div>';
+    return h+notice('Utility perks and item dividend returns are left unpriced rather than treating market asking prices as realised revenue. Each new active benefit increment doubles the share requirement.');
+  }
+  function renderRevenuePanel(){
+    const records=moneyRecords(),sum=days=>records.filter(x=>x.at>=now()-days*86400000).reduce((n,x)=>n+Number(x.net||0),0);
+    let h='<div class="statrow"><div class="stat"><small>7-day realised net</small><b>'+fmt(sum(7))+'</b></div><div class="stat"><small>30-day realised net</small><b>'+fmt(sum(30))+'</b></div></div>'+
+      '<div class="card"><h3>Record completed income or losses</h3><form id="ps_revenue"><div class="field"><label>Income source</label><select name="source">'+incomeRoutes.map(r=>'<option value="'+esc(r[0])+'">'+esc(r[1])+'</option>').join('')+'</select></div>'+
+      '<div class="duo">'+field('received','Received ($)',0)+field('spent','Spent ($)',0)+'</div><div class="duo">'+field('minutes','Minutes of active work',0)+field('note','Note','','text','maxlength="100"')+'</div><button class="btn" type="submit">Save income</button></form></div>'+
+      '<h3>Explore other Torn revenue sources</h3>';
+    for(const r of incomeRoutes)h+='<div class="card"><div class="line"><strong>'+esc(r[1])+'</strong><button class="btn secondary" data-action="incomepage" data-source="'+esc(r[0])+'">Open Torn</button></div></div>';
+    h+='<h3>Income history</h3>';
+    for(const x of records.slice(-30).reverse())h+='<div class="card"><div class="line"><b>'+esc(incomeRoutes.find(r=>r[0]===x.source)?.[1]||'Other')+'</b><span>'+fmt(x.net)+'</span></div>'+
+      '<div class="line"><span class="muted">'+esc(x.note||new Date(x.at).toLocaleDateString())+'</span><button class="btn red" data-income-id="'+esc(x.id)+'">Delete</button></div></div>';
+    return h+notice('Only completed earnings are recorded. Stock holding values, unrealised resale estimates and bank scenarios are not counted as earned income.');
+  }
+
   function css(){
     return [
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
@@ -766,8 +833,8 @@
       'background:linear-gradient(120deg,#0c3358,#0b203b);border-bottom:1px solid #254765}',
       '.brand{font-size:19px;font-weight:850;letter-spacing:.1px}.sub{color:#90a9c0;font-size:11px}',
       '.close{background:#1c3b59;color:#fff;border:0;padding:7px 12px;border-radius:9px;font-weight:700}',
-      '.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:7px;background:#0b223b}',
-      '.tab{border:0;border-radius:8px;background:transparent;color:#91aac4;padding:10px 2px;font-size:12px}',
+      '.tabs{display:flex;gap:4px;padding:7px;overflow-x:auto;background:#0b223b}',
+      '.tab{border:0;border-radius:8px;background:transparent;color:#91aac4;padding:10px;font-size:12px;white-space:nowrap;flex:0 0 auto}',
       '.tab.active{background:#1c5080;color:#fff;font-weight:750}',
       '.body{overflow-y:auto;padding:13px;flex:1;overscroll-behavior:contain}',
       '.statrow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 0 10px}',
@@ -1027,11 +1094,11 @@
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
-    const tabs=['alerts','scan','museum','portfolio','settings'];
-    const labels=['Alerts '+valid.length,'Deals','Museum','Ledger','Settings'];
+    const tabs=['alerts','scan','stocks','income','museum','portfolio','settings'];
+    const labels=['Alerts '+(valid.length+dueDividends().length),'Deals','Stocks','Income','Museum','Ledger','Settings'];
     const active=state.tab;
     const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
-      active==='portfolio'?renderPortfolio():renderSettings();
+      active==='portfolio'?renderPortfolio():active==='stocks'?renderStockPanel():active==='income'?renderRevenuePanel():renderSettings();
     shell.innerHTML='<div class="panel" role="dialog" aria-modal="true" aria-label="ProfitStaxx">'+
       '<div class="heading"><div><div class="brand">Profit<span style="color:#54d7fa">Staxx</span></div><div class="sub">Profit intelligence · v'+VERSION+'</div></div>'+
       '<button class="close" data-action="close">Close ×</button></div>'+
@@ -1068,12 +1135,13 @@
     input.click();
   }
   function onClick(event){
-    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned]');
+    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id]');
     if(!el)return;
-    if(el.dataset.tab){state.tab=el.dataset.tab;render();return;}
+    if(el.dataset.tab){state.tab=el.dataset.tab;render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
       owned[name]=Math.max(0,Math.floor(number(owned[name])+Number(el.dataset.delta||0)));
       state.settings.museumOwned=owned;persist();render();return;}
+    if(el.dataset.incomeId){if(confirm('Delete income record?')){putMoney(moneyRecords().filter(x=>x.id!==el.dataset.incomeId));render();}return;}
     if(el.dataset.delete){
       if(confirm('Remove this manual ledger entry? Later sales may depend on it.')){
         state.trades=state.trades.filter(t=>t.id!==el.dataset.delete);persist();render();
@@ -1095,6 +1163,9 @@
       }
       case 'close':state.open=false;render();break;
       case 'scan':scan({manual:true});break;
+      case 'stockrefresh':refreshStocks();break;
+      case 'stockpage':location.assign('https://www.torn.com/page.php?sid=stocks');break;
+      case 'incomepage':{const row=incomeRoutes.find(x=>x[0]===el.dataset.source);if(row)location.assign('https://www.torn.com'+row[2]);break;}
       case 'export':exportFile('profitstaxx-trades.csv',exportCSV(),'text/csv;charset=utf-8');break;
       case 'backup':exportFile('profitstaxx-backup.json',JSON.stringify({
         version:VERSION,trades:state.trades,settings:Object.assign({},state.settings,{key:''})},null,2),'application/json');break;
@@ -1117,6 +1188,12 @@
         addTrade({side,itemId:item.id,qty:f.get('qty'),price:f.get('price'),
           fee:method==='market'?5:0,method});
       }catch(e){alert(e.message);}
+    }else if(event.target.id==='ps_revenue'){
+      event.preventDefault();const f=new FormData(event.target),a=Number(f.get('received')),b=Number(f.get('spent')),minutes=Number(f.get('minutes'));
+      if(![a,b,minutes].every(n=>Number.isFinite(n)&&n>=0&&n<=1e12)){alert('Use non-negative figures.');return;}
+      const source=String(f.get('source'));if(!incomeRoutes.some(x=>x[0]===source))return;
+      const records=moneyRecords();records.push({id:now()+'_'+Math.random().toString(36).slice(2,6),at:now(),source,net:a-b,minutes,note:String(f.get('note')||'').slice(0,100)});
+      putMoney(records);render();
     }else if(event.target.id==='ps_settings'){
       event.preventDefault();
       const f=new FormData(event.target),s=state.settings;
