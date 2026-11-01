@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.12.0
+// @version      1.13.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -15,7 +15,7 @@
 // @updateURL    https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // ==/UserScript==
-/* StaxxHub v2.5 · shared Torn PDA launcher · IamEEKY · no external dependencies */
+/* StaxxHub v2.6 · shared Torn PDA launcher · IamEEKY · no external dependencies */
 (function () {
   "use strict";
   if (typeof location === "undefined" || typeof document === "undefined" ||
@@ -96,6 +96,15 @@
     const tools=root.querySelector("#staxx-hub-tools"),alerts=root.querySelector("#staxx-hub-alerts"),bubble=root.querySelector("#staxx-hub-count");
     const overview=root.querySelector("#staxx-hub-overview"),overviewButton=root.querySelector("[data-overview]"),taskList=root.querySelector("#staxx-hub-tasks"),diagnostics=root.querySelector("#staxx-hub-diagnostics"),diagnosticButton=root.querySelector("[data-diagnostics]");
     let expanded=false, panelOpen=false, overviewShown=false, diagnosticsShown=false, moving=null, suppressClickUntil=0;
+    let lastDataRequestV26=0;
+    function refreshConnectedV26(force=false){
+      if(document.hidden||!entries.some(x=>active[x.id]))return false;
+      const time=Date.now();
+      if(!force&&time-lastDataRequestV26<120000)return false;
+      lastDataRequestV26=time;
+      document.dispatchEvent(new CustomEvent("staxx:refresh-request",{detail:{reason:force?"manual":"hub-open",force}}));
+      return true;
+    }
     const openPanels=new Set();
     const idOk = v=>typeof v==="string" && /^[a-z][a-z0-9-]{0,31}$/.test(v);
     function node(tag,cls,value) {const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=String(value);return e;}
@@ -241,7 +250,7 @@
     }
     function diagnosticReportV25(){
       const time=Date.now();
-      return {hub:"2.5",capturedAt:new Date(time).toISOString(),page:String(location.pathname||""),
+      return {hub:"2.6",capturedAt:new Date(time).toISOString(),page:String(location.pathname||""),
         connectedCount:entries.filter(x=>active[x.id]).length,knownCount:entries.length,tools:entries.map(e=>{
           const sum=summaries[e.id],actions=actionSets[e.id],notice=notices[e.id],h=healthReports[e.id];
           const age=Number(sum?.updated),lastAction=Number(actions?.updated);
@@ -282,6 +291,8 @@
     function showOverview(){
       overview.replaceChildren();
       overview.append(node("p","staxx-trendnote","All registered tools automatically appear here, including future Staxx scripts. Stale suggestions are labelled and sorted after current data."));
+      const syncButton=node("button","staxx-overview-switch","↻ Check current data across connected tools");
+      syncButton.type="button";syncButton.dataset.syncAll="1";overview.append(syncButton);
       for(const [i,item] of taskRowsV25().slice(0,5).entries()){
         const row=node("button","staxx-task "+(!item.cached&&item.status==="urgent"?"urgent":""));
         row.dataset.openAlertTool=item.owner;row.dataset.openAlertId=item.id;
@@ -448,7 +459,8 @@
       }
       if(b.dataset.openAlertTool){openTool(b.dataset.openAlertTool,b.dataset.openAlertId);return;}
       if(b.dataset.openStaxx){openTool(b.dataset.openStaxx);return;}
-      if(b.hasAttribute("data-overview")){overviewShown=!overviewShown;if(overviewShown)diagnosticsShown=false;render();return;}
+      if(b.hasAttribute("data-overview")){overviewShown=!overviewShown;if(overviewShown){diagnosticsShown=false;refreshConnectedV26();}render();return;}
+       if(b.dataset.syncAll){refreshConnectedV26(true);return;}
        if(b.hasAttribute("data-diagnostics")){diagnosticsShown=!diagnosticsShown;if(diagnosticsShown){overviewShown=false;
          document.dispatchEvent(new CustomEvent("staxx:diagnostics-request"));}render();return;}
        if(b.dataset.checkDiagnostics){document.dispatchEvent(new CustomEvent("staxx:ping"));
@@ -458,7 +470,7 @@
          if(clipboard?.writeText){clipboard.writeText(report).catch(()=>{const box=diagnostics.querySelector("#staxx-safe-report");if(box){box.hidden=false;box.value=report;}});}
          else{const box=diagnostics.querySelector("#staxx-safe-report");if(box){box.hidden=false;box.value=report;box.select?.();}}
          return;}
-      if(b===toggle){if(Date.now()<suppressClickUntil)return;setExpanded(true);return;}
+      if(b===toggle){if(Date.now()<suppressClickUntil)return;setExpanded(true);refreshConnectedV26();return;}
       if(b.hasAttribute("data-hub-close"))setExpanded(false);
     });
     veil.addEventListener("click",()=>setExpanded(false));
@@ -569,7 +581,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.12.0';
+  const VERSION = '1.13.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -587,7 +599,7 @@
     key:'',alertThreshold:100000,tab:'scan',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},
     travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
     tab:'scan',dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
@@ -598,6 +610,25 @@
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const now=()=>Date.now();
+  // Wallet is an optional read-only safety limit. Never assume the API returned a zero balance.
+  function parseMoneyV113(payload){
+    const value=payload?.money?.money_onhand??payload?.money_onhand;
+    const amount=Number(value);
+    return value!==undefined&&value!==null&&value!==''&&Number.isFinite(amount)&&amount>=0?amount:null;
+  }
+  function liveWalletCashV113(){
+    return state.walletAt&&Number.isFinite(state.walletCash)&&now()-state.walletAt<15*60000?state.walletCash:null;
+  }
+  async function refreshWalletV113(){
+    if(state.walletBusy||!apiKey()||document.hidden)return;
+    state.walletBusy=true;
+    try{
+      const cash=parseMoneyV113(await api('user/money'));
+      if(cash===null)throw Error('Torn returned no verified cash-on-hand field.');
+      state.walletCash=cash;state.walletAt=now();state.walletError='';
+    }catch(e){state.walletError='Live wallet unavailable: '+String(e.message||e).slice(0,110);}
+    finally{state.walletBusy=false;render();}
+  }
   const age=ms=>ms?Math.max(0,Math.floor((now()-ms)/60000))+'m ago':'Never';
   const human=n=>{if(!Number.isFinite(n))return '—'; const a=Math.abs(n);
     return (n<0?'-':'')+'$'+(a>=1e9?(a/1e9).toFixed(2)+'b':a>=1e6?(a/1e6).toFixed(2)+'m':a>=1e3?(a/1e3).toFixed(1)+'k':Math.round(a));};
@@ -711,7 +742,7 @@
     const roi=100*sell.unitProfit/offer.price;
     const cashCap=number(state.settings.capital)*number(state.settings.maxTradePct)/100;
     const itemCap=number(state.settings.capital)*number(state.settings.maxItemPct)/100;
-    const funds=Math.min(cashCap,Math.max(0,itemCap-exposure(q.id)),Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost()));
+    const funds=Math.min(cashCap,Math.max(0,itemCap-exposure(q.id)),Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost()),liveWalletCashV113()??Infinity);
     const quantity=Math.max(0,Math.min(offer.qty,Math.floor(funds/offer.price)));
     const profit=quantity*sell.unitProfit;
     if(!quantity||roi<number(state.settings.minRoi)||profit<number(state.settings.minProfit))return null;
@@ -786,7 +817,7 @@
     if(state.busy)return;
     if(!apiKey()){state.status='API key needed';render();return;}
     if(!manual&&document.hidden)return;
-    if(!manual&&now()-state.lastScan<number(state.settings.scanInterval)*1000)return;
+    if(!manual&&!quick&&now()-state.lastScan<number(state.settings.scanInterval)*1000)return;
     state.busy=true;state.cancelScan=false;state.scanMode=quick?'quick':'full';state.error='';state.status='Loading catalog...';render();
     try{
       await loadCatalog();
@@ -1174,7 +1205,7 @@
 
   // Cross-category ranking deliberately distinguishes one-off spreads from recurring cash benefits.
   function incomeCandidates(){
-    const remaining=Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost());
+    const remaining=Math.min(Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost()),liveWalletCashV113()??Infinity);
     const entries=[],activeMin=Math.max(1,number(state.settings.reviewMinutes)||3);
     const add=(x)=>{
       if(!Number.isFinite(Number(x.cost))||x.cost<=0||!Number.isFinite(Number(x.net))||x.net<=0)return;
@@ -1231,7 +1262,7 @@
   function dailyPlanV111(){
     const day=new Date().toISOString().slice(0,10),settings=state.settings,
       budget=Math.max(1,number(settings.dailyReviewMinutes)||15),
-      spendable=Math.max(0,number(settings.capital)*(1-number(settings.reservePct)/100)-openCost()),
+      spendable=Math.min(Math.max(0,number(settings.capital)*(1-number(settings.reservePct)/100)-openCost()),liveWalletCashV113()??Infinity),
       candidates=incomeCandidates().filter(x=>x&&x.net>0&&x.cost>0&&x.score>=20);
     const categories=new Map(),items=[];let activeMinutes=0,committed=0;
     // First pass: diversity across sources, second pass: best remaining cash/time fit.
@@ -1269,7 +1300,7 @@
       field('dailyReviewCap','Maximum reviewed opportunities',5,'number','disabled')+'</div><button class="btn secondary" type="submit">Save time budget</button></form>'+
       '<div class="statrow"><div class="stat"><small>Reviewed today</small><b>'+done+'/'+plan.items.length+'</b></div>'+
       '<div class="stat"><small>Modelled active time</small><b>'+plan.activeMinutes+' / '+plan.budget+' min</b></div></div>'+
-      '<p class="muted">Working cash model: '+fmt(plan.spendable)+' · selected short-list commitments '+fmt(plan.committed)+'. The model does not know your current Torn wallet or confirm buy/sell fills.</p></div>';
+      '<p class="muted">Working cash model: '+fmt(plan.spendable)+' · selected short-list commitments '+fmt(plan.committed)+'. '+(liveWalletCashV113()!==null?'Torn cash on hand '+fmt(liveWalletCashV113())+' · checked '+age(state.walletAt)+'.':'Cash-on-hand API not verified; using your saved capital cap.')+' Real purchases and sales still require confirmation.</p></div>';
     if(!plan.items.length)html+='<div class="empty">No supported candidates fit your time and protected cash. Refresh the separate Deals, Travel or Stocks data; never trade just to fill a quota.</div>';
     for(const [i,x] of plan.items.entries()){
       const mark=x.reviewed?'Reviewed (not bought)':'Mark reviewed';
@@ -1302,7 +1333,7 @@
   }
   // Buckets share only deployable cash; the unspent cash reserve and item cost basis are protected.
   function multiCapitalPlan(){
-    const s=state.settings,capital=number(s.capital),liquid=Math.max(0,capital*(1-number(s.reservePct)/100)-openCost());
+    const s=state.settings,capital=number(s.capital),liquid=Math.min(Math.max(0,capital*(1-number(s.reservePct)/100)-openCost()),liveWalletCashV113()??Infinity);
     const input=[number(s.allocMarket),number(s.allocTravel),number(s.allocStock),number(s.allocBank)];
     const total=input.reduce((a,b)=>a+b,0)||1;
     const percent=input.map(x=>100*x/total);
@@ -2028,13 +2059,16 @@
     observer=new MutationObserver(attempt);observer.observe(document.body,{childList:true,subtree:true});
     timer=setInterval(attempt,800);attempt();
   }
-  const autoChecksV112={full:0,quick:0,travel:0,stocks:0,inventory:0};
+  const autoChecksV112={full:0,quick:0,travel:0,stocks:0,inventory:0,wallet:0};
   let autoTickRunningV112=false;
   async function autoTickV112(){
     if(autoTickRunningV112||document.hidden||!apiKey()||state.busy||travelState.busy||stockState.loading)return;
     autoTickRunningV112=true;
     try{
       const time=now();
+      if(time-state.walletAt>=10*60000&&time-autoChecksV112.wallet>=10*60000){
+        autoChecksV112.wallet=time;await refreshWalletV113();return;
+      }
       // Full scans may be lengthy: never repeat faster than 45 minutes, including failures.
       if((!state.lastScan||time-state.lastScan>=60*60000)&&time-autoChecksV112.full>=45*60000){
         autoChecksV112.full=time;await scan({manual:false});return;
@@ -2086,6 +2120,7 @@
     scanTimer=setInterval(()=>{void autoTickV112();},60000);
     setTimeout(()=>{void autoTickV112();},10000);
     document.addEventListener('visibilitychange',()=>{if(!document.hidden){render();void autoTickV112();}});
+    document.addEventListener('staxx:refresh-request',()=>{void autoTickV112();});
 
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
