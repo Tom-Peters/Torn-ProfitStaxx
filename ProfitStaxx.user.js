@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.3.1
+// @version      1.4.0
 // @description  Read-only market intelligence, Museum arbitrage and manual profit ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -14,7 +14,7 @@
 // @updateURL    https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // ==/UserScript==
-/* StaxxHub v2.1 · shared Torn PDA launcher · IamEEKY · no external dependencies */
+/* StaxxHub v2.2 · shared Torn PDA launcher · IamEEKY · no external dependencies */
 (function () {
   "use strict";
   if (typeof location === "undefined" || typeof document === "undefined" ||
@@ -65,6 +65,7 @@
       '#staxx-hub-drawer .staxx-alert.urgent .staxx-alert-title{color:#ff9bad!important}',
       '#staxx-hub-drawer .staxx-alert span{display:block;color:#daecf9;font-size:12px;margin:5px 0;overflow-wrap:anywhere}',
       '#staxx-hub-drawer .staxx-alert small{display:block;color:#91aec6;font-size:11px;margin:4px 0}',
+      '#staxx-hub-drawer .staxx-alert-item{display:block;width:100%;margin:7px 0 3px;padding:9px 10px;background:#123c60;border:1px solid #427b9f;color:#e3f5ff;border-radius:8px;text-align:left;font-size:12px;font-weight:750;line-height:1.35;min-height:38px}#staxx-hub-drawer .staxx-alert-item:focus-visible{outline:2px solid #54d7fa}#staxx-hub-drawer .staxx-alert-description{padding:0 3px 3px}',
       '#staxx-hub-drawer .staxx-alert-actions{display:flex;gap:7px;margin-top:10px}',
       '#staxx-hub-drawer .staxx-snooze-menu{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}#staxx-hub-drawer .staxx-snooze-menu button{background:#174463;border:1px solid #3e7593;border-radius:7px;padding:6px 8px;min-height:32px;font-size:11px}#staxx-hub-drawer .staxx-snooze-menu input{background:#071d32;border:1px solid #527b9b;border-radius:7px;color:#fff;min-width:56px;width:64px;padding:6px;font-size:12px}#staxx-hub-drawer .staxx-snooze-menu label{display:flex;align-items:center;gap:4px;color:#bfd9ec;font-size:11px}#staxx-hub-drawer .staxx-due{font-size:11px;color:#b8e4ff!important;font-weight:700}#staxx-hub-drawer .staxx-spark{display:flex;align-items:end;gap:3px;height:40px;margin:11px 0 4px}#staxx-hub-drawer .staxx-spark span{flex:1;min-width:0;max-width:30px;border-radius:3px 3px 0 0;background:linear-gradient(#50d5f8,#17649c)}#staxx-hub-drawer .staxx-spark span.missing{background:#1e3a52;height:3px!important}#staxx-hub-drawer .staxx-trendnote{font-size:10px!important;color:#9ab5cf!important}#staxx-hub-drawer .staxx-alert-actions button{background:#1c3e5b;border:1px solid #365978;border-radius:8px;padding:6px 9px;font-size:11px;flex:1;min-height:32px}',
       '#staxx-hub-drawer .staxx-empty{color:#9db7cd;background:#0c243e;border:1px dashed #305473;border-radius:10px;font-size:11px;padding:14px 10px}',
@@ -142,9 +143,9 @@
       if(control.dismissed===n.fingerprint || Number(control.snoozeUntil)>Date.now())return null;
       return n;
     }
-    function openTool(id){
+    function openTool(id,alertId){
       if(id==="company"&&!/^\/companies\.php$/i.test(location.pathname)){
-        try{sessionStorage.setItem("staxx-open-company","1");}catch(_){}
+        try{sessionStorage.setItem("staxx-open-company","1");if(alertId)sessionStorage.setItem("staxx-open-company-alert",alertId);}catch(_){}
         location.assign(location.origin+"/companies.php");return;
       }
       if(!active[id]){
@@ -153,7 +154,7 @@
       }
       panelOpen=true;setExpanded(false);launcherVisibility();
       document.dispatchEvent(new CustomEvent("staxx:closeall"));
-      document.dispatchEvent(new CustomEvent("staxx:open",{detail:{id}}));
+      document.dispatchEvent(new CustomEvent("staxx:open",{detail:{id,alertId:alertId||null}}));
     }
     function timeUntil(ms) {
       if(!Number.isFinite(ms)||ms<=0)return "";
@@ -255,7 +256,16 @@
         const title=node("button","staxx-alert-title",e.label+" · "+n.count+" alert"+(n.count===1?"":"s"));
         title.type="button";title.dataset.openStaxx=e.id;card.append(title);
         card.append(node("span","",n.summary||"Needs attention"));
-        for(const item of n.items.slice(0,2))card.append(node("small","",item));
+        if(Array.isArray(n.alerts)&&n.alerts.length){
+          for(const item of n.alerts.slice(0,8)){
+            const go=node("button","staxx-alert-item",item.title);
+            go.type="button";go.dataset.openAlertTool=e.id;go.dataset.openAlertId=item.id;
+            go.title=item.detail||item.title;
+            card.append(go);
+            if(item.detail)card.append(node("small","staxx-alert-description",item.detail));
+          }
+          if(n.alerts.length>8)card.append(node("small","",String(n.alerts.length-8)+" more — open the tool's Alerts tab"));
+        }else for(const item of n.items.slice(0,2))card.append(node("small","",item));
         if(n.cached)card.append(node("small","","Last observed on a previous page"));
         if(n.dueAt){const countdown=node("small","staxx-due",timeUntil(n.dueAt));card.append(countdown);}
         const buttons=node("div","staxx-alert-actions");
@@ -296,6 +306,7 @@
       if(b.hasAttribute("data-arrange")){
         arrangeShown=!arrangeShown;b.setAttribute("aria-pressed",String(arrangeShown));b.textContent=arrangeShown?"Done":"Reorder";render();return;
       }
+      if(b.dataset.openAlertTool){openTool(b.dataset.openAlertTool,b.dataset.openAlertId);return;}
       if(b.dataset.openStaxx){openTool(b.dataset.openStaxx);return;}
       if(b.hasAttribute("data-overview")){overviewShown=!overviewShown;render();return;}
       if(b===toggle){if(Date.now()<suppressClickUntil)return;setExpanded(true);return;}
@@ -344,8 +355,9 @@
       const n={count,summary:String(d.summary||"").slice(0,180),
         items:Array.isArray(d.items)?d.items.slice(0,5).map(x=>String(x).slice(0,160)):[],
         level:["urgent","warning","info"].includes(d.level)?d.level:"info",cached:false};
+      n.alerts=Array.isArray(d.alerts)?d.alerts.slice(0,30).filter(x=>x&&/^[a-z][a-z0-9-]{0,63}$/.test(String(x.id||""))).map(x=>({id:String(x.id),title:String(x.title||x.id).slice(0,100),detail:String(x.detail||"").slice(0,190)})):[];
       n.dueAt=Number.isFinite(Number(d.dueAt))&&Number(d.dueAt)>0?Number(d.dueAt):null;
-      n.fingerprint=JSON.stringify([n.count,n.summary,n.items,n.level,n.dueAt]);
+      n.fingerprint=JSON.stringify([n.count,n.summary,n.items,n.alerts,n.level,n.dueAt]);
       if(JSON.stringify(notices[id])!==JSON.stringify(n)){notices[id]=n;remember();render();}
     });
     document.addEventListener("staxx:summary",e=>{
@@ -388,7 +400,7 @@
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'scan'};
-  const state={settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
+  const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
     tab:'scan',open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
@@ -664,7 +676,7 @@
       'background:linear-gradient(120deg,#0c3358,#0b203b);border-bottom:1px solid #254765}',
       '.brand{font-size:19px;font-weight:850;letter-spacing:.1px}.sub{color:#90a9c0;font-size:11px}',
       '.close{background:#1c3b59;color:#fff;border:0;padding:7px 12px;border-radius:9px;font-weight:700}',
-      '.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:7px;background:#0b223b}',
+      '.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:7px;background:#0b223b}',
       '.tab{border:0;border-radius:8px;background:transparent;color:#91aac4;padding:10px 2px;font-size:12px}',
       '.tab.active{background:#1c5080;color:#fff;font-weight:750}',
       '.body{overflow-y:auto;padding:13px;flex:1;overscroll-behavior:contain}',
@@ -696,6 +708,12 @@
   }
   function notice(str,warning=false){return '<div class="notice'+(warning?' warning':'')+'">'+esc(str)+'</div>';}
   function linkToItem(id){return 'https://www.torn.com/page.php?sid=ItemMarket#/market/view=search&itemID='+encodeURIComponent(id);}
+  function activeDealAlerts(){return deals().filter(x=>x.profit>=number(state.settings.alertThreshold)&&now()-x.at<8*60000);}
+  function renderAlerts(){
+    const list=activeDealAlerts();
+    return '<div class="card"><h3>What needs doing</h3><p>Only buy after checking the live Torn price and available quantity. These signals are estimates, not reserved offers.</p><button class="btn secondary" data-action="scan">Refresh opportunities</button></div>'+
+      (list.length?list.slice(0,30).map(x=>'<div class="card" id="ps-alert-deal-'+Number(x.id)+'"><h3>'+esc(x.name)+'</h3><p><b>BUY:</b> up to '+Math.floor(x.qty)+' units at '+fmt(x.buy)+'/unit or less.</p><p class="positive">Potential profit '+fmt(x.profit)+' · '+pct(x.roi)+' estimated ROI</p><button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Open Torn Item Market · prepare '+Math.floor(x.qty)+'</button></div>').join(''):'<div class="empty">No fresh qualifying opportunities — nothing to buy.</div>');
+  }
   function renderScan(){
     const d=deals().filter(x=>now()-x.at<8*60000),p=portfolio();
     let html='<div class="statrow"><div class="stat"><small>Working capital</small><b>'+human(state.settings.capital)+'</b></div>'+
@@ -714,7 +732,7 @@
         '<div class="line"><span class="muted">Best modeled exit</span><span>'+esc(x.method==='bazaar'?'Bazaar (slower sale possible)':'Item Market')+'</span></div>'+
         '<div class="line"><span class="muted">Market net / Bazaar net per unit</span><span>'+fmt(x.marketNet)+' / '+fmt(x.bazaarNet)+'</span></div>'+
         '<div class="line"><span class="muted">Competition depth: '+x.depth+' units · '+age(x.at)+'</span>'+
-        '<a href="'+linkToItem(x.id)+'" target="_blank" rel="noopener">Open market</a></div>'+
+        '<button class="btn secondary" data-action="market-buy" data-id="'+Number(x.id)+'">Market · '+Math.floor(x.qty)+' units</button></div>'+
         '<div class="meter"><i style="width:'+x.score+'%"></i></div></div>';
     }
     html+=notice('Expected resale is inferred from active asking prices, not confirmed completed sales. Listings may disappear before you buy.');
@@ -804,9 +822,9 @@
     if(!root)return;
     if(lastHubPanelState!==state.open){lastHubPanelState=state.open;
       document.dispatchEvent?.(new CustomEvent('staxx:panel',{detail:{id:'profit',open:state.open}}));}
-    const valid=deals().filter(d=>d.profit>=number(state.settings.alertThreshold)&&now()-d.at<8*60000);
+    const valid=activeDealAlerts();
     if(badge){badge.textContent=valid.length?String(Math.min(99,valid.length)):'';badge.style.display=valid.length?'block':'none';}
-    document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:valid.length,level:valid.length?'warning':'info',summary:valid.length+' profitable opportunities above your threshold',items:valid.slice(0,3).map(d=>String(d.name||d.itemName||'Market opportunity'))}}));
+    document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:valid.length,level:valid.length?'warning':'info',summary:valid.length+' profitable opportunities above your threshold',items:valid.slice(0,3).map(d=>String(d.name||d.itemName||'Market opportunity')),alerts:valid.slice(0,30).map(d=>({id:'deal-'+Number(d.id),title:'Buy up to '+Math.floor(d.qty)+' '+String(d.name||'items'),detail:'Estimated profit '+fmt(d.profit)+' · max '+fmt(d.buy)+'/unit'}))}}));
     const summaryPortfolio=portfolio();
     document.dispatchEvent?.(new CustomEvent('staxx:summary',{detail:{id:'profit',headline:state.lastScan?'Last scan '+age(state.lastScan):'Awaiting market scan',metrics:[
       {label:'Fresh deals',value:state.lastScan?String(valid.length):'Not scanned'},
@@ -815,10 +833,10 @@
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
-    const tabs=['scan','museum','portfolio','settings'];
-    const labels=['Deals','Museum','Ledger','Settings'];
+    const tabs=['alerts','scan','museum','portfolio','settings'];
+    const labels=['Alerts '+valid.length,'Deals','Museum','Ledger','Settings'];
     const active=state.tab;
-    const content=active==='scan'?renderScan():active==='museum'?renderMuseum():
+    const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
       active==='portfolio'?renderPortfolio():renderSettings();
     shell.innerHTML='<div class="panel" role="dialog" aria-modal="true" aria-label="ProfitStaxx">'+
       '<div class="heading"><div><div class="brand">Profit<span style="color:#54d7fa">Staxx</span></div><div class="sub">Profit intelligence · v'+VERSION+'</div></div>'+
@@ -827,6 +845,8 @@
       '" data-tab="'+name+'">'+labels[i]+'</button>').join('')+'</nav>'+
       '<main class="body">'+content+'</main><div class="footer">'+
       'Estimates only · API cached · Never auto-trades · '+esc(state.status)+'</div></div>';
+    if(state.alertFocus){const id=Number(state.alertFocus.replace('deal-',''));const target=shell.querySelector('#ps-alert-deal-'+id);
+      if(target){target.style.outline='2px solid #54d7fa';target.scrollIntoView?.({block:'nearest'});}state.alertFocus='';}
   }
   async function exportFile(name,text,mime){
     const blob=new Blob([text],{type:mime});const url=URL.createObjectURL(blob);
@@ -867,6 +887,13 @@
       return;
     }
     switch(el.dataset.action){
+      case 'market-buy':{
+        const id=Number(el.dataset.id),d=activeDealAlerts().find(x=>Number(x.id)===id);
+        if(!d||!Number.isInteger(Math.floor(d.qty))||d.qty<1){state.error='Opportunity expired; refresh the scan.';render();return;}
+        try{sessionStorage.setItem('profitstaxx-market-intent-v1',JSON.stringify({id,qty:Math.floor(d.qty),maxPrice:Number(d.buy),name:String(d.name||'Item').slice(0,80),at:now()}));}
+        catch(_){state.error='Cannot save the quantity for this navigation. Enter it manually.';render();return;}
+        location.assign(linkToItem(id));break;
+      }
       case 'close':state.open=false;render();break;
       case 'scan':scan({manual:true});break;
       case 'export':exportFile('profitstaxx-trades.csv',exportCSV(),'text/csv;charset=utf-8');break;
@@ -920,11 +947,70 @@
     root.appendChild(shell);
     render();
   }
-  document.addEventListener('staxx:open',e=>{if(e.detail?.id==='profit'){state.open=true;render();}else if(state.open){state.open=false;render();}});
+  document.addEventListener('staxx:open',e=>{if(e.detail?.id==='profit'){state.open=true;if(e.detail.alertId){state.tab='alerts';state.alertFocus=String(e.detail.alertId);}render();}else if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:closeall',()=>{if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:ping',()=>document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit'}})));
+  function marketAssist(){
+    if(!/\/page\.php$/i.test(location.pathname)||!location.search.includes('sid=ItemMarket'))return;
+    let p;try{p=JSON.parse(sessionStorage.getItem('profitstaxx-market-intent-v1')||'null');}catch(_){return;}
+    if(!p||!Number.isInteger(p.id)||!Number.isInteger(p.qty)||p.qty<1||p.qty>1000000||now()-p.at>600000||!location.hash.includes('itemID='+p.id))return;
+    const box=document.createElement('div');box.id='ps-market-assist';box.style.cssText='position:fixed;z-index:2147483639;right:12px;bottom:12px;max-width:310px;background:#08192d;color:#e8f7ff;border:1px solid #54d7fa;border-radius:12px;padding:12px;font:13px system-ui;box-shadow:0 5px 28px #000a';
+    const title=document.createElement('b');title.textContent='ProfitStaxx · '+p.name+' × '+p.qty;
+    const status=document.createElement('p');status.textContent='Check live listing price (modeled cap 
+    mount();
+    marketAssist();
+    document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit'}}));
+    try{
+      const loaded=await readStore();
+      state.settings=Object.assign({},DEFAULTS,loaded.settings||{});
+      state.trades=Array.isArray(loaded.trades)?loaded.trades:[];
+      state.catalog=loaded.catalog||{};
+      state.quotes=loaded.quotes||{};
+      state.snapshots=loaded.snapshots||{};
+      state.pointsPrice=number(loaded.pointsPrice);
+      state.lastScan=number(loaded.lastScan);
+      state.status='Ready · '+state.storage+' storage';
+    }catch(e){state.error='Could not restore local data: '+e.message;}
+    render();
+    // Pure API reads only, and only while the Torn tab is foreground/visible.
+    scanTimer=setInterval(()=>{
+      if(document.hidden||state.busy||!apiKey())return;
+      scan({manual:false});
+    },30000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
+  else init();
+})();
++Math.round(p.maxPrice).toLocaleString('en-US')+'/unit). Looking for Buy quantity field…';
+    const copy=document.createElement('button');copy.textContent='Copy quantity';copy.onclick=()=>{const v=String(p.qty);if(navigator.clipboard?.writeText)navigator.clipboard.writeText(v).then(()=>status.textContent='Copied '+v).catch(()=>status.textContent='Quantity: '+v);else status.textContent='Quantity: '+v;};
+    const close=document.createElement('button');close.textContent='Close ×';close.style.marginLeft='10px';
+    box.append(title,status,copy,close);document.body.appendChild(box);
+    let filled=false,count=0,observer,timer;
+    const stop=()=>{observer?.disconnect();clearInterval(timer);sessionStorage.removeItem('profitstaxx-market-intent-v1');};
+    close.onclick=()=>{stop();box.remove();};
+    const attempt=()=>{
+      if(filled)return;
+      if(!location.hash.includes('itemID='+p.id)){stop();box.remove();return;}
+      if(++count>120){stop();status.textContent='Buy field not detected. Copy quantity and enter it manually.';return;}
+      const found=[...document.querySelectorAll('input')].filter(el=>{
+        if(box.contains(el)||el.disabled||!el.getClientRects?.().length)return false;
+        const hint=[el.name,el.id,el.placeholder,el.getAttribute('aria-label')].join(' ').toLowerCase();
+        const parent=(el.closest('[role=dialog],[class*=buy],[class*=purchase]')?.textContent||'').slice(0,400).toLowerCase();
+        return /qty|quantity|amount/.test(hint)&&(/buy|purchase/.test(parent)||/buy|purchase/.test(hint));
+      });
+      if(found.length!==1||found[0].value&&Number(found[0].value)!==1)return;
+      const el=found[0],set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;
+      if(set)set.call(el,String(p.qty));else el.value=String(p.qty);
+      el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));
+      filled=true;stop();status.textContent='Quantity '+p.qty+' filled. Verify price and press Buy yourself.';
+    };
+    observer=new MutationObserver(attempt);observer.observe(document.body,{childList:true,subtree:true});
+    timer=setInterval(attempt,800);attempt();
+  }
   async function init(){
     mount();
+    marketAssist();
     document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit'}}));
     try{
       const loaded=await readStore();
