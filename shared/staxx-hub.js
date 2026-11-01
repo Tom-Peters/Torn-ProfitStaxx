@@ -1,4 +1,4 @@
-/* StaxxHub v2.5 · shared Torn PDA launcher · IamEEKY · no external dependencies */
+/* StaxxHub v2.6 · shared Torn PDA launcher · IamEEKY · no external dependencies */
 (function () {
   "use strict";
   if (typeof location === "undefined" || typeof document === "undefined" ||
@@ -79,6 +79,15 @@
     const tools=root.querySelector("#staxx-hub-tools"),alerts=root.querySelector("#staxx-hub-alerts"),bubble=root.querySelector("#staxx-hub-count");
     const overview=root.querySelector("#staxx-hub-overview"),overviewButton=root.querySelector("[data-overview]"),taskList=root.querySelector("#staxx-hub-tasks"),diagnostics=root.querySelector("#staxx-hub-diagnostics"),diagnosticButton=root.querySelector("[data-diagnostics]");
     let expanded=false, panelOpen=false, overviewShown=false, diagnosticsShown=false, moving=null, suppressClickUntil=0;
+    let lastDataRequestV26=0;
+    function refreshConnectedV26(force=false){
+      if(document.hidden||!entries.some(x=>active[x.id]))return false;
+      const time=Date.now();
+      if(!force&&time-lastDataRequestV26<120000)return false;
+      lastDataRequestV26=time;
+      document.dispatchEvent(new CustomEvent("staxx:refresh-request",{detail:{reason:force?"manual":"hub-open",force}}));
+      return true;
+    }
     const openPanels=new Set();
     const idOk = v=>typeof v==="string" && /^[a-z][a-z0-9-]{0,31}$/.test(v);
     function node(tag,cls,value) {const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=String(value);return e;}
@@ -224,7 +233,7 @@
     }
     function diagnosticReportV25(){
       const time=Date.now();
-      return {hub:"2.5",capturedAt:new Date(time).toISOString(),page:String(location.pathname||""),
+      return {hub:"2.6",capturedAt:new Date(time).toISOString(),page:String(location.pathname||""),
         connectedCount:entries.filter(x=>active[x.id]).length,knownCount:entries.length,tools:entries.map(e=>{
           const sum=summaries[e.id],actions=actionSets[e.id],notice=notices[e.id],h=healthReports[e.id];
           const age=Number(sum?.updated),lastAction=Number(actions?.updated);
@@ -265,6 +274,8 @@
     function showOverview(){
       overview.replaceChildren();
       overview.append(node("p","staxx-trendnote","All registered tools automatically appear here, including future Staxx scripts. Stale suggestions are labelled and sorted after current data."));
+      const syncButton=node("button","staxx-overview-switch","↻ Check current data across connected tools");
+      syncButton.type="button";syncButton.dataset.syncAll="1";overview.append(syncButton);
       for(const [i,item] of taskRowsV25().slice(0,5).entries()){
         const row=node("button","staxx-task "+(!item.cached&&item.status==="urgent"?"urgent":""));
         row.dataset.openAlertTool=item.owner;row.dataset.openAlertId=item.id;
@@ -431,7 +442,8 @@
       }
       if(b.dataset.openAlertTool){openTool(b.dataset.openAlertTool,b.dataset.openAlertId);return;}
       if(b.dataset.openStaxx){openTool(b.dataset.openStaxx);return;}
-      if(b.hasAttribute("data-overview")){overviewShown=!overviewShown;if(overviewShown)diagnosticsShown=false;render();return;}
+      if(b.hasAttribute("data-overview")){overviewShown=!overviewShown;if(overviewShown){diagnosticsShown=false;refreshConnectedV26();}render();return;}
+       if(b.dataset.syncAll){refreshConnectedV26(true);return;}
        if(b.hasAttribute("data-diagnostics")){diagnosticsShown=!diagnosticsShown;if(diagnosticsShown){overviewShown=false;
          document.dispatchEvent(new CustomEvent("staxx:diagnostics-request"));}render();return;}
        if(b.dataset.checkDiagnostics){document.dispatchEvent(new CustomEvent("staxx:ping"));
@@ -441,7 +453,7 @@
          if(clipboard?.writeText){clipboard.writeText(report).catch(()=>{const box=diagnostics.querySelector("#staxx-safe-report");if(box){box.hidden=false;box.value=report;}});}
          else{const box=diagnostics.querySelector("#staxx-safe-report");if(box){box.hidden=false;box.value=report;box.select?.();}}
          return;}
-      if(b===toggle){if(Date.now()<suppressClickUntil)return;setExpanded(true);return;}
+      if(b===toggle){if(Date.now()<suppressClickUntil)return;setExpanded(true);refreshConnectedV26();return;}
       if(b.hasAttribute("data-hub-close"))setExpanded(false);
     });
     veil.addEventListener("click",()=>setExpanded(false));
