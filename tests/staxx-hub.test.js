@@ -85,6 +85,7 @@ function mounted(){
     '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-count':'span',
     '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-total':'span'
   }))q[name]=new Element(tag);
+  q["[data-overview]"].setAttribute("data-overview","");
   const doc={
     readyState:'complete',hidden:false,mounted:null,__selectors:q,
     getElementById:()=>null,
