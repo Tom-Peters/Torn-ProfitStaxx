@@ -255,3 +255,9 @@ test('realised history reflects weighted-average cost and fees, never hypothetic
   assert.equal(p.total,380);
   assert.equal(p.sources.size,2);
 });
+
+test('StaxxHub stock and market alert focus uses exact DOM id, not a numeric-only parser',()=>{
+ assert.match(source,/const focus='ps-alert-'\+String\(state\.alertFocus\)/);
+ assert.match(source,/\.find\(x=>x\.id===focus\)/);
+ assert.doesNotMatch(source,/Number\(state\.alertFocus\.replace/);
+});
