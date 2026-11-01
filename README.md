@@ -1,5 +1,12 @@
 # ProfitStaxx
 
+## v1.13.0 — StaxxHub smart sync and wallet-aware risk
+
+- **Hub-driven refresh:** Opening StaxxHub requests a read-only update from each connected tool, subject to its existing cooldown and API permissions. The daily dashboard also offers a manual check button.
+- **Cash-on-hand verification:** ProfitStaxx attempts `user/money` approximately every 10 minutes while Torn is visible. Only a valid numeric `money_onhand` field is accepted; missing or denied responses never become zero. Recent confirmed on-hand cash caps proposed liquid trades, while saved capital/reserve rules still apply. Cash kept in a bank or vault is not assumed to be spendable.
+- **Fast scans actually refresh:** The incremental ten-item quote scan no longer inherits the full-scan cooldown. Full scans remain bounded and back off independently.
+- **Gameplay writes remain manual:** Market transactions, realised profit entries and income receipts require confirmed execution; estimated spreads are never auto-booked as profit.
+
 ## v1.12.0 — automatic read-only data and inventory
 
 - **Visible-only automatic intelligence:** A bounded single-task scheduler checks full Item Market prices roughly hourly, stale watched items in short batches, foreign stock observations around every 20 minutes, and stock prices around every 10 minutes. It only operates with an API key while Torn is foregrounded, and backs off failed full scans instead of repeating them on every timer tick.
