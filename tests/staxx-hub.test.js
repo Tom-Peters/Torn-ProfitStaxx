@@ -16,7 +16,7 @@ function bootHub(){
       this.className='';this.innerHTML='';this.id='';
       this.style={top:'',setProperty:(k,v)=>{this.style[k]=v;}};
       const classes=new Set();
-      this.classList={toggle:(k,on)=>{if(on)classes.add(k);else classes.delete(k);},contains:k=>classes.has(k)};
+      this.classList={toggle:(k,on)=>{if(on)classes.add(k);else classes.delete(k);},contains:k=>classes.has(k),add:k=>classes.add(k),remove:k=>classes.delete(k)};
       this.handlers=Object.create(null);
     }
     append(...children){this.children.push(...children);}
@@ -33,7 +33,7 @@ function bootHub(){
   for(const [selector,tag] of Object.entries({
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
     '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-tasks':'section','#staxx-hub-count':'span',
-    '#staxx-hub-overview':'section','[data-overview]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
+    '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section','[data-diagnostics]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
   }))roots[selector]=new FakeElement(tag);
   const doc={
     readyState:'complete',hidden:false,mounted:null,
@@ -69,7 +69,7 @@ function mounted(){
     constructor(tag){
       this.tag=tag;this.children=[];this.dataset={};this.hidden=false;this.className='';this.textContent='';this.innerHTML='';this.id='';this.attributes={};this.handlers={};
       this.style={top:'',setProperty:(key,value)=>{this.style[key]=value;}};
-      const c=new Set();this.classList={toggle:(key,yes)=>yes?c.add(key):c.delete(key),contains:key=>c.has(key)};
+      const c=new Set();this.classList={toggle:(key,yes)=>yes?c.add(key):c.delete(key),contains:key=>c.has(key),add:k=>c.add(k),remove:k=>c.delete(k)};
     }
     append(...elements){this.children.push(...elements);}replaceChildren(...elements){this.children=[...elements];}
     get childElementCount(){return this.children.length;}
@@ -83,7 +83,7 @@ function mounted(){
   for(const [name,tag] of Object.entries({
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
     '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-tasks':'section','#staxx-hub-count':'span',
-    '#staxx-hub-overview':'section','[data-overview]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
+    '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section','[data-diagnostics]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
   }))q[name]=new Element(tag);
   q["[data-overview]"].setAttribute("data-overview","");
   q["[data-arrange]"].setAttribute("data-arrange","");
@@ -104,8 +104,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v2.4 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v2\.4/);
+test('v2.5 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v2\.5/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -143,7 +143,7 @@ test('priority badges, dismiss, snooze, combined overview and dynamic discovery'
   h.emit('staxx:summary',{id:'profit',headline:'Recent scan',metrics:[{label:'Deals',value:'3'}]});
   h.root.fire('click',h.q['[data-overview]']);
   assert.equal(h.q['#staxx-hub-overview'].hidden,false);
-  assert.equal(h.q['#staxx-hub-overview'].children[0].children[1].textContent,'Recent scan');
+  assert.equal(h.q['#staxx-hub-overview'].children.find(x=>x.className==='staxx-overview-card').children[1].textContent,'Recent scan');
 });
 
 test('reorder moves tools with touch-friendly buttons',()=>{
@@ -163,7 +163,7 @@ test('countdowns require genuine dueAt and trend charts show missing days',()=>{
   assert.ok(alert.children.some(x=>x.className==='staxx-due'&&/Due in 10m/.test(x.textContent)));
   h.emit('staxx:summary',{id:'company',headline:'Company',metrics:[{label:'Star rating',value:'4 / 10'}],updated:now});
   h.root.fire('click',h.q['[data-overview]']);
-  const companyCard=h.q['#staxx-hub-overview'].children[1];
+  const companyCard=h.q['#staxx-hub-overview'].children.filter(x=>x.className==='staxx-overview-card')[1];
   const trend=companyCard.children.find(x=>x.className==='staxx-trend');
   assert.ok(trend);
   assert.match(trend.children[2].textContent,/1\/7 recorded days/);
@@ -206,4 +206,21 @@ test('native Torn guidance is optional, routed and does not perform gameplay wri
   assert.match(source,/anchor\.insertAdjacentElement\("afterend",bar\)/);
   assert.match(source,/openTool\(ctx\.id,first\?\.id\|\|null\)/);
   assert.doesNotMatch(source,/fetch\s*\(\s*["']https:\/\/api\.torn\.com/);
+});
+
+test('future tools join daily dashboard, expose safe diagnostics and do not promote cached urgent actions',()=>{
+  const h=mounted();
+  h.emit('staxx:register',{id:'newtool',label:'New Tool',icon:'NT',desc:'Future Staxx',freshnessMs:60000,trendMetric:'Completed'});
+  h.emit('staxx:actions',{id:'newtool',updated:Date.now()-3600000,items:[{id:'new-task',title:'Review future tool',status:'urgent',priority:100}]});
+  const btn=h.q['#staxx-hub-tasks'].children.find(x=>x.dataset.openAlertId==='new-task');
+  assert.ok(btn);
+  assert.doesNotMatch(btn.className,/urgent/,'old actions must not retain urgent styling');
+  assert.match(btn.children[0].textContent,/LAST OBSERVED/);
+  h.emit('staxx:diagnostics',{id:'newtool',version:'0.1.0',api:'ready',storage:'ready',ui:'ready',detail:'All fine'});
+  h.root.fire('click',h.q['[data-diagnostics]']);
+  const panel=h.q['#staxx-hub-diagnostics'];
+  assert.equal(panel.hidden,false);
+  const card=panel.children.find(x=>x.className==='staxx-overview-card'&&x.children[0].textContent.includes('New Tool'));
+  assert.ok(card,'automatically registered tool must be visible in diagnostics');
+  assert.ok(card.children.some(x=>x.textContent.includes('Version 0.1.0')));
 });
