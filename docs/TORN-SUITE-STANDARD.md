@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.01.3** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.01.4** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -11,6 +11,13 @@ This file is the single source of truth for *cross-script* behaviour, design and
 3. A repository's project-level documentation can add rules but cannot silently override shared rules; record any necessary exception here, with reasons and expiry/review conditions.
 4. Treat user-approved decisions and newly discovered recurring bugs as candidate standard changes. Record the decision in `docs/TORN-SUITE-CHANGELOG.md`. Increase the standard version when the rule itself changes.
 5. Do not assume a past ChatGPT session automatically reloads GitHub. Read this canonical file during future tasks and report if inaccessible rather than silently applying an outdated version.
+
+## Foreground automation and data provenance (2026-11-01)
+- Automatically collect and reconcile **read-only** API facts and local evidence while TornPDA is in the foreground, with per-endpoint intervals, permission checks, bounded requests and failure backoff. Each tool may refresh from any visible Torn page when its installed key is available. Timers stop API work while the page is hidden; no expectation of background execution with TornPDA closed.
+- Recover unimported historical pages incrementally when valid official Torn cursors, identifiers or timestamp boundaries exist; persist progress, de-duplicate by exact source ID, halt safely on ambiguous or repeated cursors, and never invent missing history. Old transfers may be suggested for review, not silently assigned a training purpose.
+- Automatically monitor real saved open positions, observed gains and other verifiable account-owned records where relevant; never overwrite explicitly chosen user focus, personal assumptions or manual ledger entries. Mark estimated, cached and partly verified data distinctly.
+- Prefer persistent per-tool failure backoff, failure visibility and user-triggered retry. Respect API limits and don't let one failing category starve unrelated refreshes. Do not equate successful HTTP response with complete/valid data.
+- Gameplay mutations (purchases, training, wage changes, stock orders, resource use, payment approvals) always remain deliberate player actions on Torn, even if a script can calculate or prepare the next step. No silent form prefill except explicit user-led guarded preparation.
 
 ## Non-negotiable rules
 - **Public attribution:** `IamEEKY` only in author credits, README examples, commit message authored metadata and docs. Keep real API keys, employee data and user-specific transactions OUT of GitHub. Existing repository URL namespaces are unchanged.
