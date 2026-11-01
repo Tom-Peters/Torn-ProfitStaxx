@@ -587,7 +587,7 @@
     key:'',alertThreshold:100000,tab:'scan',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},
     travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',
     tab:'scan',dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
@@ -605,7 +605,7 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','dailyReviews']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','dailyReviews','inventoryOwned','inventoryAt']);
         state.storage='TornPDA';
         return data||{};
       }
@@ -621,7 +621,7 @@
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
       trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan,
       travelRows:travelState.rows,travelAt:travelState.at,
-      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,dailyReviews:state.dailyReviews};
+      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
         await PDA_storage.setMany(data);
@@ -836,11 +836,49 @@
     }
     return null;
   }
+  function liveMuseumOwnedV112(){
+    return state.inventoryAt>0&&now()-state.inventoryAt<60*60000;
+  }
+  function museumOwnedCountV112(name){
+    const source=liveMuseumOwnedV112()?state.inventoryOwned:(state.settings.museumOwned||{});
+    return Math.max(0,Math.floor(number(source[name])));
+  }
+  async function refreshInventoryV112(){
+    if(state.inventoryBusy||!apiKey()||document.hidden)return;
+    state.inventoryBusy=true;state.inventoryError='';render();
+    try{
+      // Only promote complete inventory; no invented zero quantities on partial responses.
+      const pages=[];let complete=false;
+      for(let offset=0;offset<2000;offset+=250){
+        const response=await api('user/inventory?limit=250&offset='+offset);
+        const rows=response?.inventory?.items;
+        if(!Array.isArray(rows))throw Error('Inventory API returned no item list.');
+        if(rows.some(x=>!x||!Number.isFinite(Number(x.id))||!Number.isFinite(Number(x.amount))||Number(x.amount)<0))
+          throw Error('Inventory returned invalid item quantities.');
+        pages.push(...rows);
+        const total=Number(response?._metadata?.total);
+        if(rows.length<250||(Number.isFinite(total)&&total>=0&&pages.length>=total)){
+          complete=true;break;
+        }
+      }
+      if(!complete)throw Error('Inventory exceeds the safe 2,000-entry page cap.');
+      const names=new Map(RECIPES.flatMap(r=>r.items).map(n=>[n.toLowerCase(),n]));
+      const owned={};
+      for(const entry of pages){
+        if(entry.faction_owned)continue;
+        const name=names.get(String(entry.name||'').toLowerCase());
+        if(name)owned[name]=(owned[name]||0)+Math.floor(Number(entry.amount));
+      }
+      state.inventoryOwned=owned;state.inventoryAt=now();
+      persist();
+    }catch(e){state.inventoryError='Inventory auto-sync unavailable; using saved manual counts: '+String(e.message||e);}
+    finally{state.inventoryBusy=false;render();}
+  }
   function recipeResults(){
     const batch=clamp(Math.floor(number(state.settings.museumBatch)||1),1,25);
     return RECIPES.map(r=>{
       const rows=r.items.map(name=>{const item=getItem(name),q=item&&state.quotes[item.id];
-        const owned=Math.floor(number((state.settings.museumOwned||{})[name]));
+        const owned=museumOwnedCountV112(name);
         const price=q&&q.offers[0]&&q.offers[0].price||0;
         const needed=Math.max(0,batch-owned);
         const cash=q?bookCost(q.offers,needed):null;
@@ -1599,7 +1637,12 @@
   function renderMuseum(){
     let html='<div class="statrow"><div class="stat"><small>Cheapest point ask</small><b>'+fmt(state.pointsPrice)+'</b></div>'+
       '<div class="stat"><small>Museum unlocked</small><b>Yes</b></div></div>';
-    html+=notice('Each complete flower or plushie set = 10 points. Cash cost assumes buying one of every component on the Item Market. Points revenue uses the current lowest ASK, not guaranteed sale proceeds.');
+    html+=notice('Each complete flower or plushie set = 10 points. Cash cost assumes Item Market purchases; points revenue uses the lowest ASK, not guaranteed proceeds.');
+    html+='<div class="toolbar"><button class="btn secondary" data-action="inventoryscan" '+(state.inventoryBusy?'disabled':'')+'>'+
+      (state.inventoryBusy?'Checking Torn inventory…':'Sync owned flowers & plushies')+'</button></div>';
+    html+=notice(liveMuseumOwnedV112()?'Torn inventory quantities synced '+age(state.inventoryAt)+'; faction-owned and items kept elsewhere are excluded.':
+      'Using locally recorded counts until a complete Torn inventory sync succeeds.');
+    if(state.inventoryError)html+=notice(state.inventoryError,true);
     for(const r of recipeResults()){
       html+='<div class="card"><h3>'+esc(r.name)+'</h3>'+
         '<div class="line"><span>Sets modeled</span><strong>'+r.batch+'</strong></div>'+
@@ -1611,11 +1654,12 @@
         '<div class="line"><span>Capital limit check</span><span>'+(r.missingCost>number(state.settings.capital)*number(state.settings.maxTradePct)/100?'<span class="negative">Above single-trade cap</span>':'Within single-trade cap')+'</span></div>'+
         '<details><summary class="muted">Component prices and missing data</summary>';
       for(const item of r.rows)html+='<div class="line"><span>'+esc(item.name)+'</span><span>'+fmt(item.price)+
-        ' · Owned '+item.owned+' <button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="-1">−</button> '+
-        '<button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="1">+</button></span></div>';
+        ' · Owned '+item.owned+(liveMuseumOwnedV112()?' · Torn inventory':
+        ' <button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="-1">−</button> '+
+        '<button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="1">+</button>')+'</span></div>';
       html+='</details></div>';
     }
-    html+=notice('This models full-set purchases only. Use +/− to record existing museum components locally. Cash needed reflects these holdings; profit includes their opportunity cost. Batch prices use available order-book quantities and are not guaranteed. Conversions stay manual.');
+    html+=notice('This models full-set purchases only. On a complete inventory sync, counts update automatically; +/− remain available as the offline fallback. Cash needed reflects these holdings; profit includes their opportunity cost. Batch prices use available order-book quantities and are not guaranteed. Conversions stay manual.');
     return html;
   }
   function renderPortfolio(){
@@ -1841,6 +1885,7 @@
         else alert('Clipboard unavailable; use StaxxHub diagnostics to view the report.');break;}
       case 'stockrefresh':refreshStocks();break;
       case 'travelscan':scanTravel();break;
+      case 'inventoryscan':refreshInventoryV112();break;
       case 'rank-open':{
         const r=incomeCandidates().find(x=>x.id===el.dataset.rankId);if(!r)return;
         if(r.kind==='market'){
@@ -1983,7 +2028,7 @@
     observer=new MutationObserver(attempt);observer.observe(document.body,{childList:true,subtree:true});
     timer=setInterval(attempt,800);attempt();
   }
-  const autoChecksV112={full:0,quick:0,travel:0,stocks:0};
+  const autoChecksV112={full:0,quick:0,travel:0,stocks:0,inventory:0};
   let autoTickRunningV112=false;
   async function autoTickV112(){
     if(autoTickRunningV112||document.hidden||!apiKey()||state.busy||travelState.busy||stockState.loading)return;
@@ -1999,6 +2044,9 @@
       }
       if(time-stockState.at>=10*60000&&time-autoChecksV112.stocks>=10*60000){
         autoChecksV112.stocks=time;await refreshStocks();return;
+      }
+      if(time-state.inventoryAt>=30*60000&&time-autoChecksV112.inventory>=30*60000){
+        autoChecksV112.inventory=time;await refreshInventoryV112();return;
       }
       if(time-Math.max(autoChecksV112.quick,state.lastScan)>=12*60000){
         autoChecksV112.quick=time;await scan({manual:false,quick:true});
@@ -2021,6 +2069,8 @@
        state.stockCache=Array.isArray(loaded.stockCache)?loaded.stockCache:[];
        state.stockCacheAt=number(loaded.stockCacheAt);
        state.dailyReviews=loaded.dailyReviews&&typeof loaded.dailyReviews==='object'&&!Array.isArray(loaded.dailyReviews)?loaded.dailyReviews:{};
+       state.inventoryOwned=loaded.inventoryOwned&&typeof loaded.inventoryOwned==='object'&&!Array.isArray(loaded.inventoryOwned)?loaded.inventoryOwned:{};
+       state.inventoryAt=number(loaded.inventoryAt);
        stockState.all=state.stockCache;stockState.at=state.stockCacheAt;
        if(!state.income.length){try{const prev=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');if(Array.isArray(prev)&&prev.length){state.income=prev.slice(-1000);persist();}}catch(_){}}
       state.catalog=loaded.catalog||{};
