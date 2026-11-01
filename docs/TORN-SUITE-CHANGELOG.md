@@ -2,6 +2,14 @@
 
 All shared changes are documented here. This log is **not** a feed of user-specific Torn data.
 
+## 2026-11-01 — StaxxHub 2.4 / decision intelligence across Torn
+
+- Added a context-sensitive, optional Staxx recommendation directly below known Torn Gym, Company and Item Market page headings, with an on/off sidebar setting; clicking an advisory action opens its specific alert card inside the responsible tool. No autonomous Torn actions or additional API reads.
+- ProfitStaxx **1.6.0**: bounded capital allocation, asking-price sample quality and near-price competition labels, configurable assumed active-review minutes for profit/work-time comparisons, and holding-specific after-fee sell watch.
+- Company Helper **1.9.0**: working-stat development pace based on real dated snapshots, conservative salary cash-flow what-ifs, and historical Sunday-star readiness only with sufficient observed promotion data; retains existing staff role simulator.
+- Happy Jump preview **0.18.0**: gain-per-energy comparison, marginal point-refill cash efficiency, refill timing, historical daily stat changes and conditional long-term target scenarios; immutable v0.18.0 snapshot updated. Stable HJ installer remains pinned.
+- Shared `shared/staxx-hub.js` code synchronized into all three active scripts and Happy Jump preview snapshot. Synthetic regression checks added for risk allocation, wage scenario logic, training advising and data freshness. Native Torn PDA visual and field selection still require on-device verification.
+
 ## 2026-11-01 — StaxxHub 2.3 / next-action overhaul
 
 - All three active tools now publish a structured `staxx:actions` queue. Sidebar ranks urgent, due, upcoming, advisory and optional opportunities across tools, deep-links to exact alert cards, and labels last-observed cached recommendations.
