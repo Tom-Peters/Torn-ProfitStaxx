@@ -1149,6 +1149,84 @@
     return h+notice('This is a split-capital scenario, not an instruction to buy. It is not a verified optimal portfolio: liquidity, realised fills, stock capital losses and current cash in your Torn account are not automatically known.');
   }
 
+
+  // Realised trading cashflow is reconstructed chronologically from weighted-average cost.
+  function realisedEvents(){
+    const events=[],holdings=new Map();
+    for(const t of (state.trades||[]).slice().sort((a,b)=>Number(a.at)-Number(b.at))){
+      const id=String(t.itemId),qty=Number(t.qty),price=Number(t.price),when=Number(t.at);
+      if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(price)||price<0||!Number.isFinite(when))continue;
+      const pos=holdings.get(id)||{qty:0,basis:0};
+      if(t.side==='buy'){pos.basis+=qty*price;pos.qty+=qty;}
+      else if(t.side==='sell'&&qty<=pos.qty){
+        const basis=pos.basis/pos.qty*qty,net=qty*price*(1-clamp(Number(t.fee)||0,0,100)/100)-basis;
+        pos.qty-=qty;pos.basis=Math.max(0,pos.basis-basis);
+        events.push({at:when,source:'Item trades (ledger)',net});
+      }
+      holdings.set(id,pos);
+    }
+    for(const r of moneyRecords()){
+      const value=Number(r.net),when=Number(r.at);
+      if(!Number.isFinite(value)||!Number.isFinite(when)||when<=0)continue;
+      events.push({at:when,source:incomeRoutes.find(x=>x[0]===r.source)?.[1]||'Other income',net:value});
+    }
+    return events;
+  }
+  function profitHistory(days){
+    const end=new Date(),endDate=Date.UTC(end.getUTCFullYear(),end.getUTCMonth(),end.getUTCDate());
+    const start=endDate-(days-1)*86400000;
+    const daily=Array.from({length:days},(_,i)=>({day:new Date(start+i*86400000).toISOString().slice(0,10),net:0,cumulative:0}));
+    const sources=new Map();
+    for(const e of realisedEvents()){
+      if(!Number.isFinite(e.at)||e.at<start||e.at>=endDate+86400000)continue;
+      const index=Math.floor((e.at-start)/86400000);
+      if(!daily[index])continue;
+      daily[index].net+=e.net;
+      sources.set(e.source,(sources.get(e.source)||0)+e.net);
+    }
+    let running=0;
+    for(const d of daily){running+=d.net;d.cumulative=running;}
+    return {daily,sources,total:running};
+  }
+  function svgLine(values,label,color){
+    const w=590,h=185,left=48,right=18,top=16,bottom=37;
+    if(!values.length)return '';
+    const low=Math.min(0,...values),high=Math.max(0,...values),range=Math.max(1,high-low);
+    const px=i=>left+(values.length===1?0:(w-left-right)*i/(values.length-1));
+    const py=v=>top+(h-top-bottom)*(high-v)/range;
+    const points=values.map((v,i)=>px(i).toFixed(2)+','+py(v).toFixed(2)).join(' ');
+    const baseline=py(0);
+    return '<svg class="ps-chart" viewBox="0 0 '+w+' '+h+'" role="img" aria-label="'+esc(label)+'" xmlns="http://www.w3.org/2000/svg">'+
+      '<title>'+esc(label)+'</title>'+
+      '<line x1="'+left+'" y1="'+baseline+'" x2="'+(w-right)+'" y2="'+baseline+'" stroke="#6a8196" stroke-width="1"/>'+
+      '<polyline points="'+points+'" fill="none" stroke="'+color+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<text x="7" y="'+(top+5)+'" fill="#c7e1f7" font-size="10">'+esc(human(high))+'</text>'+
+      '<text x="7" y="'+(h-bottom)+'" fill="#c7e1f7" font-size="10">'+esc(human(low))+'</text>'+
+      '<text x="'+left+'" y="'+(h-9)+'" fill="#b8d2e4" font-size="11">First day</text>'+
+      '<text x="'+(w-right-42)+'" y="'+(h-9)+'" fill="#b8d2e4" font-size="11">Today</text></svg>';
+  }
+  function renderHistory(){
+    const n=[7,30,90].includes(state.chartDays)?state.chartDays:30,h=profitHistory(n),
+      highest=Math.max(1,...h.daily.map(x=>Math.abs(x.net)));
+    let out='<div class="card"><h3>Realised profit history</h3>'+
+      '<p class="muted">Based on dated, completed item sales in Ledger and manually recorded Income entries. Includes losses. No unrealised shares, forecast returns or unsold inventory.</p>'+
+      '<div class="toolbar">'+[7,30,90].map(d=>'<button class="btn '+(d===n?'':'secondary')+'" data-chart-days="'+d+'">'+d+' days</button>').join('')+'</div>'+
+      '<div class="statrow"><div class="stat"><small>Selected-period net</small><b class="'+(h.total<0?'negative':'positive')+'">'+fmt(h.total)+'</b></div>'+
+      '<div class="stat"><small>Active sources</small><b>'+h.sources.size+'</b></div></div>'+
+      '<h3>Cumulative net during period</h3>'+svgLine(h.daily.map(x=>x.cumulative),'Cumulative realised profit', '#43cbef')+
+      '<h3>Daily net</h3>'+svgLine(h.daily.map(x=>x.net),'Daily realised profit and losses','#66d6a3')+'</div>';
+    out+='<div class="card"><h3>Income composition by source</h3>';
+    if(!h.sources.size)out+='<p class="muted">Record income or close a ledger trade to build the chart.</p>';
+    const max=Math.max(1,...[...h.sources.values()].map(x=>Math.abs(x)));
+    for(const [key,value] of [...h.sources].sort((a,b)=>b[1]-a[1])){
+      out+='<div class="line"><span>'+esc(key)+'</span><b class="'+(value<0?'negative':'positive')+'">'+fmt(value)+'</b></div>'+
+        '<div class="meter"><i style="width:'+clamp(Math.abs(value)/max*100,0,100).toFixed(1)+'%;background:'+(value<0?'#fa7484':'#43cbef')+'"></i></div>';
+    }
+    out+='</div><div class="card"><h3>What counts?</h3><p class="muted">Income logged separately as Item Market earnings may duplicate sales already in Ledger. Stock dividend receipts should be recorded once in Income when actually received. Historical data starts only when you started recording, and is not proof of missing earnings.</p>'+
+      '<div class="toolbar"><button class="btn secondary" data-tab="income">Record income</button><button class="btn secondary" data-tab="portfolio">Trade ledger</button></div></div>';
+    return out;
+  }
+
   function css(){
     return [
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
@@ -1190,6 +1268,7 @@
       '.meter{height:5px;background:#193b5d;border-radius:5px;overflow:hidden;margin-top:9px}',
       '.meter>i{display:block;height:100%;background:#45b5e8}',
       '.footer{border-top:1px solid #223d5c;padding:8px 13px;color:#819db5;font-size:10px;background:#0b2139}',
+      '.ps-chart{width:100%;height:auto;max-width:100%;display:block;background:#0b223b;border-radius:10px;margin:8px 0 14px}',
       'a{color:#66d5ff;text-decoration:none}a:hover{text-decoration:underline}',
       '@media(min-width:800px){.overlay{align-items:center}.panel{border-radius:18px;height:min(85vh,880px)}}'
     ].join('');
@@ -1494,8 +1573,9 @@
     input.click();
   }
   function onClick(event){
-    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id],button[data-stock-clear],button[data-rank-filter]');
+    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id],button[data-stock-clear],button[data-rank-filter],button[data-chart-days]');
     if(!el)return;
+    if(el.dataset.chartDays){state.chartDays=[7,30,90].includes(Number(el.dataset.chartDays))?Number(el.dataset.chartDays):30;render();return;}
     if(el.dataset.rankFilter){state.rankFilter=['all','active','passive'].includes(el.dataset.rankFilter)?el.dataset.rankFilter:'all';render();return;}
     if(el.dataset.tab){state.tab=el.dataset.tab;render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
