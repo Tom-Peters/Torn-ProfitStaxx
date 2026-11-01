@@ -1645,6 +1645,33 @@
     }
     return html;
   }
+
+  function safeProfitDiagnosticsV111(){
+    return {tool:'ProfitStaxx',version:VERSION,at:new Date().toISOString(),
+      keyPresent:Boolean(apiKey()),storage:state.storage,screenMounted:Boolean(root&&shell),
+      panelOpen:state.open,scanBusy:state.busy,lastFullScanMinutes:state.lastScan?Math.floor((now()-state.lastScan)/60000):null,
+      checkedItems:Object.keys(state.quotes).length,stockQuoteAgeMinutes:stockState.at?Math.floor((now()-stockState.at)/60000):null,
+      foreignFeedAgeMinutes:travelState.at?Math.floor((now()-travelState.at)/60000):null,
+      catalogLoaded:Object.keys(state.catalog).length>0,incomeRecords:moneyRecords().length,
+      errorPresent:Boolean(state.error||stockState.error||travelState.error)};
+  }
+  function renderProfitDiagnosticsV111(){
+    const d=safeProfitDiagnosticsV111();
+    let h='<div class="card"><h3>ProfitStaxx · diagnostics</h3>'+
+      '<p class="muted">These checks contain no Torn API key, player identity, financial amounts, trading holdings or imported item records.</p>'+
+      '<div class="toolbar"><button class="btn" data-action="diagcheck">Recheck tools</button>'+
+      '<button class="btn secondary" data-action="diagcopy">Copy safe report</button></div>';
+    const lines=[['Script version',d.version],['API key detected',d.keyPresent?'Yes':'No'],['Storage',d.storage],
+      ['UI mounted',d.screenMounted?'Yes':'No'],['Market scan in progress',d.scanBusy?'Yes':'No'],
+      ['Last complete market scan',d.lastFullScanMinutes===null?'Never':d.lastFullScanMinutes+' min ago'],
+      ['Market items cached',d.checkedItems],['Stock quotes age',d.stockQuoteAgeMinutes===null?'Unknown':d.stockQuoteAgeMinutes+' min'],
+      ['Foreign stock age',d.foreignFeedAgeMinutes===null?'Not scanned':d.foreignFeedAgeMinutes+' min'],
+      ['Item catalogue',d.catalogLoaded?'Loaded':'Not loaded'],['Income entries',d.incomeRecords],
+      ['An API/data warning exists',d.errorPresent?'Yes':'No']];
+    for(const [name,value] of lines)h+='<div class="line"><span>'+esc(name)+'</span><b>'+esc(value)+'</b></div>';
+    return h+'</div>'+notice('If the dashboard is empty: verify the script is enabled, check its TornPDA API-key permission and run a manual scan. If prices are missing, check whether the original API reply still matches the expected Torn v2 shape.');
+  }
+
   function renderSettings(){
     const s=state.settings;
     let html='<div class="card"><h3>API privacy and access</h3>'+
@@ -1689,11 +1716,11 @@
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
-    const tabs=['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings'];
-    const labels=['Alerts '+noticeCount,'Today','Best','Deals','Travel','Stocks','Capital','Charts','Income','Museum','Ledger','Settings'];
+    const tabs=['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics'];
+    const labels=['Alerts '+noticeCount,'Today','Best','Deals','Travel','Stocks','Capital','Charts','Income','Museum','Ledger','Settings','Diagnostics'];
     const active=state.tab;
     const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
-      active==='portfolio'?renderPortfolio():active==='daily'?renderDailyPlanV111():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():renderSettings();
+      active==='portfolio'?renderPortfolio():active==='daily'?renderDailyPlanV111():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():active==='diagnostics'?renderProfitDiagnosticsV111():renderSettings();
     // Preserve the actual inner scroll container across progressive scans and any other renders.
     // TornPDA WebView otherwise snaps to the beginning when shell.innerHTML is replaced.
     const previousBody=shell.querySelector('.body'),previousTabs=shell.querySelector('.tabs');
@@ -1802,6 +1829,10 @@
       case 'scan':scan({manual:true});break;
       case 'quickscan':scan({manual:true,quick:true});break;
       case 'stopscan':if(state.busy){state.cancelScan=true;state.status='Stopping after current request…';render();}break;
+      case 'diagcheck':document.dispatchEvent(new CustomEvent('staxx:ping'));document.dispatchEvent(new CustomEvent('staxx:diagnostics-request'));render();break;
+      case 'diagcopy':{const text=JSON.stringify(safeProfitDiagnosticsV111(),null,2);
+        if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).catch(()=>{alert('Clipboard unavailable; use StaxxHub diagnostics to view the report.');});
+        else alert('Clipboard unavailable; use StaxxHub diagnostics to view the report.');break;}
       case 'stockrefresh':refreshStocks();break;
       case 'travelscan':scanTravel();break;
       case 'rank-open':{
