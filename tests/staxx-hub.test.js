@@ -104,8 +104,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v2.1 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v2\.1/);
+test('v2.2 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v2\.2/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -168,4 +168,15 @@ test('countdowns require genuine dueAt and trend charts show missing days',()=>{
   assert.ok(trend);
   assert.match(trend.children[2].textContent,/1\/7 recorded days/);
   assert.equal(trend.children[1].children.filter(x=>x.className==='missing').length,6);
+});
+
+test('specific notification opens the exact tool alert',()=>{
+  const h=mounted();h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:notice',{id:'profit',count:1,level:'warning',summary:'One purchase to review',alerts:[{id:'deal-123',title:'Buy 100 medical items',detail:'Check the live price'}]});
+  const group=h.q['#staxx-hub-alerts'].children[0];
+  const action=group.children.find(x=>x.dataset.openAlertId==='deal-123');
+  assert.ok(action,'Individual alert should render an actionable sidebar button');
+  let opened=null;h.document.addEventListener('staxx:open',e=>{opened=e.detail;});
+  h.root.fire('click',action);
+  assert.equal(opened.id,'profit');assert.equal(opened.alertId,'deal-123');
 });
