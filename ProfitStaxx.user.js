@@ -1204,6 +1204,12 @@
         if(items.length>=5)break;
         if(picked.has(x.id)||diverse&&(categories.get(x.kind)||0)>=1)continue;
         const minutes=x.minutes>0?x.minutes:0;
+        // A travel trip with no known door-to-door duration cannot be claimed to fit a short session.
+        if(x.kind==='travel'&&!minutes)continue;
+        if(x.kind==='market'){
+          const observed=activeDealAlerts().find(d=>Number(d.id)===Number(x.itemId));
+          if(!observed||dealRisk(observed).level==='High')continue;
+        }
         if(minutes&&activeMinutes+minutes>budget)continue;
         // Principal of manually-entered property/bank scenarios need not belong to trading funds.
         const liquid=x.kind!=='bank'&&x.kind!=='rent';
