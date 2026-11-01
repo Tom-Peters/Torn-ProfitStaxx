@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.15.0
+// @version      1.16.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -795,7 +795,9 @@
       cacheTimestamp:Number(payload.itemmarket&&payload.itemmarket.cache_timestamp)||0};
   }
   function getWatchList(){
-    const names=[...(state.settings.watchNames||[]),...RECIPES.flatMap(r=>r.items)];
+    // Track recorded open holdings automatically, including items the user removed from the manual list.
+    const recorded=(state.trades||[]).length?positions().filter(p=>p.qty>0&&p.itemId>0):[];
+    const names=[...(state.settings.watchNames||[]),...RECIPES.flatMap(r=>r.items),...recorded.map(p=>p.name)];
     return [...new Set(names.map(x=>String(x).trim()).filter(Boolean))].map(name=>getItem(name)).filter(Boolean)
       .filter((item,i,all)=>all.findIndex(x=>x.id===item.id)===i);
   }
@@ -823,7 +825,14 @@
       await loadCatalog();
       const all=getWatchList();
       // Fast mode prioritises stale and never-priced items, with a small bounded API budget.
-      const list=quick?all.slice().sort((a,b)=>(Number(state.quotes[a.id]?.at)||0)-(Number(state.quotes[b.id]?.at)||0)).slice(0,10):all;
+      const held=new Set(positions().filter(p=>p.qty>0).map(p=>Number(p.itemId)));
+      // First refresh stale owned positions; then the oldest watched opportunities.
+      const list=quick?all.slice().sort((a,b)=>{
+        const aAge=Number(state.quotes[a.id]?.at)||0,bAge=Number(state.quotes[b.id]?.at)||0;
+        const aHeld=held.has(Number(a.id))&&now()-aAge>5*60000;
+        const bHeld=held.has(Number(b.id))&&now()-bAge>5*60000;
+        return Number(bHeld)-Number(aHeld)||aAge-bAge;
+      }).slice(0,10):all;
       state.scanTotal=list.length;state.scanDone=0;
       state.status='Scanning '+list.length+' items...';render();
       await refreshPoints();render();
@@ -2093,7 +2102,20 @@
     observer=new MutationObserver(attempt);observer.observe(document.body,{childList:true,subtree:true});
     timer=setInterval(attempt,800);attempt();
   }
+  // Only timestamps are retained across reloads. No keys, trades or balances in this scheduler record.
   const autoChecksV112={full:0,quick:0,travel:0,stocks:0,inventory:0,wallet:0};
+  const automaticAttemptKeyV116='profitstaxx-auto-attempts-v116';
+  try{
+    const previous=JSON.parse(localStorage.getItem(automaticAttemptKeyV116)||'{}');
+    for(const k of Object.keys(autoChecksV112)){
+      const v=Number(previous[k]);
+      if(Number.isFinite(v)&&v>0&&v<=now()&&now()-v<2*86400000)autoChecksV112[k]=v;
+    }
+  }catch(_){}
+  function noteAutoAttemptV116(kind,time){
+    autoChecksV112[kind]=time;
+    try{localStorage.setItem(automaticAttemptKeyV116,JSON.stringify(autoChecksV112));}catch(_){}
+  }
   let autoTickRunningV112=false;
   async function autoTickV112(){
     if(autoTickRunningV112||document.hidden||!apiKey()||state.busy||travelState.busy||stockState.loading)return;
@@ -2101,23 +2123,23 @@
     try{
       const time=now();
       if(time-state.walletAt>=10*60000&&time-autoChecksV112.wallet>=10*60000){
-        autoChecksV112.wallet=time;await refreshWalletV113();return;
+        noteAutoAttemptV116('wallet',time);await refreshWalletV113();return;
       }
       // Full scans may be lengthy: never repeat faster than 45 minutes, including failures.
       if((!state.lastScan||time-state.lastScan>=60*60000)&&time-autoChecksV112.full>=45*60000){
-        autoChecksV112.full=time;await scan({manual:false});return;
+        noteAutoAttemptV116('full',time);await scan({manual:false});return;
       }
       if(time-travelState.at>=20*60000&&time-autoChecksV112.travel>=20*60000){
-        autoChecksV112.travel=time;await scanTravel();return;
+        noteAutoAttemptV116('travel',time);await scanTravel();return;
       }
       if(time-stockState.at>=10*60000&&time-autoChecksV112.stocks>=10*60000){
-        autoChecksV112.stocks=time;await refreshStocks();return;
+        noteAutoAttemptV116('stocks',time);await refreshStocks();return;
       }
       if(time-state.inventoryAt>=30*60000&&time-autoChecksV112.inventory>=30*60000){
-        autoChecksV112.inventory=time;await refreshInventoryV112();return;
+        noteAutoAttemptV116('inventory',time);await refreshInventoryV112();return;
       }
-      if(time-Math.max(autoChecksV112.quick,state.lastScan)>=12*60000){
-        autoChecksV112.quick=time;await scan({manual:false,quick:true});
+      if(time-Math.max(autoChecksV112.quick,state.lastScan)>=8*60000){
+        noteAutoAttemptV116('quick',time);await scan({manual:false,quick:true});
       }
     }catch(e){state.error='Automatic data check failed: '+String(e?.message||e);render();}
     finally{autoTickRunningV112=false;}
