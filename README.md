@@ -1,5 +1,13 @@
 # ProfitStaxx
 
+## v1.10.0 — quicker scans and trading-risk gates
+
+- **Fast scan:** Press **Fast scan · 10** in Deals to price up to ten stale/unpriced watched items first. Full scan remains available. Requests are spaced to avoid API pressure.
+- **Stop scan:** Stops after the in-flight API response; completed partial prices remain visible. A cancelled, partial or quick scan **does not** overwrite the timestamp of the last verified complete scan.
+- **Risk detail per deal:** Warning flags now call out sparse price samples, falling asking-price trend, wide asking-price spread, crowded resale listings, limited near-price depth and thin estimated margins. These use observations, not actual bids or guaranteed completed sales.
+- **Scroll continuity:** Each tab retains its position, and active form values are preserved while prices update.
+
+
 **Torn trading, stocks and income intelligence for TornPDA** — developed by **IamEEKY**.
 
 A mobile-first userscript for Torn Item Market deals, stock benefit blocks, cash dividend opportunities, Museum conversions, a trading ledger and a multi-source realised-income tracker. All in-game purchases, sales and claims remain user-confirmed.
