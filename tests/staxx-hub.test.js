@@ -33,7 +33,7 @@ function bootHub(){
   for(const [selector,tag] of Object.entries({
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
     '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-count':'span',
-    '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-total':'span'
+    '#staxx-hub-overview':'section','[data-overview]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
   }))roots[selector]=new FakeElement(tag);
   const doc={
     readyState:'complete',hidden:false,mounted:null,
@@ -83,9 +83,10 @@ function mounted(){
   for(const [name,tag] of Object.entries({
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
     '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-count':'span',
-    '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-total':'span'
+    '#staxx-hub-overview':'section','[data-overview]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
   }))q[name]=new Element(tag);
   q["[data-overview]"].setAttribute("data-overview","");
+  q["[data-arrange]"].setAttribute("data-arrange","");
   const doc={
     readyState:'complete',hidden:false,mounted:null,__selectors:q,
     getElementById:()=>null,
@@ -103,8 +104,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v2 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v2\.0/);
+test('v2.1 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v2\.1/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -137,10 +138,34 @@ test('priority badges, dismiss, snooze, combined overview and dynamic discovery'
   h.emit('staxx:notice',{id:'profit',count:3,level:'warning',summary:'New findings',items:['Different alert']});
   assert.equal(h.q['#staxx-hub-count'].hidden,false,'New alert should override dismissal');
   const nextAlert=h.q['#staxx-hub-alerts'].children[0];
-  h.root.fire('click',nextAlert.children.find(x=>x.className==='staxx-alert-actions').children[1]);
+  h.root.fire('click',nextAlert.children.find(x=>x.className==='staxx-snooze-menu').children[1]); // 1h preset
   assert.equal(h.q['#staxx-hub-count'].hidden,true,'Snooze should hide a current alert');
   h.emit('staxx:summary',{id:'profit',headline:'Recent scan',metrics:[{label:'Deals',value:'3'}]});
   h.root.fire('click',h.q['[data-overview]']);
   assert.equal(h.q['#staxx-hub-overview'].hidden,false);
   assert.equal(h.q['#staxx-hub-overview'].children[0].children[1].textContent,'Recent scan');
+});
+
+test('reorder moves tools with touch-friendly buttons',()=>{
+  const h=mounted();
+  h.root.fire('click',h.q['[data-arrange]']);
+  const items=h.q['#staxx-hub-tools'].children;
+  assert.equal(items[0].className,'staxx-toolrow');
+  assert.equal(items[0].children[0].dataset.openStaxx,'profit');
+  h.root.fire('click',items[0].children[2]);
+  assert.equal(h.q['#staxx-hub-tools'].children[0].children[0].dataset.openStaxx,'company');
+  assert.equal(h.q['#staxx-hub-tools'].children[1].children[0].dataset.openStaxx,'profit');
+});
+test('countdowns require genuine dueAt and trend charts show missing days',()=>{
+  const h=mounted(),now=Date.now();
+  h.emit('staxx:notice',{id:'happy',count:1,level:'warning',summary:'Gym action',dueAt:now+10*60000});
+  const alert=h.q['#staxx-hub-alerts'].children[0];
+  assert.ok(alert.children.some(x=>x.className==='staxx-due'&&/Due in 10m/.test(x.textContent)));
+  h.emit('staxx:summary',{id:'company',headline:'Company',metrics:[{label:'Star rating',value:'4 / 10'}],updated:now});
+  h.root.fire('click',h.q['[data-overview]']);
+  const companyCard=h.q['#staxx-hub-overview'].children[1];
+  const trend=companyCard.children.find(x=>x.className==='staxx-trend');
+  assert.ok(trend);
+  assert.match(trend.children[2].textContent,/1\/7 recorded days/);
+  assert.equal(trend.children[1].children.filter(x=>x.className==='missing').length,6);
 });
