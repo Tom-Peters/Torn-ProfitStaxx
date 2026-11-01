@@ -44,6 +44,7 @@ You can also use a compatible browser userscript manager. TornPDA is the primary
 | Own shares and claim-ready dividend status | Yes — authorised `user/stocks` API selection |
 | Multi-source income directory and Torn handoffs | Yes — 12 channels, player-led navigation |
 | Native-storage realised income ledger | Yes — received less costs, 7-/30-day totals |
+| Income comparison and source ranking | Yes — bank/rent inputs, live cash-dividend candidates, 30-day income/hour |
 | Museum plushie / flower arbitrage | Yes |
 | Manually record pre-owned Museum items | Yes |
 | 10-point set calculations and points quotes | Yes |
@@ -80,6 +81,12 @@ You can also use a compatible browser userscript manager. TornPDA is the primary
 - The JSON backup **redacts the manually entered key**. The CSV contains only user-recorded transactions.
 - A public-access key supports market and public stock quotes; reading your personal holdings and ready-to-claim dividends requires a suitably restricted **Limited** key. Do not paste a Full Access key unless you understand its access.
 - Deleting the script or native storage can delete your trade history. Use **Backup JSON** regularly.
+
+## Comparing passive-income opportunities
+
+**Income > Passive-income comparison** accepts the actual annual-equivalent bank interest rate, bank principal, property value, and net weekly rent you enter. It shows annualised bank interest, annualised net rent / property yield, and the highest available fixed-cash-dividend stock block that fits your configured trading reserve. Bank and rent terms are **user-entered**, while eligible stock prices come from recent Torn API quotes. This is a cash-yield comparison, not a full risk-adjusted investment ranking.
+
+Income history also groups manually recorded earnings from the last 30 days by source, with net per active hour where time was recorded. This is actual recorded activity rather than a prediction of future profits.
 
 ## Stock Market and income boundaries
 
