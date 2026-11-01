@@ -617,7 +617,7 @@
     return value!==undefined&&value!==null&&value!==''&&Number.isFinite(amount)&&amount>=0?amount:null;
   }
   function liveWalletCashV113(){
-    return state.walletAt&&Number.isFinite(state.walletCash)&&now()-state.walletAt<15*60000?state.walletCash:null;
+    return state.walletAt>0&&Number.isFinite(state.walletCash)&&now()-state.walletAt<15*60000?state.walletCash:null;
   }
   async function refreshWalletV113(){
     if(state.walletBusy||!apiKey()||document.hidden)return;
