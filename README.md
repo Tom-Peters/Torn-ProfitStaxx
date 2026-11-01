@@ -1,5 +1,12 @@
 # ProfitStaxx
 
+## v1.11.0 — five money-making decisions, diagnostics and StaxxHub v2.5
+
+- **Today:** An actionable, prioritised shortlist of up to five supported profit opportunities that fit a user-entered time budget and protected trading cash. Each item links to a manual review action, retains an explicitly labelled return period, and can be marked **reviewed** without generating fictitious realised profits. UTC-day review marks are stored locally and included in backups.
+- **Diagnostics:** New internal tab shows API presence, quote recency, native vs fallback storage, UI mounting and scanner status. Copying its report deliberately excludes keys, amounts, imported trades and player data.
+- **StaxxHub v2.5:** All current and newly registered Staxx tools join one daily dashboard, cross-tool priority queue and safe diagnostics surface. Older observations cannot silently become current urgent actions. The latest integration and privacy rules live at `suite/STAXX-INTEGRATION.md`.
+
+
 ## v1.10.0 — quicker scans and trading-risk gates
 
 - **Fast scan:** Press **Fast scan · 10** in Deals to price up to ten stale/unpriced watched items first. Full scan remains available. Requests are spaced to avoid API pressure.
