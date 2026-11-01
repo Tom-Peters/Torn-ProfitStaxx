@@ -4,13 +4,17 @@
 
 A mobile-first userscript that spots potentially profitable Item Market listings, compares no-fee Bazaar resale with Item Market resale, evaluates complete Museum sets, tracks your purchases and sales, and shows a profit-opportunity badge on a floating **PS** button.
 
-## Install
+## Install on TornPDA (remote URL)
+
+**Important:** Select the **Remote URL / Configure** option in TornPDA's userscript manager and paste the **raw JavaScript URL below**. Do not use the GitHub repository page (`github.com/Tom-Peters/Torn-ProfitStaxx`) or the GitHub file viewer (`github.com/.../blob/...`). Those return HTML and TornPDA may report **"No header available"**.
 
 Use this **permanent script URL** in TornPDA's Scripts section:
 
 https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 
-The filename and URL remain unchanged when the script is updated. If your TornPDA version does not auto-refresh scripts, refresh or re-import it from the same URL.
+The filename and URL remain unchanged when the script is updated. This file begins with `// ==UserScript==` and includes `@name`, `@version`, and `@match` metadata for TornPDA.
+
+If TornPDA still says "No header available", check that the pasted URL begins with `https://raw.githubusercontent.com/` and ends with `/ProfitStaxx.user.js`, with no extra spaces, and use the **Remote URL** field instead of the code field. In the TornPDA script configuration, use **Fetch**, then **Load** once the header/name displays. If your TornPDA version does not auto-refresh scripts, refresh or re-import it from the same URL.
 
 You can also use a compatible browser userscript manager. TornPDA is the primary target.
 
