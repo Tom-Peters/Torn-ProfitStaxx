@@ -357,3 +357,11 @@ test('quick background price scan is not blocked by full-scan cooldown',()=>{
   assert.match(source,/staxx:refresh-request/);
   assert.match(source,/user\/money/);
 });
+
+
+test('watched Torn market items share the verified inventory sync without inferred trades',()=>{
+ assert.match(source,/const names=new Map\(\[\.\.\.RECIPES\.flatMap\(r=>r\.items\),\.\.\.CORE_ITEMS\]/);
+ assert.match(source,/function verifiedOwnedV114\(name\)/);
+ assert.match(source,/Verified Torn inventory:/);
+ assert.doesNotMatch(source,/autoExecuteTrade\(/);
+});
