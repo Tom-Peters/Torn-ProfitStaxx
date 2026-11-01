@@ -196,3 +196,14 @@ test('ranked next actions navigate directly to their matching tool alert',()=>{
   assert.equal(event.id,'profit');
   assert.equal(event.alertId,'deal-42');
 });
+
+test('native Torn guidance is optional, routed and does not perform gameplay writes',()=>{
+  assert.match(source,/staxx-hub-context-v1/);
+  assert.match(source,/data-context-toggle/);
+  assert.match(source,/\/gym\.php/);
+  assert.match(source,/\/companies\.php/);
+  assert.match(source,/sid=itemmarket/);
+  assert.match(source,/anchor\.insertAdjacentElement\("afterend",bar\)/);
+  assert.match(source,/openTool\(ctx\.id,first\?\.id\|\|null\)/);
+  assert.doesNotMatch(source,/fetch\s*\(\s*["']https:\/\/api\.torn\.com/);
+});
