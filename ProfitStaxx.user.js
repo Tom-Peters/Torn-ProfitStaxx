@@ -491,10 +491,10 @@
   ];
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
-    key:'',alertThreshold:100000,tab:'scan',bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,
+    key:'',alertThreshold:100000,tab:'scan',bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},
     travelCapacity:10,travelMinProfit:100000,travelMinutes:''};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
     tab:'scan',open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
@@ -512,7 +512,7 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt']);
         state.storage='TornPDA';
         return data||{};
       }
@@ -527,7 +527,8 @@
   function persist() {
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
       trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan,
-      travelRows:travelState.rows,travelAt:travelState.at};
+      travelRows:travelState.rows,travelAt:travelState.at,
+      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
         await PDA_storage.setMany(data);
@@ -783,6 +784,15 @@
       const rows=await api('torn/stocks');
       if(!Array.isArray(rows.stocks))throw Error('Invalid stock quote response.');
       stockState.all=rows.stocks;stockState.at=now();
+      const bucket=Math.floor(stockState.at/3600000);
+      for(const item of stockState.all){
+        if(!(Number(item.id)>0&&number(item.market?.price)>0))continue;
+        const id=String(item.id),old=state.stockHistory[id]||[];
+        if(!old.length||Math.floor(old[old.length-1].at/3600000)!==bucket)old.push({at:stockState.at,price:number(item.market.price)});
+        state.stockHistory[id]=old.filter(x=>x.at>now()-90*86400000).slice(-1500);
+      }
+      state.stockCache=stockState.all;state.stockCacheAt=stockState.at;
+      persist();
       try{const mine=await api('user/stocks');if(!Array.isArray(mine.stocks))throw Error('Invalid holdings response.');
         stockState.owned=mine.stocks;stockState.ownedAt=now();}
       catch(e){stockState.owned=[];stockState.ownedAt=0;
@@ -790,19 +800,56 @@
     }catch(e){stockState.error=e.message}
     finally{stockState.loading=false;render()}
   }
+
+  function stockHistoryPoint(id){return (state.stockHistory[String(id)]||[]).filter(x=>x?.at>now()-90*86400000&&number(x.price)>0).sort((a,b)=>a.at-b.at);}
+  function stockChange(row){
+    const old=stockHistoryPoint(row.id).filter(x=>x.at<=now()-86400000).slice(-1)[0];
+    return old?100*(row.p/old.price-1):null;
+  }
+  function stockSignals(){
+    if(!stockState.at||now()-stockState.at>30*60000)return [];
+    const signals=[];
+    for(const row of stockRows()){
+      const cfg=state.settings.stockTargets?.[String(row.id)]||{};
+      if(number(cfg.buy)>0&&row.p<=number(cfg.buy))signals.push({id:'stock-buy-'+row.id,
+        title:'Review buying '+row.acronym,why:fmt(row.p)+' at or below '+fmt(cfg.buy),priority:80});
+      if(number(cfg.sell)>0&&row.p>=number(cfg.sell))signals.push({id:'stock-sell-'+row.id,
+        title:'Review selling '+row.acronym,why:fmt(row.p)+' at or above '+fmt(cfg.sell),priority:85});
+    }
+    return signals.slice(0,30);
+  }
+  function stockWatchPanel(){
+    const rows=stockRows(),targets=state.settings.stockTargets||{};
+    if(!rows.length)return '';
+    let h='<div class="card"><h3>Stock buy / sell price alerts</h3>'+
+      '<p class="muted">Watch absolute share prices. Signals require a quote checked within 30 minutes and run only while Torn is open.</p>'+
+      '<form id="ps_stocktargets"><div class="field"><label>Stock</label><select name="stockId">'+rows.slice().sort((a,b)=>a.acronym.localeCompare(b.acronym))
+      .map(x=>'<option value="'+x.id+'">'+esc(x.acronym)+' · '+esc(x.name)+' ('+fmt(x.p)+')</option>').join('')+'</select></div>'+
+      '<div class="duo">'+field('stockBuy','Buy at or below ($)',0)+field('stockSell','Sell at or above ($)',0)+'</div>'+
+      '<button class="btn" type="submit">Save target</button></form>';
+    for(const [id,x] of Object.entries(targets)){
+      const row=rows.find(r=>String(r.id)===id);if(!row)continue;
+      h+='<div class="line"><span>'+esc(row.acronym)+' · buy '+(x.buy?fmt(x.buy):'off')+' / sell '+(x.sell?fmt(x.sell):'off')+'</span>'+
+        '<button class="btn red" data-stock-clear="'+esc(id)+'">Remove</button></div>';
+    }
+    return h+'</div>';
+  }
+
   function renderStockPanel(){
     const rows=stockRows(),due=dueDividends();
     let h='<div class="toolbar"><button class="btn" data-action="stockrefresh" '+(stockState.loading?'disabled':'')+'>'+(stockState.loading?'Refreshing…':'Refresh stocks')+
       '</button><button class="btn secondary" data-action="stockpage">Open Torn stock exchange</button></div>'+
       notice('Block costs and share prices are from Torn API v2. Annual yield is shown only for fixed cash dividends; price appreciation is excluded. Selling shares incurs a 0.1% fee.');
     if(stockState.error)h+=notice(stockState.error,true);
+    h+=stockWatchPanel();
+    if(stockSignals().length)h+='<div class="card"><h3>Stock price targets reached</h3>'+stockSignals().map(x=>'<div class="line" id="ps-alert-'+esc(x.id)+'"><span>'+esc(x.title)+' · '+esc(x.why)+'</span><button class="btn secondary" data-action="stockpage">Inspect</button></div>').join('')+'</div>';
     if(!rows.length)return h+'<div class="empty">Press Refresh to load live stocks.</div>';
     h+='<div class="statrow"><div class="stat"><small>Market value of owned shares</small><b>'+(stockState.ownedAt?fmt(rows.reduce((n,x)=>n+x.shares*x.p,0)):'Limited key needed')+'</b></div>'+
       '<div class="stat"><small>Ready dividends</small><b>'+(stockState.ownedAt?due.length:'—')+'</b></div></div>';
     if(due.length)h+='<div class="card" id="ps-alert-stock-claim"><h3>Collect dividends</h3><p>'+due.map(x=>esc(x.acronym)).join(', ')+'</p><button class="btn" data-action="stockpage">Collect on Torn</button></div>';
     for(const x of rows)h+='<div class="card"><div class="line"><strong>'+esc(x.acronym)+' · '+esc(x.name)+'</strong><span class="pill">'+(x.annualYield===null?'Unpriced bonus':pct(x.annualYield)+' cash yield')+'</span></div>'+
       '<div class="line"><span>Share / first benefit block</span><b>'+fmt(x.p)+' / '+fmt(x.p*x.block)+'</b></div>'+
-      '<p class="muted">'+esc(x.bonus?.description||'No benefit description')+'</p>'+
+      '<p class="muted">'+esc(x.bonus?.description||'No benefit description')+(stockChange(x)===null?' · 24h trend unavailable':' · sampled 24h '+pct(stockChange(x)))+'</p>'+
       (stockState.ownedAt?'<p>Owned '+Math.floor(x.shares).toLocaleString('en-US')+' · active increments '+x.increment+
         (x.own?.bonus?.available?' · <b class="positive">Claim now</b>':'')+'</p><p class="muted">Next benefit: '+Math.floor(x.need).toLocaleString('en-US')+' more shares, about '+fmt(x.need*x.p)+'.</p>':'')+
       '<button class="btn secondary" data-action="stockpage">Inspect stock</button></div>';
@@ -1043,6 +1090,7 @@
   function profitNextActions(){
     const fresh=activeDealAlerts(),exits=exitSignals(),actions=[];
     if(dueDividends().length)actions.push({id:'stock-claim',title:'Collect available stock dividends',detail:dueDividends().map(x=>x.acronym).join(', ')+' · withdraw manually on Torn',status:'now',priority:95});
+    for(const x of stockSignals().slice(0,4))actions.push({id:x.id,title:x.title,detail:x.why,status:'review',priority:x.priority});
     const stale=!state.lastScan||now()-state.lastScan>8*60000;
     if(stale)actions.push({id:'refresh-scan',title:'Refresh market prices before trading',detail:'Quotes are missing or older than 8 minutes.',status:'now',priority:90});
     else for(const d of fresh.slice(0,3))actions.push({
@@ -1130,7 +1178,7 @@
   function renderAlerts(){
     const list=activeDealAlerts();
     const exits=exitSignals();
-    return (dueDividends().length?'<div class="card" id="ps-alert-stock-claim"><h3>Stock dividends ready</h3><p>'+dueDividends().map(x=>esc(x.acronym)).join(', ')+'</p><button class="btn" data-action="stockpage">Collect manually on Torn</button></div>':'')+'<div class="card" id="ps-alert-refresh-scan"><h3>What should I do next?</h3><p>'+esc(state.lastScan?'Last market scan '+age(state.lastScan):'No confirmed scan yet')+'. Check prices on Torn before deciding to trade.</p><button class="btn secondary" data-action="scan">↻ Refresh opportunities</button></div>'+
+    return (stockSignals().length?stockSignals().map(x=>'<div class="card" id="ps-alert-'+esc(x.id)+'"><h3>'+esc(x.title)+'</h3><p>'+esc(x.why)+'</p><button class="btn" data-action="stockpage">Inspect stock</button></div>').join(''):'')+(dueDividends().length?'<div class="card" id="ps-alert-stock-claim"><h3>Stock dividends ready</h3><p>'+dueDividends().map(x=>esc(x.acronym)).join(', ')+'</p><button class="btn" data-action="stockpage">Collect manually on Torn</button></div>':'')+'<div class="card" id="ps-alert-refresh-scan"><h3>What should I do next?</h3><p>'+esc(state.lastScan?'Last market scan '+age(state.lastScan):'No confirmed scan yet')+'. Check prices on Torn before deciding to trade.</p><button class="btn secondary" data-action="scan">↻ Refresh opportunities</button></div>'+
       (list.length?list.slice(0,30).map(x=>'<div class="card" id="ps-alert-deal-'+Number(x.id)+'"><h3>BUY · '+esc(x.name)+'</h3><p><b>Quantity:</b> up to '+Math.floor(x.qty)+' · <b>maximum:</b> '+fmt(x.buy)+'/unit.</p><p><b>Capital required:</b> '+fmt(x.buy*x.qty)+' · <b>Score:</b> '+Math.floor(x.score)+'/100</p><p class="positive">Potential profit '+fmt(x.profit)+' · '+pct(x.roi)+' estimated ROI after modelled fees</p><p class="muted">Buy only at or below the suggested cap. Re-check inventory, listings and prices.</p><button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Open market · prepare '+Math.floor(x.qty)+'</button></div>').join(''):'<div class="empty">No fresh qualifying buy opportunities — do not force a trade.</div>')+
       (exits.length?'<div class="card"><h3>Positions worth reviewing for sale</h3><p class="muted">Estimated from current asking prices, less a 5% market selling fee. Not an executable bid.</p></div>'+exits.slice(0,10).map(x=>'<div class="card" id="ps-alert-exit-'+Number(x.itemId)+'"><h3>SELL REVIEW · '+esc(x.name)+'</h3><p><b>Recorded holdings:</b> '+Math.floor(x.qty)+' · <b>breakeven ask:</b> '+fmt(x.breakeven)+'/unit</p><p class="positive">Indicative gain '+fmt(x.upside)+' · '+pct(x.roi)+' based on asking prices</p><button class="btn secondary" data-action="market-view" data-id="'+Number(x.itemId)+'">Inspect live market listings</button></div>').join(''):'');
   }
@@ -1248,9 +1296,9 @@
     if(!root)return;
     if(lastHubPanelState!==state.open){lastHubPanelState=state.open;
       document.dispatchEvent?.(new CustomEvent('staxx:panel',{detail:{id:'profit',open:state.open}}));}
-    const valid=activeDealAlerts(),claims=dueDividends(),noticeCount=valid.length+claims.length;
+    const valid=activeDealAlerts(),claims=dueDividends(),stockNotices=stockSignals(),noticeCount=valid.length+claims.length+stockNotices.length;
     if(badge){badge.textContent=noticeCount?String(Math.min(99,noticeCount)):'';badge.style.display=noticeCount?'block':'none';}
-    document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:noticeCount,level:claims.length?'urgent':valid.length?'warning':'info',summary:claims.length+' dividends ready · '+valid.length+' market opportunities',items:claims.slice(0,2).map(x=>'Collect '+x.acronym+' dividend').concat(valid.slice(0,3).map(d=>String(d.name||d.itemName||'Market opportunity'))),alerts:[...claims.map(x=>({id:'stock-claim',title:'Claim '+x.acronym+' dividend',detail:'Ready for withdrawal in Torn Stock Exchange'})),...valid.slice(0,25).map(d=>({id:'deal-'+Number(d.id),title:'Buy up to '+Math.floor(d.qty)+' '+String(d.name||'items'),detail:'Estimated profit '+fmt(d.profit)+' · max '+fmt(d.buy)+'/unit'}))]}}));
+    document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:noticeCount,level:claims.length?'urgent':stockNotices.length||valid.length?'warning':'info',summary:claims.length+' dividends · '+stockNotices.length+' stock targets · '+valid.length+' market deals',items:claims.slice(0,2).map(x=>'Collect '+x.acronym+' dividend').concat(stockNotices.slice(0,2).map(x=>x.title)).concat(valid.slice(0,2).map(d=>String(d.name||d.itemName||'Market opportunity'))),alerts:[...claims.map(x=>({id:'stock-claim',title:'Claim '+x.acronym+' dividend',detail:'Ready for withdrawal in Torn Stock Exchange'})),...stockNotices.map(x=>({id:x.id,title:x.title,detail:x.why})),...valid.slice(0,25).map(d=>({id:'deal-'+Number(d.id),title:'Buy up to '+Math.floor(d.qty)+' '+String(d.name||'items'),detail:'Estimated profit '+fmt(d.profit)+' · max '+fmt(d.buy)+'/unit'}))]}}));
     document.dispatchEvent?.(new CustomEvent('staxx:actions',{detail:{id:'profit',items:profitNextActions(),updated:state.lastScan||now()}}));
     const summaryPortfolio=portfolio();
     document.dispatchEvent?.(new CustomEvent('staxx:summary',{detail:{id:'profit',headline:state.lastScan?'Last scan '+age(state.lastScan):'Awaiting market scan',metrics:[
@@ -1324,12 +1372,13 @@
     input.click();
   }
   function onClick(event){
-    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id]');
+    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id],button[data-stock-clear]');
     if(!el)return;
     if(el.dataset.tab){state.tab=el.dataset.tab;render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
       owned[name]=Math.max(0,Math.floor(number(owned[name])+Number(el.dataset.delta||0)));
       state.settings.museumOwned=owned;persist();render();return;}
+    if(el.dataset.stockClear){delete state.settings.stockTargets[el.dataset.stockClear];persist();render();return;}
     if(el.dataset.incomeId){if(confirm('Delete income record?')){putMoney(moneyRecords().filter(x=>x.id!==el.dataset.incomeId));render();}return;}
     if(el.dataset.delete){
       if(confirm('Remove this manual ledger entry? Later sales may depend on it.')){
@@ -1384,6 +1433,12 @@
       const source=String(f.get('source'));if(!incomeRoutes.some(x=>x[0]===source))return;
       const records=moneyRecords();records.push({id:now()+'_'+Math.random().toString(36).slice(2,6),at:now(),source,net:a-b,minutes,note:String(f.get('note')||'').slice(0,100)});
       putMoney(records);render();
+    }else if(event.target.id==='ps_stocktargets'){
+      event.preventDefault();const f=new FormData(event.target),id=String(f.get('stockId')),
+        buy=Number(f.get('stockBuy')),sell=Number(f.get('stockSell'));
+      if(!stockRows().some(x=>String(x.id)===id)||![buy,sell].every(x=>Number.isFinite(x)&&x>=0&&x<=1e15)){alert('Invalid price target');return;}
+      state.settings.stockTargets=state.settings.stockTargets||{};
+      if(!buy&&!sell)delete state.settings.stockTargets[id];else state.settings.stockTargets[id]={buy,sell};persist();render();
     }else if(event.target.id==='ps_travelsettings'){
       event.preventDefault();const f=new FormData(event.target);
       state.settings.travelCapacity=clamp(Math.floor(number(f.get('travelCapacity'))||10),1,200);
@@ -1472,6 +1527,10 @@
        state.income=Array.isArray(loaded.income)?loaded.income:[];
        travelState.rows=Array.isArray(loaded.travelRows)?loaded.travelRows:[];
        travelState.at=number(loaded.travelAt);
+       state.stockHistory=loaded.stockHistory&&typeof loaded.stockHistory==='object'&&!Array.isArray(loaded.stockHistory)?loaded.stockHistory:{};
+       state.stockCache=Array.isArray(loaded.stockCache)?loaded.stockCache:[];
+       state.stockCacheAt=number(loaded.stockCacheAt);
+       stockState.all=state.stockCache;stockState.at=state.stockCacheAt;
        if(!state.income.length){try{const prev=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');if(Array.isArray(prev)&&prev.length){state.income=prev.slice(-1000);persist();}}catch(_){}}
       state.catalog=loaded.catalog||{};
       state.quotes=loaded.quotes||{};
