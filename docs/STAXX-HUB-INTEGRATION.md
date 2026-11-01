@@ -1,4 +1,4 @@
-# StaxxHub 2.2 integration
+# StaxxHub 2.3 integration
 
 Author: IamEEKY. Read-only visual launcher for Torn PDA. The canonical implementation lives in `shared/staxx-hub.js` and is bundled directly into each participating userscript. No remote `@require` dependency is needed.
 
@@ -126,3 +126,34 @@ Dark navy background `#08192d`, card `#0d2945`, lighter stats `#102844`, border 
 ## Compatibility and testing
 
 The stable Happy Jump installer stays pinned; StaxxHub 2 is integrated with the ongoing Happy Jump preview channel. When creating new releases, update the permanent preview and its versioned snapshot together. CI checks JavaScript syntax and runs the separate regression suites. Test in Torn PDA after installation for visual/interaction behaviour.
+
+## Prioritised cross-tool action queue (v2.3)
+
+All active tools should publish a **compact, data-grounded set of next steps** whenever the underlying data materially changes. StaxxHub shows the six highest-priority actions **above the tool list**. Tapping an action opens the **exact matching** card inside the tool's Alerts screen.
+
+```js
+document.dispatchEvent(new CustomEvent('staxx:actions', {detail:{
+  id:'profit',
+  updated:Date.now(), // timestamp of underlying verified data, not a UI rerender
+  items:[
+    {id:'deal-42',title:'Review buying 100 items',
+     detail:'Estimated profit only; check the live item-market listing.',
+     status:'review',priority:72},
+    {id:'refresh-scan',title:'Refresh old prices',
+     detail:'Market quote is no longer fresh.',status:'now',priority:90}
+  ]
+}}));
+```
+
+Statuses: `urgent` (critical issue or confirmed overdue), `now` (action needed first), `soon` (due shortly), `review` (advisory) and `optional`. Priority is an optional integer 0–100 to break ties **within a status**, not to override urgency. Optional `dueAt` is an actual verified time in milliseconds, not guessed. IDs must match safe, stable local alert IDs (`^[a-z][a-z0-9-]{0,63}$`). Max 12 actions sent per tool; 6 shown in the combined queue.
+
+Hub remembers brief descriptions during Torn page transitions for up to four hours and marks them **LAST OBSERVED**. A cached item is not proof that its underlying opportunity is still valid. The target script should refresh and show why an action is still relevant. Do not embed key material, private employee data, full imported records or unsupported links.
+
+**Script-specific action expectations:** ProfitStaxx shows fresh buy opportunities, a price-refresh action, and asking-price-based sell reviews only when supported by recorded holdings. Company Helper shows confirmed train obligations, bank overflow, losses, stock shortage, pending payment review and stale-data refresh. Happy Jump shows overdose recovery holds, scheduled events, current gym readiness, stale-data refresh and verified owned-book opportunities. All game actions require a separate user gesture and Torn confirmation.
+
+## Seamless Torn navigation
+- Opening from the Hub should close the sidebar/FAB, then reveal the destination tool and focus the exact alert.
+- User-initiated ProfitStaxx buy preparations may prefill **only** a verified quantity field on a matching Item Market route. Never submit a transaction.
+- Gym and points actions link to the live Torn pages; no remote gameplay write.
+- Company Helper opens on Torn companies.php and restores an alert ID through sessionStorage.
+- Keep visual chrome modest, accessible and compatible with Torn PDA touch interfaces. Do not cover Torn's own controls.
