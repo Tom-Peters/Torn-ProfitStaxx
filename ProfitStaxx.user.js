@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.11.0
+// @version      1.12.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -569,7 +569,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.11.0';
+  const VERSION = '1.12.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -1055,7 +1055,7 @@
   function renderTravel(){
     const rows=travelRows(),fresh=rows.filter(x=>x.valid),priced=rows.filter(x=>x.net!==null).length;
     let h='<div class="card"><h3>Foreign-shop profit scanner</h3>'+
-      '<p class="muted">Optional third-party public observation data from Torn Tracker, used only when you press Scan abroad. No API key, identity or stored trading record is sent. <a href="https://torn-tracker.com/guide/website/developer-api/" target="_blank" rel="noopener noreferrer">Data: torn-tracker.com contributors</a> (CC BY 4.0). Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
+      '<p class="muted">Optional third-party public observation data from Torn Tracker, checked automatically when Torn is in the foreground (or on demand). No API key, identity or stored trading record is sent. <a href="https://torn-tracker.com/guide/website/developer-api/" target="_blank" rel="noopener noreferrer">Data: torn-tracker.com contributors</a> (CC BY 4.0). Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
       '<form id="ps_travelsettings"><div class="duo">'+field('travelCapacity','Carry capacity (items)',state.settings.travelCapacity||10)+
       field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+'</div>'+
       '<div class="field"><label>Round-trip minutes by destination (country=minutes; include shop time)</label>'+
@@ -1983,6 +1983,29 @@
     observer=new MutationObserver(attempt);observer.observe(document.body,{childList:true,subtree:true});
     timer=setInterval(attempt,800);attempt();
   }
+  const autoChecksV112={full:0,quick:0,travel:0,stocks:0};
+  let autoTickRunningV112=false;
+  async function autoTickV112(){
+    if(autoTickRunningV112||document.hidden||!apiKey()||state.busy||travelState.busy||stockState.loading)return;
+    autoTickRunningV112=true;
+    try{
+      const time=now();
+      // Full scans may be lengthy: never repeat faster than 45 minutes, including failures.
+      if((!state.lastScan||time-state.lastScan>=60*60000)&&time-autoChecksV112.full>=45*60000){
+        autoChecksV112.full=time;await scan({manual:false});return;
+      }
+      if(time-travelState.at>=20*60000&&time-autoChecksV112.travel>=20*60000){
+        autoChecksV112.travel=time;await scanTravel();return;
+      }
+      if(time-stockState.at>=10*60000&&time-autoChecksV112.stocks>=10*60000){
+        autoChecksV112.stocks=time;await refreshStocks();return;
+      }
+      if(time-Math.max(autoChecksV112.quick,state.lastScan)>=12*60000){
+        autoChecksV112.quick=time;await scan({manual:false,quick:true});
+      }
+    }catch(e){state.error='Automatic data check failed: '+String(e?.message||e);render();}
+    finally{autoTickRunningV112=false;}
+  }
   async function init(){
     mount();
     marketAssist();
@@ -2008,15 +2031,12 @@
       state.status='Ready · '+state.storage+' storage';
     }catch(e){state.error='Could not restore local data: '+e.message;}
     render();
-    // Pure API reads only, and only while the Torn tab is foreground/visible.
-    scanTimer=setInterval(()=>{
-      if(document.hidden||!apiKey())return;
-      if(!state.busy)scan({manual:false});
-      if(Object.keys(state.settings.stockTargets||{}).length&&now()-stockState.at>=10*60000&&!stockState.loading){
-        refreshStocks();
-      }
-    },30000);
-    document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
+    // Read-only autopilot: one bounded data task at a time, while Torn is foregrounded.
+    // Prioritise missing/old full scans, then travel, stocks and short incremental quotes.
+    scanTimer=setInterval(()=>{void autoTickV112();},60000);
+    setTimeout(()=>{void autoTickV112();},10000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden){render();void autoTickV112();}});
+
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
