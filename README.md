@@ -1,8 +1,8 @@
 # ProfitStaxx
 
-**Torn trading intelligence for TornPDA** — developed by **IamEEKY**.
+**Torn trading, stocks and income intelligence for TornPDA** — developed by **IamEEKY**.
 
-A mobile-first userscript that spots potentially profitable Item Market listings, compares no-fee Bazaar resale with Item Market resale, evaluates complete Museum sets, tracks your purchases and sales, and shows a profit-opportunity badge on a floating **PS** button.
+A mobile-first userscript for Torn Item Market deals, stock benefit blocks, cash dividend opportunities, Museum conversions, a trading ledger and a multi-source realised-income tracker. All in-game purchases, sales and claims remain user-confirmed.
 
 ## Install on TornPDA (remote URL)
 
@@ -26,17 +26,24 @@ You can also use a compatible browser userscript manager. TornPDA is the primary
 4. Open **Deals > Refresh opportunities** to perform the first scan.
 5. Use the linked Torn market page to **manually** inspect and buy any candidate.
 6. Record actual buys and sells in **Ledger** so the tool can measure *realised* profit.
+7. Open **Stocks > Refresh stocks** to load real stock quotes. Personal holdings and claim-ready dividends require a Limited-access API key that authorises `user/stocks`.
+8. Open **Income** to record completed returns from bank interest, stock dividends, company payouts, rental income, travel importing, crimes, services, bounties and other sources. Record each realised earning only once.
 
 ## Features
 
 | Feature | Included |
 | --- | --- |
 | Persistent floating PS button | Yes |
-| Badge displaying profitable opportunities | Yes — only from recent API data |
+| Badge displaying profitable opportunities and due stock claims | Yes — only from recent API data |
 | Torn API v2 Item Market watchlist scanner | Yes |
 | Market depth / spread / fee-adjusted ROI | Yes |
 | Choice of Bazaar vs Item Market exit | Yes — model, not guaranteed sale |
 | Balanced risk caps / cash reserve | Yes |
+| Torn Stock Market live quotations | Yes — `torn/stocks` |
+| Benefit-block price and fixed-cash-dividend yield estimates | Yes — no modelled future share appreciation |
+| Own shares and claim-ready dividend status | Yes — authorised `user/stocks` API selection |
+| Multi-source income directory and Torn handoffs | Yes — 12 channels, player-led navigation |
+| Native-storage realised income ledger | Yes — received less costs, 7-/30-day totals |
 | Museum plushie / flower arbitrage | Yes |
 | Manually record pre-owned Museum items | Yes |
 | 10-point set calculations and points quotes | Yes |
@@ -66,13 +73,21 @@ You can also use a compatible browser userscript manager. TornPDA is the primary
 
 ## Privacy / API key handling
 
-- Data requested: Torn API v2 **torn/items**, **market/{itemId}/itemmarket**, **market/pointsmarket**.
+- Data requested: Torn API v2 **torn/items**, **market/{itemId}/itemmarket**, **market/pointsmarket**, **torn/stocks** and, if authorised, **user/stocks**.
 - API requests go only to **api.torn.com**, using a key in the Authorization header.
 - TornPDA's \`###PDA-APIKEY###\` placeholder is supported; no key is shipped in the code.
 - When pasted manually in Settings, a key is stored **locally** in the native PDA per-script storage (or localStorage fallback). It is never uploaded to GitHub.
 - The JSON backup **redacts the manually entered key**. The CSV contains only user-recorded transactions.
-- For this market-only version, use a public-access/custom-scoped key if entering it manually. Do not paste a Full Access key unless you understand its access.
+- A public-access key supports market and public stock quotes; reading your personal holdings and ready-to-claim dividends requires a suitably restricted **Limited** key. Do not paste a Full Access key unless you understand its access.
 - Deleting the script or native storage can delete your trade history. Use **Backup JSON** regularly.
+
+## Stock Market and income boundaries
+
+- Torn API quotations reflect the stock market at retrieval time. This tool displays fixed cash payout yield estimates only where payout amounts and intervals are known. Noncash benefits are left **unpriced** rather than assuming a guaranteed cash-equivalent yield.
+- Own-stock benefits can require waiting, owning enough shares and manually claiming a payout. No stock purchases, disposals or claims are executed by the script.
+- Stock price changes, buying fees, resale delays and future dividends cannot be forecast precisely. Yield rankings are cash-dividend scenarios, not promises.
+- The **Income** tab is a manually maintained ledger of completed receipts and costs. It does **not** automatically count item-sale profits already recorded in the trade ledger, so the two ledgers should not be added together blindly.
+- Other income pages open on Torn but do not automatically price every activity (for example, travel profits vary by destination, inventory availability and time). This is a revenue directory plus a realised-income tracker, not a live optimiser for all possible revenue streams.
 
 ## Known boundaries
 
@@ -93,6 +108,6 @@ Museum set membership currently uses the known flower/plushie recipes, matched a
 
 ## Compliance
 
-ProfitStaxx does not purchase or sell items, manipulate the Torn UI, send any extra non-API Torn requests, inspect unfocused Torn pages, bypass CAPTCHA, or promise automated profit. All in-game actions require direct user interaction.
+ProfitStaxx does not purchase or sell items or stocks, claim dividends, send automated in-game transaction requests, inspect unfocused Torn pages, bypass CAPTCHA, or promise automated profit. Item Market quantity preparation is limited to a user-triggered, guarded handoff that requires manual final confirmation. All in-game actions require direct user interaction.
 
 Official references: [Torn API](https://www.torn.com/api.html), [Torn scripting rules](https://www.torn.com/forums.php?p=threads&t=16534470), [TornPDA script API](https://github.com/Manuito83/torn-pda/tree/master/userscripts), [Torn Wiki Bazaar](https://wiki.torn.com/wiki/Bazaar), [Museum](https://wiki.torn.com/wiki/Museum).
