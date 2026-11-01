@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.01.2** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.01.3** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -82,3 +82,14 @@ The exact versions change independently:
 - Happy Jump: `Torn-Happy-Jump-Helper-preview.user.js` for enhancements; keep `Torn-Happy-Jump-Helper.user.js` as stable rollback.
 
 Update this mapping if paths or release policy change; do not hardcode an obsolete version in these instructions.
+
+## StaxxHub 2.4 — native context and modelling discipline (2026-11-01)
+
+- StaxxHub's one-line, **opt-out** in-page advisor appears immediately after an identifiable Torn heading on the Gym (/gym.php), Company (/companies.php) or Item Market (/page.php?sid=ItemMarket) pages. If Torn's page structure changes or no heading exists, skip embedding rather than overlaying an arbitrary element.
+- The contextual card uses an already-published fresh `staxx:actions` recommendation and its stable alert ID, opens the matching script/Alerts card, and does **not** query the Torn API on its own. When stale or missing, show a “check recommendations” prompt rather than a supposedly live action.
+- Context visibility is stored locally via `staxx-hub-context-v1` (default on); the sidebar provides an explicit on/off toggle. Hide the embedded card when sidebar or a tool panel is open. Keep native Torn controls unobstructed.
+- Native contextual recommendations are not proof of automatic native form preparation. ProfitStaxx's verified-by-item-ID, user-tapped quantity handoff stays separate and always requires final manual purchase confirmation.
+- ProfitStaxx 1.6.0 adds a risk-weighted shortlist respecting available capital and its existing per-item/trade exposure caps; history is a *sample of observed asking prices*, not actual market trades. “Profit per review minute” includes a user-configurable active-review-time assumption but **excludes unknown time-to-sale**. Sell-timing indicators must not imply genuine buyer depth.
+- Company Helper 1.9.0 extrapolates training stat shortfall only from dated working-stat observations; wage scenarios hold revenue/advertising constant and never claim that paying more earns stars. A next-star *historical pace* estimate may appear only with a meaningful record of Sunday star gains; never claim Torn exposes a reliable deterministic promotion formula.
+- Happy Jump 0.18.0 compares forecast gym gains per energy and incremental cash per 1,000 forecast stat gain, uses the actual planned refill event for timing, and distinguishes observed daily stat changes from straight-line 30/90-day scenarios. Suspend training recommendations on reported overdose; never override live user choices.
+- A suite update MUST preserve preview/snapshot body parity, pinned stable HJ installer, canonical shared Hub byte-for-byte parity, existing local data and read-only gameplay, then pass all affected regression suites and cross-repo sync checks.
