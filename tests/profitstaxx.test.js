@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -146,4 +146,37 @@ test('capital allocator respects deployable funds and per-item constraints',()=>
   assert.ok(p.allocations.length<=1);
   assert.ok(p.allocations.every(x=>x.allocQty>=1&&x.allocCost<=100000+1e-6));
   assert.ok(p.allocations.reduce((n,x)=>n+x.allocCost,0)<=p.available+1e-6);
+});
+
+test('stock cash yields need a real market price and fixed-cash payout metadata',()=>{
+  const {stockState,stockRows,dueDividends}=harness();
+  stockState.all=[
+    {id:1,acronym:'CNC',name:'Cash Dividends',market:{price:1000000},bonus:{requirement:1000,description:'Cash benefit',passive:false}},
+    {id:2,acronym:'OTHER',name:'Unknown reward',market:{price:2000000},bonus:{requirement:100,description:'Utility'}},
+    {id:3,acronym:'GRN',name:'Missing quote',market:{price:0},bonus:{requirement:100}}
+  ];
+  stockState.owned=[{id:1,shares:1100,bonus:{available:true,increment:0}}];
+  stockState.ownedAt=Date.now();
+  const rows=stockRows();
+  assert.equal(rows.length,2);
+  assert.equal(rows[0].acronym,'CNC');
+  assert.ok(rows[0].annualYield>0);
+  assert.equal(rows[1].annualYield,null,'unknown reward cannot be assigned a fabricated yield');
+  assert.equal(dueDividends().length,1);
+  stockState.ownedAt=Date.now()-1800001;
+  assert.equal(dueDividends().length,0,'expired readings cannot keep a dividend alert active');
+});
+
+test('income comparison keeps user-entered bank and rental cashflows separate from realised earnings',()=>{
+  const {state,incomeComparisonPanel,moneyRecords}=harness();
+  state.settings.bankPrincipal=100000000;
+  state.settings.bankApr=8;
+  state.settings.rentalAssetValue=500000000;
+  state.settings.rentalNetWeekly=250000;
+  state.income=[{source:'travel',net:2000000,minutes:120,at:Date.now()}];
+  const html=incomeComparisonPanel();
+  assert.match(html,/8,000,000/,'bank scenario uses entered rate, not a fake live quote');
+  assert.match(html,/13,000,000/,'rental scenario annualises reported weekly net');
+  assert.match(html,/1,000,000/,'active return per hour is derived from the ledger');
+  assert.equal(moneyRecords()[0].net,2000000);
 });
