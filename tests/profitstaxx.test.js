@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -260,4 +260,22 @@ test('StaxxHub stock and market alert focus uses exact DOM id, not a numeric-onl
  assert.match(source,/const focus='ps-alert-'\+String\(state\.alertFocus\)/);
  assert.match(source,/\.find\(x=>x\.id===focus\)/);
  assert.doesNotMatch(source,/Number\(state\.alertFocus\.replace/);
+});
+
+test('fast opportunity scans are bounded and can be stopped without claiming a full scan',()=>{
+ assert.match(source,/async function scan\(\{manual=false,quick=false\}=\{\}\)/);
+ assert.match(source,/slice\(0,10\):all/);
+ assert.match(source,/if\(state\.cancelScan\)/);
+ assert.match(source,/if\(complete&&!quick\)state\.lastScan=now\(\)/);
+ assert.match(source,/case 'stopscan':if\(state\.busy\)/);
+});
+test('deal risk flags derive from observed history and ask competition, not fictional sales',()=>{
+ const {state,dealRisk}=harness(),t=Date.now(),id=206;
+ state.snapshots[id]=[{at:t-3*3600000,reference:200},{at:t-2*3600000,reference:140},{at:t-3600000,reference:100}];
+ state.quotes[id]={id,at:t,reference:100,offers:Array.from({length:8},()=>({price:100,qty:100}))};
+ const r=dealRisk({id,qty:10,reference:100,roi:4});
+ assert.ok(r.flags.some(x=>x.includes('falling')));
+ assert.ok(r.flags.some(x=>x.includes('Crowded')));
+ assert.ok(r.flags.some(x=>x.includes('Thin')));
+ assert.equal(r.level,'High');
 });
