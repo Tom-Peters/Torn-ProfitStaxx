@@ -2,6 +2,14 @@
 
 All shared changes are documented here. This log is **not** a feed of user-specific Torn data.
 
+## 2026-11-01 — StaxxHub 2.3 / next-action overhaul
+
+- All three active tools now publish a structured `staxx:actions` queue. Sidebar ranks urgent, due, upcoming, advisory and optional opportunities across tools, deep-links to exact alert cards, and labels last-observed cached recommendations.
+- ProfitStaxx 1.5.0: clearer live-market buy sizing and costs, opportunity hero, holdings-aware sell-review signals with 5% item-market fee and break-even asking price. No automated sale or purchase.
+- Company Helper 1.8.0: top three director decisions, confirmed eligible paid-train queue, stock shortage, operating guardrails, stale refresh and targeted cards.
+- Happy Jump preview 0.17.0: verified energy-based trains possible, estimated time to natural energy cap, scheduled cooldown priorities, overdose safety, book decision, exact alert targets and Gym links.
+- Hub 2.3 canonical bundled identically into all three active scripts; stable Happy Jump 0.10.22 is untouched. CI, syntax and cross-repo parity are required; Torn PDA live field targeting still requires device validation.
+
 ## 2026-11-01 — StaxxHub 2.2 / standard 2026.11.01.1
 - Individual alert buttons now open the matching tool's Alerts view and focus the relevant issue, rather than opening the tool's default tab.
 - ProfitStaxx 1.4.1: explicit buy-quantity action cards, correct item-market deep link and user-confirmed, guarded quantity preparation with safe manual fallback. No automatic purchases or API writes.
