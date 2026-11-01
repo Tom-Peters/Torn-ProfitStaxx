@@ -70,6 +70,7 @@
     const tools=root.querySelector("#staxx-hub-tools"),alerts=root.querySelector("#staxx-hub-alerts"),bubble=root.querySelector("#staxx-hub-count");
     const overview=root.querySelector("#staxx-hub-overview"),overviewButton=root.querySelector("[data-overview]");
     let expanded=false, panelOpen=false, overviewShown=false, moving=null, suppressClick=false;
+    const openPanels=new Set();
     const idOk = v=>typeof v==="string" && /^[a-z][a-z0-9-]{0,31}$/.test(v);
     function node(tag,cls,value) {const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=String(value);return e;}
     function safeRead(key, fallback) {try {const v=JSON.parse(localStorage.getItem(key)||"null");return v===null?fallback:v;}catch(_){return fallback;}}
@@ -212,8 +213,8 @@
     window.addEventListener("resize",()=>position((parseFloat(toggle.style.top)||0)/Math.max(1,window.innerHeight)));
     document.addEventListener("staxx:panel",e=>{
       if(!e.detail||!idOk(e.detail.id))return;
-      if(e.detail.open){panelOpen=true;setExpanded(false);}
-      else{panelOpen=false;launcherVisibility();}
+      if(e.detail.open){openPanels.add(e.detail.id);panelOpen=true;setExpanded(false);}
+      else{openPanels.delete(e.detail.id);panelOpen=openPanels.size>0;launcherVisibility();}
     });
     document.addEventListener("staxx:register",e=>{
       const d=e.detail||{},id=d.id;if(!idOk(id))return;
@@ -241,6 +242,7 @@
         updated:Number(d.updated)||Date.now()};
       if(JSON.stringify(summaries[id])!==JSON.stringify(entry)){summaries[id]=entry;remember();if(expanded&&overviewShown)showOverview();}
     });
+    window.setInterval(()=>{if(!document.hidden&&entries.some(e=>Number(controls[e.id]?.snoozeUntil)>0&&Number(controls[e.id]?.snoozeUntil)<=Date.now())){for(const e of entries){if(Number(controls[e.id]?.snoozeUntil)>0&&Number(controls[e.id]?.snoozeUntil)<=Date.now()){controls[e.id]={...controls[e.id],snoozeUntil:0};saveLocal("staxx-hub-alert-control-"+e.id,controls[e.id]);}}render();}},60000);
     // Older v1 notifications cannot be trusted for dismiss-state comparisons.
     render();
     document.dispatchEvent(new CustomEvent("staxx:ping"));
