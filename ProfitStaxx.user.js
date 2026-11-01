@@ -492,7 +492,7 @@
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'scan'};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
+    trades:[],income:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
     tab:'scan',open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const fmt=n=>Number.isFinite(Number(n)) ? '$'+Math.round(Number(n)).toLocaleString('en-US') : '—';
@@ -508,7 +508,7 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income']);
         state.storage='TornPDA';
         return data||{};
       }
@@ -522,7 +522,7 @@
   }
   function persist() {
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
-      trades:state.trades,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan};
+      trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
         await PDA_storage.setMany(data);
@@ -758,8 +758,8 @@
     ['bounty','Bounty hunting','/bounties.php'],['revive','Reviving / services','/hospitalview.php'],
     ['museum','Museum arbitrage','/museum.php'],['points','Points trading','/pmarket.php'],['other','Other earned income','/city.php']];
   const stockState={all:[],owned:[],at:0,ownedAt:0,loading:false,error:''};
-  function moneyRecords(){try{const v=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');return Array.isArray(v)?v:[]}catch(_){return []}}
-  function putMoney(rows){try{localStorage.setItem('profitstaxx_income_v1',JSON.stringify(rows.slice(-1000)))}catch(_){alert('Income storage is full or unavailable.')}}
+  function moneyRecords(){return state.income||[]}
+  function putMoney(rows){state.income=rows.slice(-1000);persist()}
   function stockRows(){
     const mine=new Map(stockState.owned.map(x=>[Number(x.id),x]));
     return stockState.all.filter(x=>number(x.market?.price)>0).map(x=>{
@@ -1271,6 +1271,8 @@
       const loaded=await readStore();
       state.settings=Object.assign({},DEFAULTS,loaded.settings||{});
       state.trades=Array.isArray(loaded.trades)?loaded.trades:[];
+       state.income=Array.isArray(loaded.income)?loaded.income:[];
+       if(!state.income.length){try{const prev=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');if(Array.isArray(prev)&&prev.length){state.income=prev.slice(-1000);persist();}}catch(_){}}
       state.catalog=loaded.catalog||{};
       state.quotes=loaded.quotes||{};
       state.snapshots=loaded.snapshots||{};
