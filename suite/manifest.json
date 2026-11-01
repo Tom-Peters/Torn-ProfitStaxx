@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "owner": "IamEEKY",
+  "canonical_hub": "shared/staxx-hub.js",
+  "canonical_standard": "docs/TORN-SUITE-STANDARD.md",
+  "active": [
+    {
+      "id": "profit",
+      "repository": "Torn-ProfitStaxx",
+      "entrypoint": "ProfitStaxx.user.js",
+      "channel": "stable"
+    },
+    {
+      "id": "company",
+      "repository": "Torn-Company-Helper",
+      "entrypoint": "Torn-Company-Helper.user.js",
+      "channel": "stable"
+    },
+    {
+      "id": "happy",
+      "repository": "Torn-Happy-Jump-Helper",
+      "entrypoint": "Torn-Happy-Jump-Helper-preview.user.js",
+      "channel": "preview",
+      "versioned_snapshot": true
+    }
+  ],
+  "pinned": [
+    {
+      "id": "happy-stable",
+      "repository": "Torn-Happy-Jump-Helper",
+      "entrypoint": "Torn-Happy-Jump-Helper.user.js",
+      "reason": "Preserve validated stable fallback; no StaxxHub 2.1 requirement"
+    }
+  ],
+  "onboarding": "For new Torn scripts, add active entry, copy AGENTS.md, bundle canonical StaxxHub, publish staxx:register/open/panel/summary events and run shared parity workflow."
+}
