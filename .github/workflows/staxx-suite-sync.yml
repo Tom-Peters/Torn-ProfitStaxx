@@ -1,0 +1,26 @@
+name: Shared StaxxHub parity
+
+on:
+  push:
+    paths:
+      - 'shared/staxx-hub.js'
+      - 'ProfitStaxx.user.js'
+      - 'scripts/check-suite-sync.mjs'
+      - '.github/workflows/staxx-suite-sync.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify all StaxxHub userscripts match the canonical source
+        run: node scripts/check-suite-sync.mjs
