@@ -784,12 +784,12 @@
       const rows=await api('torn/stocks');
       if(!Array.isArray(rows.stocks))throw Error('Invalid stock quote response.');
       stockState.all=rows.stocks;stockState.at=now();
-      const bucket=Math.floor(stockState.at/3600000);
+      const bucket=Math.floor(stockState.at/(6*3600000));
       for(const item of stockState.all){
         if(!(Number(item.id)>0&&number(item.market?.price)>0))continue;
         const id=String(item.id),old=state.stockHistory[id]||[];
-        if(!old.length||Math.floor(old[old.length-1].at/3600000)!==bucket)old.push({at:stockState.at,price:number(item.market.price)});
-        state.stockHistory[id]=old.filter(x=>x.at>now()-90*86400000).slice(-2200);
+        if(!old.length||Math.floor(old[old.length-1].at/(6*3600000))!==bucket)old.push({at:stockState.at,price:number(item.market.price)});
+        state.stockHistory[id]=old.filter(x=>x.at>now()-90*86400000).slice(-400);
       }
       state.stockCache=stockState.all;state.stockCacheAt=stockState.at;
       persist();
@@ -1527,8 +1527,10 @@
     if(focused&&shell.contains(focused)&&/^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)){
       let start=null,end=null;
       try{start=focused.selectionStart;end=focused.selectionEnd;}catch(_){}
-      edit={id:focused.id,name:focused.name,value:focused.value,start,end,
-        checked:focused.type==='checkbox'?focused.checked:null,tab:lastRenderedTab};
+      const form=focused.form;
+      const fields=form?[...form.elements].filter(x=>x&&x.name&&'value' in x).map(x=>({name:x.name,value:x.value,checked:x.type==='checkbox'?x.checked:null})):[];
+      edit={id:focused.id,name:focused.name,value:focused.value,start,end,fields,
+        formId:form?.id||'',checked:focused.type==='checkbox'?focused.checked:null,tab:lastRenderedTab};
     }
     shell.innerHTML='<div class="panel" role="dialog" aria-modal="true" aria-label="ProfitStaxx">'+
       '<div class="heading"><div><div class="brand">Profit<span style="color:#54d7fa">Staxx</span></div><div class="sub">Profit intelligence · v'+VERSION+'</div></div>'+
@@ -1542,6 +1544,11 @@
     if(body)body.scrollTop=scrollPositions[active]||0;
     if(nav)nav.scrollLeft=tabScroll;
     if(edit&&edit.tab===active){
+      const replacementForm=edit.formId?shell.querySelector('#'+edit.formId):null;
+      if(replacementForm)for(const entry of edit.fields){
+        const input=[...replacementForm.elements].find(x=>x.name===entry.name);
+        if(input){input.value=entry.value;if(entry.checked!==null)input.checked=entry.checked;}
+      }
       const replacement=[...shell.querySelectorAll('input,textarea,select')].find(x=>edit.id?x.id===edit.id:x.name===edit.name);
       if(replacement){replacement.value=edit.value;if(edit.checked!==null)replacement.checked=edit.checked;
         replacement.focus({preventScroll:true});
@@ -1614,7 +1621,13 @@
       case 'travelscan':scanTravel();break;
       case 'rank-open':{
         const r=incomeCandidates().find(x=>x.id===el.dataset.rankId);if(!r)return;
-        if(r.kind==='market'){location.assign(linkToItem(r.itemId));break;}
+        if(r.kind==='market'){
+          const d=activeDealAlerts().find(x=>x.id===r.itemId);
+          if(!d){state.tab='scan';render();break;}
+          try{sessionStorage.setItem('profitstaxx-market-intent-v1',JSON.stringify({id:d.id,qty:Math.floor(d.qty),maxPrice:d.buy,name:d.name,at:now()}));}
+          catch(_){state.error='Could not prepare quantity; confirm it yourself.';}
+          location.assign(linkToItem(r.itemId));break;
+        }
         if(r.route==='museum'){state.tab='museum';render();break;}
         const src=incomeRoutes.find(x=>x[0]===r.route);if(src)location.assign('https://www.torn.com'+src[2]);break;
       }
