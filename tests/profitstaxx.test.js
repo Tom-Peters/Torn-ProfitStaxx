@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -338,4 +338,22 @@ test('automatic read-only data scheduler enforces independent cooldowns and visi
  assert.match(source,/for\(let offset=0;offset<2000;offset\+=250\)/);
  assert.match(source,/if\(!complete\)throw Error/);
  assert.match(source,/if\(entry\.faction_owned\)continue/);
+});
+
+test('live cash sync accepts only verified wallet figures and never turns missing data into zero',()=>{
+  const {parseMoneyV113,liveWalletCashV113,state}=harness();
+  assert.equal(parseMoneyV113({money:{money_onhand:123456}}),123456);
+  assert.equal(parseMoneyV113({money_onhand:0}),0);
+  assert.equal(parseMoneyV113({money:{points:10}}),null);
+  assert.equal(parseMoneyV113({money_onhand:"invalid"}),null);
+  assert.equal(liveWalletCashV113(),null);
+  state.walletCash=500000;state.walletAt=Date.now();
+  assert.equal(liveWalletCashV113(),500000);
+  state.walletAt=Date.now()-20*60000;
+  assert.equal(liveWalletCashV113(),null);
+});
+test('quick background price scan is not blocked by full-scan cooldown',()=>{
+  assert.match(source,/!manual&&!quick&&now\(\)-state\.lastScan/);
+  assert.match(source,/staxx:refresh-request/);
+  assert.match(source,/user\/money/);
 });
