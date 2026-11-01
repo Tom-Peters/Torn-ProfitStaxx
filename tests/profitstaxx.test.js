@@ -91,6 +91,28 @@ test('museum accounts for pre-owned items but economic profit includes opportuni
   assert.equal(r.missingCost,720000);
   assert.equal(r.profit,220000);
 });
+test('Museum batch planner consumes price levels and owned stock',()=>{
+  const {state,recipeResults}=harness();
+  const plush=['Jaguar Plushie','Lion Plushie','Panda Plushie','Monkey Plushie','Chamois Plushie',
+    'Wolverine Plushie','Nessie Plushie','Red Fox Plushie','Camel Plushie','Kitten Plushie',
+    'Teddy Bear Plushie','Sheep Plushie','Stingray Plushie'];
+  plush.forEach((name,index)=>{
+    const id=index+1;
+    state.catalog[name.toLowerCase()]={id,name};
+    state.quotes[id]={id,name,at:Date.now(),
+      offers:[{price:60000,qty:15},{price:65000,qty:15}]};
+  });
+  state.pointsPrice=100000;
+  state.settings.museumOwned={'Jaguar Plushie':1};
+  state.settings.museumBatch=25;
+  const r=recipeResults()[0];
+  assert.equal(r.ready,true);
+  assert.equal(r.batch,25);
+  assert.equal(r.cost,13*(15*60000+10*65000)-5000);
+  assert.equal(r.missingCost,r.cost-60000);
+  state.settings.museumBatch=31;
+  assert.equal(recipeResults()[0].batch,25,'Batch maximum must be enforced');
+});
 test('HTML escaping protects item labels',()=>{
   const {esc}=harness();
   assert.equal(esc('<svg onload="boom">&'), '&lt;svg onload=&quot;boom&quot;&gt;&amp;');
