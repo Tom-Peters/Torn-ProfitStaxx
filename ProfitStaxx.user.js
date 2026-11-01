@@ -956,33 +956,7 @@
     if(!p||!Number.isInteger(p.id)||!Number.isInteger(p.qty)||p.qty<1||p.qty>1000000||now()-p.at>600000||!location.hash.includes('itemID='+p.id))return;
     const box=document.createElement('div');box.id='ps-market-assist';box.style.cssText='position:fixed;z-index:2147483639;right:12px;bottom:12px;max-width:310px;background:#08192d;color:#e8f7ff;border:1px solid #54d7fa;border-radius:12px;padding:12px;font:13px system-ui;box-shadow:0 5px 28px #000a';
     const title=document.createElement('b');title.textContent='ProfitStaxx · '+p.name+' × '+p.qty;
-    const status=document.createElement('p');status.textContent='Check live listing price (modeled cap 
-    mount();
-    marketAssist();
-    document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit'}}));
-    try{
-      const loaded=await readStore();
-      state.settings=Object.assign({},DEFAULTS,loaded.settings||{});
-      state.trades=Array.isArray(loaded.trades)?loaded.trades:[];
-      state.catalog=loaded.catalog||{};
-      state.quotes=loaded.quotes||{};
-      state.snapshots=loaded.snapshots||{};
-      state.pointsPrice=number(loaded.pointsPrice);
-      state.lastScan=number(loaded.lastScan);
-      state.status='Ready · '+state.storage+' storage';
-    }catch(e){state.error='Could not restore local data: '+e.message;}
-    render();
-    // Pure API reads only, and only while the Torn tab is foreground/visible.
-    scanTimer=setInterval(()=>{
-      if(document.hidden||state.busy||!apiKey())return;
-      scan({manual:false});
-    },30000);
-    document.addEventListener('visibilitychange',()=>{if(!document.hidden)render();});
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
-  else init();
-})();
-+Math.round(p.maxPrice).toLocaleString('en-US')+'/unit). Looking for Buy quantity field…';
+    const status=document.createElement('p');status.textContent='Check live listing price (modeled cap $'+Math.round(p.maxPrice).toLocaleString('en-US')+'/unit). Looking for Buy quantity field…';
     const copy=document.createElement('button');copy.textContent='Copy quantity';copy.onclick=()=>{const v=String(p.qty);if(navigator.clipboard?.writeText)navigator.clipboard.writeText(v).then(()=>status.textContent='Copied '+v).catch(()=>status.textContent='Quantity: '+v);else status.textContent='Quantity: '+v;};
     const close=document.createElement('button');close.textContent='Close ×';close.style.marginLeft='10px';
     box.append(title,status,copy,close);document.body.appendChild(box);
