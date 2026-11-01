@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.9.0
+// @version      1.10.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -476,7 +476,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.9.0';
+  const VERSION = '1.10.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -494,7 +494,7 @@
     key:'',alertThreshold:100000,tab:'scan',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},
     travelCapacity:10,travelMinProfit:100000,travelMinutes:''};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,
     tab:'scan',rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
@@ -689,19 +689,23 @@
       state.pointsPrice=rows.length?rows[0].price:0;
     }catch(e){state.error='Points pricing unavailable: '+e.message;}
   }
-  async function scan({manual=false}={}){
+  async function scan({manual=false,quick=false}={}){
     if(state.busy)return;
     if(!apiKey()){state.status='API key needed';render();return;}
     if(!manual&&document.hidden)return;
     if(!manual&&now()-state.lastScan<number(state.settings.scanInterval)*1000)return;
-    state.busy=true;state.error='';state.status='Loading catalog...';render();
+    state.busy=true;state.cancelScan=false;state.scanMode=quick?'quick':'full';state.error='';state.status='Loading catalog...';render();
     try{
       await loadCatalog();
-      const list=getWatchList();state.scanTotal=list.length;state.scanDone=0;
+      const all=getWatchList();
+      // Fast mode prioritises stale and never-priced items, with a small bounded API budget.
+      const list=quick?all.slice().sort((a,b)=>(Number(state.quotes[a.id]?.at)||0)-(Number(state.quotes[b.id]?.at)||0)).slice(0,10):all;
+      state.scanTotal=list.length;state.scanDone=0;
       state.status='Scanning '+list.length+' items...';render();
       await refreshPoints();render();
       let firstFailure='';
       for(const item of list){
+        if(state.cancelScan){state.status='Stopped at '+state.scanDone+' / '+list.length+' · partial quotes kept';break;}
         if(document.hidden&&!manual){state.status='Scan paused while hidden';break;}
         try {
           const p=await api('market/'+item.id+'/itemmarket');
@@ -718,8 +722,11 @@
         render();
         if(state.scanDone<list.length)await sleep(2500);
       }
-      state.lastScan=now();
-      state.status='Last scan '+new Date().toLocaleTimeString();
+      const complete=!state.cancelScan&&state.scanDone===list.length&&!firstFailure;
+      if(complete&&!quick)state.lastScan=now();
+      state.status=state.cancelScan?'Scan stopped · '+state.scanDone+'/'+list.length:
+        complete?(quick?'Quick scan complete · '+list.length+' items':'Full scan complete · '+list.length+' items'):
+        'Partial scan · '+state.scanDone+'/'+list.length;
       if(firstFailure)state.error='Some items could not be checked: '+firstFailure;
       persist();
     }catch(e){state.status='Scan failed';state.error=e.message;console.warn('[ProfitStaxx] Scan issue: '+e.message);}
@@ -1334,6 +1341,19 @@
     const ratio=competing/Math.max(1,d.qty);
     return {competing,ratio,label:ratio>=5?'Crowded asks':ratio>=2?'Some competing asks':'Limited near-price asks'};
   }
+
+  function dealRisk(d){
+    const h=priceHistoryQuality(d.id),l=marketLiquiditySignal(d),flags=[];
+    if(h.n<3)flags.push('Price history limited');
+    if(h.spread!==null&&h.spread>=20)flags.push('Large observed asking-price spread');
+    if(h.trend!==null&&h.trend<=-12)flags.push('Recent asking prices falling');
+    if(l.ratio>=5)flags.push('Crowded resale listings');
+    if(d.qty>l.competing&&l.competing>=0)flags.push('Planned quantity exceeds near-price listing depth');
+    if(d.roi<5)flags.push('Thin estimated resale margin');
+    const level=flags.length>=3?'High':flags.length>=1?'Review':'Normal';
+    return {flags,level,confidence:h.n>=8?'Moderate':h.n>=3?'Developing':'Low'};
+  }
+
   function allocationPlan(){
     const available=Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost());
     let remaining=available;
@@ -1400,17 +1420,21 @@
       '<div class="stat"><small>Recorded invested</small><b>'+human(p.invested)+'</b></div></div>';
     html+='<div class="toolbar"><button class="btn" data-action="scan" '+(state.busy?'disabled':'')+'>'+
       (state.busy?'Scanning '+state.scanDone+'/'+state.scanTotal:'Refresh opportunities')+'</button>'+
+      '<button class="btn secondary" data-action="quickscan" '+(state.busy?'disabled':'')+'>Fast scan · 10</button>'+
+      (state.busy?'<button class="btn secondary" data-action="stopscan">Stop scan</button>':'')+
       '<button class="btn secondary" data-tab="museum">Museum</button></div>';
     html+=notice(state.status+' · Last full scan: '+age(state.lastScan));
     if(state.error)html+=notice(state.error,true);
     if(!apiKey())html+=notice('Torn API key not available. Open Settings to provide one or configure TornPDA.',true);
     if(!d.length)html+='<div class="empty">No qualifying fresh deals. That is a valid result: do not force a trade. Adjust thresholds in Settings if needed.</div>';
     for(const x of d.slice(0,30)){
+      const risk=dealRisk(x);
       html+='<div class="card"><div class="line"><h3>'+esc(x.name)+'</h3><span class="pill">Score '+x.score+'/100</span></div>'+
         '<div class="line"><span class="muted">Buy '+x.qty+' × '+fmt(x.buy)+'</span><strong class="positive">+'+fmt(x.profit)+'</strong></div>'+
         '<div class="line"><span class="muted">Reference ask '+fmt(x.reference)+'</span><span>'+pct(x.roi)+' estimated ROI</span></div>'+
         '<div class="line"><span class="muted">Best modeled exit</span><span>'+esc(x.method==='bazaar'?'Bazaar (slower sale possible)':'Item Market')+'</span></div>'+
         '<div class="line"><span class="muted">Market net / Bazaar net per unit</span><span>'+fmt(x.marketNet)+' / '+fmt(x.bazaarNet)+'</span></div>'+
+        '<p class="muted">Risk checks: <strong>'+esc(risk.level)+'</strong> · '+esc(risk.flags.join(' · ')||'No additional historical flags')+' · '+esc(risk.confidence)+' evidence</p>'+
         '<p class="muted">'+esc(priceHistoryQuality(x.id).label)+' · '+esc(marketLiquiditySignal(x).label)+(priceHistoryQuality(x.id).trend===null?'':' · ask trend '+pct(priceHistoryQuality(x.id).trend))+'</p>'+ 
         '<div class="line"><span class="muted">Competition depth: '+x.depth+' units · '+age(x.at)+'</span>'+
         '<button class="btn secondary" data-action="market-buy" data-id="'+Number(x.id)+'">Market · '+Math.floor(x.qty)+' units</button></div>'+
@@ -1623,6 +1647,8 @@
       }
       case 'close':state.open=false;render();break;
       case 'scan':scan({manual:true});break;
+      case 'quickscan':scan({manual:true,quick:true});break;
+      case 'stopscan':if(state.busy){state.cancelScan=true;state.status='Stopping after current request…';render();}break;
       case 'stockrefresh':refreshStocks();break;
       case 'travelscan':scanTravel();break;
       case 'rank-open':{
