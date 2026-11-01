@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.01.5** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.01.6** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -80,6 +80,7 @@ The Happy Jump **stable** installer remains deliberately pinned and must not be 
 - An action has a stable ID, plain-language imperative, quantitative context when available, data freshness or uncertainty note, and an actual one-tap route to its corresponding tool Alerts card. Do not render dead links.
 - Never confuse a forecast, asking price, investment upside or stale observation with an actual completed game action or executable order.
 - If no reliable data exists, the correct primary action is Refresh or Recheck, not speculative advice.
+- **Company paid training is an actionable alert only when the currently reported train bank has at least one unit that can be assigned to an eligible employee with a confirmed unpaid training obligation** (the existing oldest-first queue allocates at least one train). Outstanding purchases remain visible in the training ledger while availability is zero, unknown or no employee is eligible; they must not increase the badge, Alerts tab, or `staxx:actions` queue. Storage-capacity/overflow warnings and unverified-payment review are independent issues. Never treat future daily train awards as currently available.
 - All business/game mutations remain user-confirmed inside Torn. A user-initiated DOM quantity prefill is allowed only after unambiguous verification of item, route and input; no auto-click or automatic purchase.
 
 ## Current active version mapping
