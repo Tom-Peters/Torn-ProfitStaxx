@@ -11,6 +11,7 @@
 // @run-at       document-end
 // @grant        GM_xmlhttpRequest
 // @connect      api.torn.com
+// @connect      www.torn-tracker.com
 // @updateURL    https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // ==/UserScript==
@@ -490,7 +491,8 @@
   ];
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
-    key:'',alertThreshold:100000,tab:'scan',bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0};
+    key:'',alertThreshold:100000,tab:'scan',bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,
+    travelCapacity:10,travelMinProfit:100000,travelMinutes:''};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],income:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
     tab:'scan',open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
@@ -510,21 +512,22 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt']);
         state.storage='TornPDA';
         return data||{};
       }
     } catch(e){console.warn('[ProfitStaxx] Native storage unavailable; falling back');}
     state.storage='browser';
     const data={};
-    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan']){
+    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt']){
       try{data[key]=JSON.parse(localStorage.getItem(KEY_PREFIX+key)||'null');}catch(e){data[key]=null;}
     }
     return data;
   }
   function persist() {
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
-      trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan};
+      trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan,
+      travelRows:travelState.rows,travelAt:travelState.at};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
         await PDA_storage.setMany(data);
@@ -804,6 +807,125 @@
         (x.own?.bonus?.available?' · <b class="positive">Claim now</b>':'')+'</p><p class="muted">Next benefit: '+Math.floor(x.need).toLocaleString('en-US')+' more shares, about '+fmt(x.need*x.p)+'.</p>':'')+
       '<button class="btn secondary" data-action="stockpage">Inspect stock</button></div>';
     return h+notice('Utility perks and item dividend returns are left unpriced rather than treating market asking prices as realised revenue. Each new active benefit increment doubles the share requirement.');
+  }
+
+
+  // Optional, anonymised public abroad-shop observations. No Torn API key is ever sent to this provider.
+  const TRAVEL_FEED='https://www.torn-tracker.com/api/open/v1/travel/stocks';
+  const travelState={rows:[],at:0,busy:false,error:'',progress:''};
+  function countryMinutes(country){
+    const key=String(country||'').trim().toLowerCase();
+    const match=String(state.settings.travelMinutes||'').split(/[\r\n]+/).map(s=>s.match(/^\s*([a-z -]{2,40})\s*[:=]\s*(\d{1,5})\s*$/i)).filter(Boolean)
+      .find(x=>x[1].trim().toLowerCase()===key);
+    return match?Number(match[2]):0;
+  }
+  function travelRows(){
+    const cap=clamp(Math.floor(number(state.settings.travelCapacity)||10),1,200);
+    const maxSpend=number(state.settings.capital)*number(state.settings.maxTradePct)/100;
+    return travelState.rows.map(x=>{
+      const observed=Number(x.observed)||0,ageMs=observed?now()-observed:Infinity;
+      const q=state.quotes[x.id],fresh=q&&now()-q.at<8*60000&&q.reference>0;
+      const resale=fresh?Math.floor(q.reference*.95):null;
+      const quantity=Math.max(0,Math.min(cap,x.quantity,Math.floor(maxSpend/x.cost)));
+      const cost=quantity*x.cost,net=resale===null?null:quantity*(resale-x.cost);
+      const mins=countryMinutes(x.country)||countryMinutes(x.countryName);
+      return {...x,quantityBuy:quantity,spent:cost,net,roi:net!==null&&cost>0?100*net/cost:null,
+        perHour:net!==null&&mins>0?net*60/mins:null,roundTripMinutes:mins,
+        saleReference:resale,quoteAt:fresh?q.at:0,observationAge:ageMs,
+        valid:ageMs<=30*60000&&quantity>0&&net!==null&&net>0};
+    }).sort((a,b)=>(Number(b.valid)-Number(a.valid))||(b.perHour??b.net??-1)-(a.perHour??a.net??-1));
+  }
+  async function publicTravelGet(){
+    if(typeof PDA_httpGet==='function'){
+      try{const r=await PDA_httpGet(TRAVEL_FEED,{});
+        if(r&&r.status===200)return JSON.parse(r.responseText);
+        throw Error('Travel feed HTTP '+(r?.status||'unknown'));
+      }catch(e){if(typeof GM_xmlhttpRequest!=='function'&&typeof fetch!=='function')throw e;}
+    }
+    if(typeof GM_xmlhttpRequest==='function')return await new Promise((resolve,reject)=>{
+      GM_xmlhttpRequest({method:'GET',url:TRAVEL_FEED,timeout:15000,
+        onload:r=>{try{if(r.status!==200)throw Error('Travel feed HTTP '+r.status);resolve(JSON.parse(r.responseText));}catch(e){reject(e)}},
+        onerror:()=>reject(Error('Travel feed connection failed')),ontimeout:()=>reject(Error('Travel feed timed out'))});
+    });
+    const r=await fetch(TRAVEL_FEED,{credentials:'omit',mode:'cors'});if(!r.ok)throw Error('Travel feed HTTP '+r.status);
+    return await r.json();
+  }
+  function parseTravelFeed(body){
+    if(!Array.isArray(body?.countries))throw Error('Foreign stock data unavailable or changed format.');
+    const result=[];
+    for(const group of body.countries.slice(0,40)){
+      if(!Array.isArray(group?.items))continue;
+      const country=String(group.country||group.name||'').slice(0,40);
+      if(!country)continue;
+      for(const x of group.items.slice(0,150)){
+        const id=Number(x.item_id),price=Number(x.cost),qty=Number(x.quantity),age=Number(x.age_s);
+        if(!Number.isSafeInteger(id)||id<1||!Number.isFinite(price)||price<=0||!Number.isSafeInteger(qty)||qty<0)continue;
+        const parsed=Date.parse(x.observed_at||'');
+        const observed=Number.isFinite(parsed)?parsed:Number.isFinite(age)&&x.age_s!==null&&age>=0?now()-age*1000:0;
+        result.push({country,countryName:String(group.name||country).slice(0,50),id,name:String(x.name||'Item #'+id).slice(0,90),
+          cost:price,quantity:qty,observed,reporters:Math.max(0,Number(x.reporters)||0),source:String(x.source||'unknown').slice(0,16)});
+      }
+    }
+    return result.slice(0,1500);
+  }
+  async function scanTravel(){
+    if(travelState.busy||state.busy)return;
+    travelState.busy=true;travelState.error='';travelState.progress='Loading foreign stock reports…';render();
+    try{
+      const feed=await publicTravelGet();
+      const rows=parseTravelFeed(feed);
+      if(!rows.length)throw Error('No usable foreign stock observations reported.');
+      travelState.rows=rows;travelState.at=now();
+      // Scan only a capped, diverse set of fresh shelf candidates: item-market reads remain rate-limited.
+      if(apiKey()){
+        const ids=[...new Set(rows.filter(x=>x.quantity>0&&x.observed>now()-30*60000)
+          .sort((a,b)=>b.quantity-a.quantity||b.reporters-a.reporters).map(x=>x.id))].slice(0,16);
+        await loadCatalog();
+        let index=0;
+        for(const id of ids){
+          if(document.hidden)break;
+          const cached=state.quotes[id];
+          if(cached&&now()-cached.at<4*60000){index++;continue;}
+          const item=Object.values(state.catalog).find(x=>x.id===id);
+          if(!item){index++;continue;}
+          try{const quote=await api('market/'+id+'/itemmarket');
+            state.quotes[id]=normalizeMarket(quote,id,item.name);}
+          catch(e){travelState.error='Some resale prices unavailable: '+e.message;if(/429|rate|permission|key/i.test(e.message))break;}
+          travelState.progress='Pricing foreign items '+(++index)+' / '+ids.length;render();
+          if(index<ids.length)await sleep(2600);
+        }
+      }else travelState.error='Add a Torn API key to price the foreign stock against fresh Item Market asks.';
+      persist();
+    }catch(e){travelState.error=String(e.message||e);}
+    finally{travelState.busy=false;travelState.progress='';render();}
+  }
+  function renderTravel(){
+    const rows=travelRows(),fresh=rows.filter(x=>x.valid),priced=rows.filter(x=>x.net!==null).length;
+    let h='<div class="card"><h3>Foreign-shop profit scanner</h3>'+
+      '<p class="muted">Optional third-party public observation data from Torn Tracker, used only when you press Scan abroad. No API key, identity or stored trading record is sent. Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
+      '<form id="ps_travelsettings"><div class="duo">'+field('travelCapacity','Carry capacity (items)',state.settings.travelCapacity||10)+
+      field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+'</div>'+
+      '<div class="field"><label>Round-trip minutes by destination (country=minutes; include shop time)</label>'+
+      '<textarea name="travelMinutes" rows="3" style="width:100%;background:#061b31;color:white;border:1px solid #325c79;border-radius:8px;padding:9px" placeholder="mex=180">'+esc(state.settings.travelMinutes||'')+'</textarea></div>'+
+      '<button class="btn secondary" type="submit">Save travel limits</button></form></div>'+
+      '<div class="toolbar"><button class="btn" data-action="travelscan" '+(travelState.busy?'disabled':'')+'>'+(travelState.busy?'Scanning…':'Scan abroad and price up to 16 items')+'</button>'+
+      '<button class="btn secondary" data-action="incomepage" data-source="travel">Open travel agency</button></div>';
+    if(travelState.error)h+=notice(travelState.error,true);
+    if(travelState.progress)h+=notice(travelState.progress);
+    h+='<div class="statrow"><div class="stat"><small>Fresh profitable routes</small><b>'+fresh.length+'</b></div>'+
+      '<div class="stat"><small>Priced offers / observed</small><b>'+priced+' / '+rows.length+'</b></div></div>';
+    if(!rows.length)return h+'<div class="empty">No travel scan yet. Reported stock and resale market prices must be checked before choosing a route.</div>';
+    h+=notice('Last feed scan '+age(travelState.at)+' · only shelf sightings within 30 minutes count as current; round-trip profit/hour requires your own travel times. Cash per trip obeys your maximum single-trade exposure.');
+    const limit=number(state.settings.travelMinProfit);
+    for(const x of rows.filter(x=>x.valid&&x.net>=limit).slice(0,35)){
+      h+='<div class="card"><div class="line"><strong>'+esc(x.countryName)+' · '+esc(x.name)+'</strong><span class="pill">'+(x.perHour===null?pct(x.roi)+' ROI':fmt(x.perHour)+'/h')+'</span></div>'+
+        '<div class="line"><span>Estimated net trip profit</span><b class="positive">'+fmt(x.net)+'</b></div>'+
+        '<div class="line"><span>Purchase '+x.quantityBuy+' × '+fmt(x.cost)+'</span><span>'+fmt(x.spent)+' total</span></div>'+
+        '<p class="muted">Observed '+age(x.observed)+' · shelf '+x.quantity+' units · '+x.reporters+' reporters · modeled resale '+fmt(x.saleReference)+'/item (ask-derived)</p>'+
+        '<button class="btn secondary" data-action="incomepage" data-source="travel">Open travel agency</button></div>';
+    }
+    if(!fresh.length)h+='<div class="empty">No fresh, verified-margin travel route qualifies yet. Unknown or old resale prices are not treated as profit.</div>';
+    return h;
   }
 
   // User-supplied terms complement live stock quotes; never label inputs as API observations.
@@ -1139,11 +1261,11 @@
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
-    const tabs=['alerts','scan','stocks','income','museum','portfolio','settings'];
-    const labels=['Alerts '+(valid.length+dueDividends().length),'Deals','Stocks','Income','Museum','Ledger','Settings'];
+    const tabs=['alerts','scan','travel','stocks','income','museum','portfolio','settings'];
+    const labels=['Alerts '+(valid.length+dueDividends().length),'Deals','Travel','Stocks','Income','Museum','Ledger','Settings'];
     const active=state.tab;
     const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
-      active==='portfolio'?renderPortfolio():active==='stocks'?renderStockPanel():active==='income'?renderRevenuePanel():renderSettings();
+      active==='portfolio'?renderPortfolio():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='income'?renderRevenuePanel():renderSettings();
     // Preserve the actual inner scroll container across progressive scans and any other renders.
     // TornPDA WebView otherwise snaps to the beginning when shell.innerHTML is replaced.
     const previousBody=shell.querySelector('.body'),previousTabs=shell.querySelector('.tabs');
@@ -1231,6 +1353,7 @@
       case 'close':state.open=false;render();break;
       case 'scan':scan({manual:true});break;
       case 'stockrefresh':refreshStocks();break;
+      case 'travelscan':scanTravel();break;
       case 'stockpage':location.assign('https://www.torn.com/page.php?sid=stocks');break;
       case 'incomepage':{const row=incomeRoutes.find(x=>x[0]===el.dataset.source);if(row)location.assign('https://www.torn.com'+row[2]);break;}
       case 'export':exportFile('profitstaxx-trades.csv',exportCSV(),'text/csv;charset=utf-8');break;
@@ -1261,6 +1384,11 @@
       const source=String(f.get('source'));if(!incomeRoutes.some(x=>x[0]===source))return;
       const records=moneyRecords();records.push({id:now()+'_'+Math.random().toString(36).slice(2,6),at:now(),source,net:a-b,minutes,note:String(f.get('note')||'').slice(0,100)});
       putMoney(records);render();
+    }else if(event.target.id==='ps_travelsettings'){
+      event.preventDefault();const f=new FormData(event.target);
+      state.settings.travelCapacity=clamp(Math.floor(number(f.get('travelCapacity'))||10),1,200);
+      state.settings.travelMinProfit=clamp(number(f.get('travelMinProfit')),0,1e12);
+      state.settings.travelMinutes=String(f.get('travelMinutes')||'').slice(0,1500);persist();render();
     }else if(event.target.id==='ps_passive'){
       event.preventDefault();const f=new FormData(event.target);
       for(const key of ['bankPrincipal','bankApr','rentalAssetValue','rentalNetWeekly']){
@@ -1342,6 +1470,8 @@
       state.settings=Object.assign({},DEFAULTS,loaded.settings||{});
       state.trades=Array.isArray(loaded.trades)?loaded.trades:[];
        state.income=Array.isArray(loaded.income)?loaded.income:[];
+       travelState.rows=Array.isArray(loaded.travelRows)?loaded.travelRows:[];
+       travelState.at=number(loaded.travelAt);
        if(!state.income.length){try{const prev=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');if(Array.isArray(prev)&&prev.length){state.income=prev.slice(-1000);persist();}}catch(_){}}
       state.catalog=loaded.catalog||{};
       state.quotes=loaded.quotes||{};
