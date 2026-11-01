@@ -491,11 +491,11 @@
   ];
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
-    key:'',alertThreshold:100000,tab:'scan',bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},
+    key:'',alertThreshold:100000,tab:'scan',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},
     travelCapacity:10,travelMinProfit:100000,travelMinutes:''};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
-    tab:'scan',open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
+    tab:'scan',rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
   let lastRenderedTab=null;
@@ -1027,6 +1027,128 @@
     return h+notice('Only completed earnings are recorded. Stock holding values, unrealised resale estimates and bank scenarios are not counted as earned income.');
   }
 
+
+  // Cross-category ranking deliberately distinguishes one-off spreads from recurring cash benefits.
+  function incomeCandidates(){
+    const remaining=Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost());
+    const entries=[],activeMin=Math.max(1,number(state.settings.reviewMinutes)||3);
+    const add=(x)=>{
+      if(!Number.isFinite(Number(x.cost))||x.cost<=0||!Number.isFinite(Number(x.net))||x.net<=0)return;
+      const roi=100*x.net/x.cost,confidence=clamp(x.confidence,0,100);
+      // Score is a transparent shortlist heuristic, not a probability or guaranteed recurring return.
+      const speed=x.minutes>0?clamp(Math.log10(1+Math.max(0,x.net)/x.minutes)*17,0,100):0;
+      const quality=clamp(roi*3,0,100),scale=clamp(Math.log10(1+x.net)*13,0,100);
+      x.score=Math.round(confidence*.35+quality*.25+speed*.20+scale*.20);
+      x.roi=roi;entries.push(x);
+    };
+    for(const d of activeDealAlerts().slice(0,24)){
+      add({id:'market-'+d.id,kind:'market',label:d.name,category:'active',cost:d.buy*d.qty,net:d.profit,
+        minutes:activeMin,confidence:Math.min(85,Number(d.score)||0),period:'one trade',route:'market',
+        summary:'Live item ask-derived exit · resale not guaranteed',itemId:d.id});
+    }
+    for(const r of travelRows().filter(x=>x.valid).slice(0,40)){
+      add({id:'travel-'+r.country+'-'+r.id,kind:'travel',label:r.countryName+' · '+r.name,category:'active',
+        cost:r.spent,net:r.net,minutes:r.roundTripMinutes||0,confidence:Math.max(0,70-r.observationAge/60000),
+        period:'one round trip',route:'travel',summary:r.roundTripMinutes?'Round-trip minutes: '+r.roundTripMinutes:'Enter travel minutes for hourly comparison'});
+    }
+    if(state.pointsPrice>0){
+      for(const r of recipeResults())if(r.ready&&r.profit>0&&r.missingCost>0){
+        add({id:'museum-'+r.name,kind:'museum',label:r.name+' × '+r.batch,category:'active',
+          cost:r.missingCost,net:r.profit,minutes:activeMin*2,confidence:38,period:'one conversion',route:'museum',
+          summary:'Components and point proceeds are asking-price estimates'});
+      }
+    }
+    if(stockState.at&&now()-stockState.at<30*60000){
+      for(const s of stockRows().filter(x=>x.annualYield!==null&&x.block*x.p>0)){
+        const missing=s.need>0?s.need:s.block,cost=missing*s.p;
+        const payout=dividendCash[s.acronym],income=payout?payout[0]*30/payout[1]:0;
+        if(!income||cost>remaining)continue;
+        add({id:'stock-'+s.id,kind:'stock',label:s.acronym+' first/next cash benefit',category:'passive',
+          cost,net:income,minutes:0,confidence:65,period:'modelled 30 days after benefit eligibility',
+          route:'stocks',summary:'Fixed cash benefit only · stock price risk and eligibility delay excluded'});
+      }
+    }
+    const bank=state.settings;
+    if(number(bank.bankPrincipal)>0&&number(bank.bankApr)>0)
+      add({id:'bank',kind:'bank',label:'Bank interest (entered quote)',category:'passive',
+        cost:number(bank.bankPrincipal),net:number(bank.bankPrincipal)*number(bank.bankApr)/1200,
+        minutes:0,confidence:48,period:'30-day simple-interest equivalent',
+        route:'bank',summary:'Rate entered by you · not a live quote or reinvestment guarantee'});
+    if(number(bank.rentalAssetValue)>0&&number(bank.rentalNetWeekly)>0)
+      add({id:'rent',kind:'rent',label:'Property rental (entered net)',category:'passive',
+        cost:number(bank.rentalAssetValue),net:number(bank.rentalNetWeekly)*30/7,
+        minutes:0,confidence:48,period:'30-day rent equivalent',
+        route:'rent',summary:'User-entered property figures · vacancies not modelled'});
+    return entries.sort((a,b)=>b.score-a.score||b.net-a.net);
+  }
+  function renderRankings(){
+    const rows=incomeCandidates(),filter=state.rankFilter||'all',shown=rows.filter(x=>filter==='all'||x.category===filter);
+    let h='<div class="card"><h3>One dashboard · best options to review</h3><p class="muted">A single ranked shortlist across active and passive income. Scores combine indicative ROI, payoff size, active time where known and source quality. They do not annualise a one-off trade or imply a chance of profit.</p>'+
+      '<div class="toolbar">'+[['all','All'],['active','Quick / active'],['passive','Passive']].map(x=>
+        '<button class="btn '+(filter===x[0]?'':'secondary')+'" data-rank-filter="'+x[0]+'">'+x[1]+'</button>').join('')+'</div></div>';
+    if(!shown.length)h+='<div class="empty">Nothing sufficiently priced to rank. Refresh Deals, Stocks and Travel, or enter actual bank/rental terms.</div>';
+    for(const x of shown.slice(0,35)){
+      h+='<div class="card"><div class="line"><strong>'+esc(x.label)+'</strong><span class="pill">Priority '+x.score+'/100</span></div>'+
+        '<div class="line"><span>Cash commitment</span><b>'+fmt(x.cost)+'</b></div>'+
+        '<div class="line"><span>Modelled net · '+esc(x.period)+'</span><b class="positive">'+fmt(x.net)+'</b></div>'+
+        '<div class="line"><span>ROI / confidence heuristic</span><span>'+pct(x.roi)+' / '+Math.round(x.confidence)+'/100</span></div>'+
+        (x.minutes?'<p class="muted">Estimated active time '+x.minutes+' min · '+fmt(x.net*60/x.minutes)+'/active hour if completed</p>':'')+
+        '<p class="muted">'+esc(x.summary)+'</p>'+
+        '<button class="btn secondary" data-action="rank-open" data-rank-id="'+esc(x.id)+'">Review this opportunity</button></div>';
+    }
+    return h;
+  }
+  // Buckets share only deployable cash; the unspent cash reserve and item cost basis are protected.
+  function multiCapitalPlan(){
+    const s=state.settings,capital=number(s.capital),liquid=Math.max(0,capital*(1-number(s.reservePct)/100)-openCost());
+    const input=[number(s.allocMarket),number(s.allocTravel),number(s.allocStock),number(s.allocBank)];
+    const total=input.reduce((a,b)=>a+b,0)||1;
+    const percent=input.map(x=>100*x/total);
+    const limits=percent.map(x=>liquid*x/100),spent=[0,0,0,0],items=[];
+    const propose=(bucket,source,title,cost,net,period,description)=>{
+      if(!(cost>0&&cost<=limits[bucket]-spent[bucket]+1e-6))return false;
+      spent[bucket]+=cost;items.push({bucket,source,title,cost,net,period,description});return true;
+    };
+    for(const d of allocationPlan().allocations){
+      if(items.filter(x=>x.bucket===0).length>=8)break;
+      const qty=Math.min(Math.floor(d.allocQty),Math.floor((limits[0]-spent[0])/d.buy));
+      if(qty>0)propose(0,'market',d.name+' × '+qty,qty*d.buy,qty*d.unitProfit,'one resale','Modelled asking-price profit; confirm listing and demand');
+    }
+    for(const r of travelRows().filter(x=>x.valid)){
+      if(items.some(x=>x.bucket===1))break;
+      propose(1,'travel',r.countryName+' · '+r.name,r.spent,r.net,'one trip','Check shelf on arrival; sale and round-trip time unconfirmed');
+    }
+    if(stockState.at&&now()-stockState.at<30*60000)for(const r of stockRows().filter(x=>x.annualYield!==null)){
+      if(items.some(x=>x.bucket===2))break;
+      const units=r.need>0?r.need:r.block,price=units*r.p;
+      const payout=dividendCash[r.acronym];if(payout)propose(2,'stocks',r.acronym+' benefit block',price,payout[0]*30/payout[1],
+        '30-day equivalent after eligibility','Share price risk; income assumes reward cadence only after activation');
+    }
+    if(number(s.bankApr)>0&&limits[3]>0)propose(3,'bank','Bank allocation',limits[3],limits[3]*number(s.bankApr)/1200,
+      '30-day equivalent','Entered bank rate, not verified live, check investment term');
+    return {liquid,limits,percent,spent,items,unallocated:Math.max(0,liquid-spent.reduce((a,b)=>a+b,0))};
+  }
+  function renderCapital(){
+    const s=state.settings,p=multiCapitalPlan(),names=['Item Market','Foreign trips','Stock blocks','Bank'];
+    let h='<div class="card"><h3>Capital allocator · diversified scenarios</h3>'+
+      '<p class="muted">Uses your '+fmt(s.capital)+' trading-capital assumption, protects '+pct(number(s.reservePct))+' cash reserve and subtracts the cost basis of recorded open items. Stock holdings and other assets are not assumed to be cash. Buckets normalise to 100%.</p>'+
+      '<form id="ps_allocation"><div class="duo">'+field('allocMarket','Item flipping weight',s.allocMarket)+
+      field('allocTravel','Travel weight',s.allocTravel)+'</div><div class="duo">'+field('allocStock','Stock blocks weight',s.allocStock)+
+      field('allocBank','Bank weight',s.allocBank)+'</div>'+
+      '<button class="btn secondary" type="submit">Update capital split</button></form>'+
+      '<div class="statrow"><div class="stat"><small>Deployable cash</small><b>'+fmt(p.liquid)+'</b></div>'+
+      '<div class="stat"><small>Unallocated cash</small><b>'+fmt(p.unallocated)+'</b></div></div>';
+    for(let i=0;i<names.length;i++)h+='<div class="line"><span>'+names[i]+' · '+pct(p.percent[i])+'</span><b>'+fmt(p.spent[i])+' / '+fmt(p.limits[i])+'</b></div>';
+    h+='</div><h3>Proposed use of capital</h3>';
+    if(!p.items.length)h+='<div class="empty">No qualifying offers fit current bucket limits. Unallocated cash remains liquid.</div>';
+    for(const x of p.items)h+='<div class="card"><div class="line"><strong>'+esc(x.title)+'</strong><span class="pill">'+esc(names[x.bucket])+'</span></div>'+
+      '<div class="line"><span>Cash needed</span><b>'+fmt(x.cost)+'</b></div>'+
+      '<div class="line"><span>Modelled upside · '+esc(x.period)+'</span><b class="positive">'+fmt(x.net)+'</b></div>'+
+      '<p class="muted">'+esc(x.description)+'</p>'+
+      '<button class="btn secondary" data-action="allocation-open" data-source="'+esc(x.source)+'">Inspect in Torn</button></div>';
+    return h+notice('This is a split-capital scenario, not an instruction to buy. It is not a verified optimal portfolio: liquidity, realised fills, stock capital losses and current cash in your Torn account are not automatically known.');
+  }
+
   function css(){
     return [
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
@@ -1309,11 +1431,11 @@
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
-    const tabs=['alerts','scan','travel','stocks','income','museum','portfolio','settings'];
-    const labels=['Alerts '+(valid.length+dueDividends().length),'Deals','Travel','Stocks','Income','Museum','Ledger','Settings'];
+    const tabs=['alerts','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings'];
+    const labels=['Alerts '+noticeCount,'Best','Deals','Travel','Stocks','Capital','Charts','Income','Museum','Ledger','Settings'];
     const active=state.tab;
     const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
-      active==='portfolio'?renderPortfolio():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='income'?renderRevenuePanel():renderSettings();
+      active==='portfolio'?renderPortfolio():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():renderSettings();
     // Preserve the actual inner scroll container across progressive scans and any other renders.
     // TornPDA WebView otherwise snaps to the beginning when shell.innerHTML is replaced.
     const previousBody=shell.querySelector('.body'),previousTabs=shell.querySelector('.tabs');
@@ -1372,8 +1494,9 @@
     input.click();
   }
   function onClick(event){
-    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id],button[data-stock-clear]');
+    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned],button[data-income-id],button[data-stock-clear],button[data-rank-filter]');
     if(!el)return;
+    if(el.dataset.rankFilter){state.rankFilter=['all','active','passive'].includes(el.dataset.rankFilter)?el.dataset.rankFilter:'all';render();return;}
     if(el.dataset.tab){state.tab=el.dataset.tab;render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
       owned[name]=Math.max(0,Math.floor(number(owned[name])+Number(el.dataset.delta||0)));
@@ -1403,6 +1526,13 @@
       case 'scan':scan({manual:true});break;
       case 'stockrefresh':refreshStocks();break;
       case 'travelscan':scanTravel();break;
+      case 'rank-open':{
+        const r=incomeCandidates().find(x=>x.id===el.dataset.rankId);if(!r)return;
+        if(r.kind==='market'){location.assign(linkToItem(r.itemId));break;}
+        if(r.route==='museum'){state.tab='museum';render();break;}
+        const src=incomeRoutes.find(x=>x[0]===r.route);if(src)location.assign('https://www.torn.com'+src[2]);break;
+      }
+      case 'allocation-open':{const src=incomeRoutes.find(x=>x[0]===el.dataset.source);if(src)location.assign('https://www.torn.com'+src[2]);break;}
       case 'stockpage':location.assign('https://www.torn.com/page.php?sid=stocks');break;
       case 'incomepage':{const row=incomeRoutes.find(x=>x[0]===el.dataset.source);if(row)location.assign('https://www.torn.com'+row[2]);break;}
       case 'export':exportFile('profitstaxx-trades.csv',exportCSV(),'text/csv;charset=utf-8');break;
@@ -1433,6 +1563,11 @@
       const source=String(f.get('source'));if(!incomeRoutes.some(x=>x[0]===source))return;
       const records=moneyRecords();records.push({id:now()+'_'+Math.random().toString(36).slice(2,6),at:now(),source,net:a-b,minutes,note:String(f.get('note')||'').slice(0,100)});
       putMoney(records);render();
+    }else if(event.target.id==='ps_allocation'){
+      event.preventDefault();const f=new FormData(event.target),keys=['allocMarket','allocTravel','allocStock','allocBank'];
+      const inputs=keys.map(k=>Number(f.get(k)));
+      if(!inputs.every(x=>Number.isFinite(x)&&x>=0&&x<=100)||inputs.reduce((a,b)=>a+b,0)<=0){alert('Enter non-negative weights with a positive total.');return;}
+      keys.forEach((k,i)=>state.settings[k]=inputs[i]);persist();render();
     }else if(event.target.id==='ps_stocktargets'){
       event.preventDefault();const f=new FormData(event.target),id=String(f.get('stockId')),
         buy=Number(f.get('stockBuy')),sell=Number(f.get('stockSell'));
