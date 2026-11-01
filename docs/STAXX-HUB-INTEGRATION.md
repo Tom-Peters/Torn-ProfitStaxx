@@ -157,3 +157,19 @@ Hub remembers brief descriptions during Torn page transitions for up to four hou
 - Gym and points actions link to the live Torn pages; no remote gameplay write.
 - Company Helper opens on Torn companies.php and restores an alert ID through sessionStorage.
 - Keep visual chrome modest, accessible and compatible with Torn PDA touch interfaces. Do not cover Torn's own controls.
+
+## Contextual integration (StaxxHub 2.4)
+
+Without any new Torn API calls, Hub reads the locally published `staxx:actions` for the relevant tool and, where a known native heading is available, inserts one compact, screen-reader-labelled **Staxx next-action card** in the Torn page. Supported locations:
+- `/gym.php` → Happy Jump; `/companies.php` → Company Helper; `/page.php?sid=ItemMarket` → ProfitStaxx.
+- On unknown page layout, missing data, unavailable installed tool, cached or stale actions, the card provides only a safe “check recommendations” route or skips insertion. Cached cross-page advice is never presented as a live recommendation.
+- The player can disable/enable this from the Hub drawer with **On-page guidance: On/Off**, stored only in browser `localStorage["staxx-hub-context-v1"]`. Enabled by default, automatically hidden when a tool or drawer is open.
+- User taps the card's button to dispatch the same `staxx:open` event `{id,alertId}` already used by the sidebar. No automated clicks on native Torn actions; scripts handle any optional user-initiated form preparation and leave the game-state operation to the player.
+- The card uses `textContent`, not untrusted HTML, and is not fixed over the game controls. It checks for late-loaded headings periodically while the Torn page remains visible. **Visual compatibility with the live Torn PDA UI must be verified on-device**.
+
+## Data-model additions
+
+- ProfitStaxx 1.6.0: advisory capital allocation, sampled ASK-market history and listing competition. Return-on-active-review-time uses a user-configurable workload assumption; genuine time to sell is unknown.
+- Company Helper 1.9.0: observed employee working-stat development pace, wage scenarios that do not change actual wages, and cautious multi-Sunday star history.
+- Happy Jump preview 0.18.0: gain-per-energy and extra cash-per-1k-stat forecasts, scheduled refill timing and observed-versus-projected long-term progress.
+- All three publish existing `staxx:actions` and target existing `Alerts` cards; no extra Hub API scope or gameplay writes were added.
