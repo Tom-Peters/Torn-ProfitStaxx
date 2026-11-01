@@ -106,7 +106,7 @@ function mounted(){
   return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
 test('v2.6 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v2\.6/);
+  assert.match(main,/StaxxHub v2\.7/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -205,7 +205,7 @@ test('native Torn guidance is optional, routed and does not perform gameplay wri
   assert.match(source,/\/companies\.php/);
   assert.match(source,/sid=itemmarket/);
   assert.match(source,/anchor\.insertAdjacentElement\("afterend",bar\)/);
-  assert.match(source,/openTool\(ctx\.id,first\?\.id\|\|null\)/);
+  assert.match(source,/openTool\(ctx\.id,first\.id\)/);
   assert.doesNotMatch(source,/fetch\s*\(\s*["']https:\/\/api\.torn\.com/);
 });
 
