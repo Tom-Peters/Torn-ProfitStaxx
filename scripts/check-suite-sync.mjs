@@ -17,7 +17,7 @@ const manifest=JSON.parse(readFileSync(new URL('../suite/manifest.json',import.m
 const targets=manifest.active.map(x=>[x.repository,x.entrypoint,Boolean(x.versioned_snapshot)]);
 let failures=0;
 async function get(repo,path){
-  const url=base+'/'+repo+'/main/'+path;
+  const url=base+'/'+repo+'/main/'+path+'?staxx_parity='+Date.now();
   const response=await fetch(url,{headers:{'User-Agent':'StaxxSuite-Parity-Check','Cache-Control':'no-cache'},signal:AbortSignal.timeout(20000)});
   if(!response.ok)throw Error('HTTP '+response.status+' '+url);
   return await response.text();
