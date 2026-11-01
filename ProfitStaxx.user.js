@@ -32,7 +32,7 @@
     {name:'Flower set',points:10,items:['Dahlia','Orchid','African Violet','Cherry Blossom','Peony','Ceibo Flower','Edelweiss','Crocus','Heather','Tribulus Omanense','Banana Orchid']}
   ];
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,
-    bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),
+    bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},
     key:'',alertThreshold:100000,tab:'scan'};
   const state={settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
@@ -265,12 +265,14 @@
   function recipeResults(){
     return RECIPES.map(r=>{
       const rows=r.items.map(name=>{const item=getItem(name),q=item&&state.quotes[item.id];
-        return {name,id:item&&item.id,price:q&&q.offers[0]&&q.offers[0].price||0,at:q&&q.at||0};});
+        return {name,id:item&&item.id,price:q&&q.offers[0]&&q.offers[0].price||0,
+          owned:Math.floor(number((state.settings.museumOwned||{})[name])),at:q&&q.at||0};});
       const ready=rows.every(x=>x.price>0);
       const cost=ready?rows.reduce((s,x)=>s+x.price,0):0;
+      const missingCost=ready?rows.reduce((s,x)=>s+(x.owned>=1?0:x.price),0):0;
       const proceeds=r.points*state.pointsPrice*(1-number(state.settings.pointFee)/100);
       const profit=ready&&state.pointsPrice>0?proceeds-cost:null;
-      return {name:r.name,points:r.points,rows,cost,proceeds,profit,
+      return {name:r.name,points:r.points,rows,cost,missingCost,proceeds,profit,
         roi:profit!==null&&cost?profit/cost*100:null,ready};
     });
   }
@@ -354,15 +356,18 @@
     html+=notice('Each complete flower or plushie set = 10 points. Cash cost assumes buying one of every component on the Item Market. Points revenue uses the current lowest ASK, not guaranteed sale proceeds.');
     for(const r of recipeResults()){
       html+='<div class="card"><h3>'+esc(r.name)+'</h3>'+
-        '<div class="line"><span>Set cost</span><strong>'+fmt(r.cost)+'</strong></div>'+
+        '<div class="line"><span>Full economic cost</span><strong>'+fmt(r.cost)+'</strong></div>'+
+        '<div class="line"><span>Cash to complete with holdings</span><strong>'+fmt(r.missingCost)+'</strong></div>'+
         '<div class="line"><span>Points value ('+r.points+')</span><strong>'+fmt(r.proceeds)+'</strong></div>'+
         '<div class="line"><span>Estimated spread</span><strong class="'+(r.profit>0?'positive':'negative')+'">'+(r.profit===null?'Incomplete':fmt(r.profit))+'</strong></div>'+
         '<div class="line"><span>Estimated ROI</span><strong>'+ (r.roi===null?'—':pct(r.roi))+'</strong></div>'+
         '<details><summary class="muted">Component prices and missing data</summary>';
-      for(const item of r.rows)html+='<div class="line"><span>'+esc(item.name)+'</span><span>'+fmt(item.price)+'</span></div>';
+      for(const item of r.rows)html+='<div class="line"><span>'+esc(item.name)+'</span><span>'+fmt(item.price)+
+        ' · Owned '+item.owned+' <button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="-1">−</button> '+
+        '<button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="1">+</button></span></div>';
       html+='</details></div>';
     }
-    html+=notice('This models full-set purchases only. Existing inventory is not automatically deducted; use your actual holdings when planning purchases. Museum conversions are manual.');
+    html+=notice('This models full-set purchases only. Use +/− to record existing museum components locally. Cash needed reflects these holdings; profit includes their opportunity cost. Conversions stay manual.');
     return html;
   }
   function renderPortfolio(){
@@ -467,9 +472,12 @@
     input.click();
   }
   function onClick(event){
-    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete]');
+    const el=event.target.closest('button[data-action],button[data-tab],button[data-delete],button[data-owned]');
     if(!el)return;
     if(el.dataset.tab){state.tab=el.dataset.tab;render();return;}
+    if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
+      owned[name]=Math.max(0,Math.floor(number(owned[name])+Number(el.dataset.delta||0)));
+      state.settings.museumOwned=owned;persist();render();return;}
     if(el.dataset.delete){
       if(confirm('Remove this manual ledger entry? Later sales may depend on it.')){
         state.trades=state.trades.filter(t=>t.id!==el.dataset.delete);persist();render();
