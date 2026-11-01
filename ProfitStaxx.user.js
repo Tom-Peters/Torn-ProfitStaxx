@@ -3,8 +3,8 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.7.0
-// @description  Read-only market intelligence, Museum arbitrage and manual profit ledger for TornPDA.
+// @version      1.7.1
+// @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
 // @match        https://torn.com/*
@@ -475,7 +475,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.7.0';
+  const VERSION = '1.7.1';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -490,7 +490,7 @@
   ];
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
-    key:'',alertThreshold:100000,tab:'scan'};
+    key:'',alertThreshold:100000,tab:'scan',bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],income:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
     tab:'scan',open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
@@ -803,12 +803,52 @@
       '<button class="btn secondary" data-action="stockpage">Inspect stock</button></div>';
     return h+notice('Utility perks and item dividend returns are left unpriced rather than treating market asking prices as realised revenue. Each new active benefit increment doubles the share requirement.');
   }
+
+  // User-supplied terms complement live stock quotes; never label inputs as API observations.
+  function incomeComparisonPanel(){
+    const s=state.settings,bank=number(s.bankPrincipal),bankApr=number(s.bankApr),asset=number(s.rentalAssetValue),
+      weeklyRent=number(s.rentalNetWeekly),bankAnnual=bank*bankApr/100,rentAnnual=weeklyRent*52,
+      rentYield=asset>0?100*rentAnnual/asset:null,
+      usable=Math.max(0,number(s.capital)*(1-number(s.reservePct)/100)-openCost());
+    const liveStock=stockState.at&&now()-stockState.at<30*60000;
+    const stocks=liveStock?stockRows().filter(x=>x.annualYield!==null&&x.block*x.p>0&&x.block*x.p<=usable):[];
+    const top=stocks[0];
+    let html='<div class="card"><h3>Passive-income comparison</h3>'+
+      '<p class="muted">Bank and property amounts are your own inputs. Stock block costs and fixed-cash yield come from recent Torn quotes. The returns have different risks and lock-up conditions.</p>'+
+      '<form id="ps_passive"><div class="duo">'+field('bankPrincipal','Bank principal ($)',bank)+
+      field('bankApr','Bank annual-equivalent rate (%)',bankApr)+'</div>'+
+      '<div class="duo">'+field('rentalAssetValue','Rental property value ($)',asset)+
+      field('rentalNetWeekly','Rent net per week ($)',weeklyRent)+'</div>'+
+      '<button type="submit" class="btn secondary">Update scenarios</button></form>';
+    html+='<div class="line"><span>Bank: yearly interest at entered rate</span><b>'+(bank&&bankApr?fmt(bankAnnual):'Add bank quote')+'</b></div>'+
+      '<div class="line"><span>Rent: yearly net / annual yield</span><b>'+(asset&&weeklyRent?fmt(rentAnnual)+' / '+pct(rentYield):'Add rental terms')+'</b></div>'+
+      '<div class="line"><span>Cash deployable under trading reserve</span><b>'+fmt(usable)+'</b></div>'+
+      (top?'<div class="line"><span>Highest fixed-cash stock yield within cash cap</span><b>'+esc(top.acronym)+' · '+pct(top.annualYield)+'</b></div>'+
+        '<p class="muted">First block costs '+fmt(top.block*top.p)+'. Indicative yield excludes stock depreciation, cash-flow interruption and foregone alternatives.</p>':
+        '<p class="muted">'+(liveStock?'No priced cash-dividend block fits the available trading allocation.':'Stock quote comparison unavailable or over 30 minutes old. Open Stocks to refresh first.')+'</p>')+
+      '<div class="toolbar"><button class="btn secondary" data-tab="stocks">Review stocks</button>'+
+      '<button class="btn secondary" data-action="incomepage" data-source="bank">Open bank</button></div></div>';
+    const recent=moneyRecords().filter(x=>Number(x.at)>=now()-30*86400000),totals=new Map();
+    for(const r of recent){const key=String(r.source||'other'),v=totals.get(key)||{net:0,minutes:0,count:0};
+      v.net+=Number(r.net)||0;v.minutes+=number(r.minutes);v.count++;totals.set(key,v);}
+    html+='<div class="card"><h3>30-day income by source</h3>';
+    if(!totals.size)html+='<p class="muted">No realised entries recorded in the last 30 days.</p>';
+    for(const [source,v] of [...totals].sort((a,b)=>b[1].net-a[1].net)){
+      const label=incomeRoutes.find(x=>x[0]===source)?.[1]||'Other';
+      html+='<div class="line"><span>'+esc(label)+' · '+v.count+' records</span><b class="'+(v.net<0?'negative':'positive')+'">'+fmt(v.net)+'</b></div>'+
+        (v.minutes>0?'<p class="muted">Net per active hour: '+fmt(v.net*60/v.minutes)+'</p>':'');
+    }
+    return html+'</div>';
+  }
+
   function renderRevenuePanel(){
     const records=moneyRecords(),sum=days=>records.filter(x=>x.at>=now()-days*86400000).reduce((n,x)=>n+Number(x.net||0),0);
     let h='<div class="statrow"><div class="stat"><small>7-day realised net</small><b>'+fmt(sum(7))+'</b></div><div class="stat"><small>30-day realised net</small><b>'+fmt(sum(30))+'</b></div></div>'+
       '<div class="card"><h3>Record completed income or losses</h3><form id="ps_revenue"><div class="field"><label>Income source</label><select name="source">'+incomeRoutes.map(r=>'<option value="'+esc(r[0])+'">'+esc(r[1])+'</option>').join('')+'</select></div>'+
       '<div class="duo">'+field('received','Received ($)',0)+field('spent','Spent ($)',0)+'</div><div class="duo">'+field('minutes','Minutes of active work',0)+field('note','Note','','text','maxlength="100"')+'</div><button class="btn" type="submit">Save income</button></form></div>'+
-      '<h3>Explore other Torn revenue sources</h3>';
+      '';
+    h+=incomeComparisonPanel();
+    h+='<h3>Explore other Torn revenue sources</h3>';
     for(const r of incomeRoutes)h+='<div class="card"><div class="line"><strong>'+esc(r[1])+'</strong><button class="btn secondary" data-action="incomepage" data-source="'+esc(r[0])+'">Open Torn</button></div></div>';
     h+='<h3>Income history</h3>';
     for(const x of records.slice(-30).reverse())h+='<div class="card"><div class="line"><b>'+esc(incomeRoutes.find(r=>r[0]===x.source)?.[1]||'Other')+'</b><span>'+fmt(x.net)+'</span></div>'+
@@ -1198,6 +1238,13 @@
       const source=String(f.get('source'));if(!incomeRoutes.some(x=>x[0]===source))return;
       const records=moneyRecords();records.push({id:now()+'_'+Math.random().toString(36).slice(2,6),at:now(),source,net:a-b,minutes,note:String(f.get('note')||'').slice(0,100)});
       putMoney(records);render();
+    }else if(event.target.id==='ps_passive'){
+      event.preventDefault();const f=new FormData(event.target);
+      for(const key of ['bankPrincipal','bankApr','rentalAssetValue','rentalNetWeekly']){
+        const v=Number(f.get(key));if(!Number.isFinite(v)||v<0||v>1e15){alert('Enter a valid non-negative value for '+key);return;}
+        state.settings[key]=key==='bankApr'?clamp(v,0,100):v;
+      }
+      persist();render();
     }else if(event.target.id==='ps_settings'){
       event.preventDefault();
       const f=new FormData(event.target),s=state.settings;
