@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.16.0
+// @version      1.17.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -581,7 +581,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.14.0';
+  const VERSION = '1.17.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -1538,9 +1538,10 @@
       detail:daily.items.filter(x=>!x.reviewed).length+' not yet reviewed · '+daily.activeMinutes+' modelled active minutes · manual checks only',status:'review',priority:76});
     if(dueDividends().length)actions.push({id:'stock-claim',title:'Collect available stock dividends',detail:dueDividends().map(x=>x.acronym).join(', ')+' · withdraw manually on Torn',status:'now',priority:95});
     for(const x of stockSignals().slice(0,4))actions.push({id:x.id,title:x.title,detail:x.why,status:'review',priority:x.priority});
-    const stale=!state.lastScan||now()-state.lastScan>8*60000;
-    if(stale)actions.push({id:'refresh-scan',title:'Refresh market prices before trading',detail:'Quotes are missing or older than 8 minutes.',status:'now',priority:90});
-    else for(const d of fresh.slice(0,3))actions.push({
+    // Quick scans can verify individual quotes while an expensive full scan is overdue.
+    // Never suppress genuinely fresh candidates merely because the last full scan is old.
+    if(!fresh.length)actions.push({id:'refresh-scan',title:'Recheck market before trading',detail:'No qualifying item has a market quote newer than 8 minutes; automatic foreground checks continue.',status:'now',priority:90});
+    for(const d of fresh.slice(0,3))actions.push({
       id:'deal-'+Number(d.id),title:'Review '+Math.floor(d.qty)+' × '+String(d.name||'item'),
       detail:'Estimated +'+fmt(d.profit)+' · '+pct(d.roi)+' net ROI · check live listing price',
       status:'review',priority:Math.min(85,40+Math.round(Number(d.score)||0)/2)
@@ -1673,12 +1674,24 @@
       '<button class="btn" data-action="market-buy" data-id="'+Number(d.id)+'">Check live listing &amp; prepare quantity</button></div>';
   }
 
+  function autopilotPanelV117(){
+    const watch=getWatchList(),held=positions().filter(p=>p.qty>0),time=now();
+    const fresh=watch.filter(x=>time-Number(state.quotes[x.id]?.at||0)<8*60000).length;
+    const staleHeld=held.filter(p=>time-Number(state.quotes[p.itemId]?.at||0)>=8*60000).length;
+    const last=state.lastScan?'Full catalog: '+age(state.lastScan):'Full catalog: not yet completed';
+    const quick=autoChecksV112.quick?'Last quick attempt: '+age(autoChecksV112.quick):'Quick scan: not yet attempted';
+    return '<div class="card"><h3>Autopilot · market freshness</h3>'+
+      '<p><b>'+fresh+'/'+watch.length+'</b> watched items checked in the past 8 minutes · <b>'+staleHeld+'</b> held position(s) due for a new quote.</p>'+
+      '<p class="muted">'+esc(last)+' · '+esc(quick)+'. Automatic checks run only while Torn is foregrounded, with rate-limit backoff.</p>'+
+      '<button class="btn secondary" data-action="quickscan" '+(state.busy?'disabled':'')+'>Check priority quotes now</button></div>';
+  }
   function renderScan(){
     const d=deals().filter(x=>now()-x.at<8*60000),p=portfolio();
     const pick=d[0];
     let html=pick?'<div class="card"><h3>Best opportunity to review</h3><p><b>'+esc(pick.name)+'</b> · up to '+Math.floor(pick.qty)+' units</p><p>Capital '+fmt(pick.qty*pick.buy)+' · modeled gain <span class="positive">'+fmt(pick.profit)+'</span> · '+pct(pick.roi)+' ROI</p><button class="btn" data-action="market-buy" data-id="'+Number(pick.id)+'">Review live listing and prepare quantity</button></div>':'';
     html+=renderTradeStressV115(pick);
     html+=renderMarketPulseV115();
+    html+=autopilotPanelV117();
     html+=allocationPanel();
     html+='<div class="statrow"><div class="stat"><small>Working capital</small><b>'+human(state.settings.capital)+'</b></div>'+
       '<div class="stat"><small>Recorded invested</small><b>'+human(p.invested)+'</b></div></div>';
@@ -1753,10 +1766,10 @@
     html+='<h3>Holdings ('+holdings.length+')</h3>';
     if(!holdings.length)html+='<div class="empty">No open positions recorded.</div>';
     for(const x of holdings){
-      const q=state.quotes[x.itemId];const estimate=q&&q.reference?x.qty*q.reference*.95-x.cost:null;
+      const q=state.quotes[x.itemId];const estimate=q&&q.reference&&now()-Number(q.at)<8*60000?x.qty*q.reference*.95-x.cost:null;
       html+='<div class="card"><div class="line"><strong>'+esc(x.name)+'</strong><span>'+x.qty+' units</span></div>'+
         '<div class="line"><span>Cost basis</span><span>'+fmt(x.cost)+'</span></div>'+
-        '<div class="line"><span>Open market estimate after 5% fee</span><span>'+(estimate===null?'—':fmt(estimate))+'</span></div></div>';
+        '<div class="line"><span>Open market estimate after 5% fee</span><span>'+(estimate===null?'Stale or unavailable':fmt(estimate))+'</span></div></div>';
     }
     html+='<div class="toolbar"><button class="btn secondary" data-action="export">Export CSV</button>'+
       '<button class="btn secondary" data-action="backup">Backup JSON</button>'+
@@ -2126,6 +2139,11 @@
         noteAutoAttemptV116('wallet',time);await refreshWalletV113();return;
       }
       // Full scans may be lengthy: never repeat faster than 45 minutes, including failures.
+      // Keep owned positions and market opportunities fresh even if a full scan is long-running or overdue.
+      const staleHeld=positions().some(p=>p.qty>0&&time-Number(state.quotes[p.itemId]?.at||0)>=8*60000);
+      if(staleHeld&&time-autoChecksV112.quick>=8*60000){
+        noteAutoAttemptV116('quick',time);await scan({manual:false,quick:true});return;
+      }
       if((!state.lastScan||time-state.lastScan>=60*60000)&&time-autoChecksV112.full>=45*60000){
         noteAutoAttemptV116('full',time);await scan({manual:false});return;
       }
