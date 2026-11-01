@@ -913,7 +913,7 @@
       '" data-tab="'+name+'">'+labels[i]+'</button>').join('')+'</nav>'+
       '<main class="body">'+content+'</main><div class="footer">'+
       'Estimates only · API cached · Never auto-trades · '+esc(state.status)+'</div></div>';
-    if(state.alertFocus){const id=Number(state.alertFocus.replace('deal-',''));const target=shell.querySelector('#ps-alert-'+(state.alertFocus==='refresh-scan'?'refresh-scan':state.alertFocus.startsWith('exit-')?'exit-'+id:'deal-'+id));
+    if(state.alertFocus){const id=Number(state.alertFocus.replace(/^(deal|exit)-/,''));const target=shell.querySelector('#ps-alert-'+(state.alertFocus==='refresh-scan'?'refresh-scan':state.alertFocus.startsWith('exit-')?'exit-'+id:'deal-'+id));
       if(target){target.style.outline='2px solid #54d7fa';target.scrollIntoView?.({block:'nearest'});}state.alertFocus='';}
   }
   async function exportFile(name,text,mime){
