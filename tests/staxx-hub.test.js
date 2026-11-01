@@ -32,7 +32,7 @@ function bootHub(){
   const roots={};
   for(const [selector,tag] of Object.entries({
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
-    '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-count':'span',
+    '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-tasks':'section','#staxx-hub-count':'span',
     '#staxx-hub-overview':'section','[data-overview]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
   }))roots[selector]=new FakeElement(tag);
   const doc={
@@ -82,7 +82,7 @@ function mounted(){
   const q={};
   for(const [name,tag] of Object.entries({
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
-    '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-count':'span',
+    '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-tasks':'section','#staxx-hub-count':'span',
     '#staxx-hub-overview':'section','[data-overview]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
   }))q[name]=new Element(tag);
   q["[data-overview]"].setAttribute("data-overview","");
@@ -104,8 +104,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v2.2 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v2\.2/);
+test('v2.3 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v2\.3/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -179,4 +179,20 @@ test('specific notification opens the exact tool alert',()=>{
   let opened=null;h.document.addEventListener('staxx:open',e=>{opened=e.detail;});
   h.root.fire('click',action);
   assert.equal(opened.id,'profit');assert.equal(opened.alertId,'deal-123');
+});
+
+test('ranked next actions navigate directly to their matching tool alert',()=>{
+  const h=mounted();h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:actions',{id:'profit',updated:Date.now(),items:[
+    {id:'deal-42',title:'Review 42 items',detail:'Estimated resale spread',status:'review',priority:72},
+    {id:'refresh-scan',title:'Refresh prices',detail:'Quote age unknown',status:'now',priority:90}
+  ]});
+  const items=h.q['#staxx-hub-tasks'].children;
+  assert.equal(items.length,2);
+  assert.equal(items[0].dataset.openAlertId,'refresh-scan','Do-now actions should sort before review suggestions');
+  assert.equal(items[1].dataset.openAlertId,'deal-42');
+  let event=null;h.document.addEventListener('staxx:open',e=>{event=e.detail;});
+  h.root.fire('click',items[1]);
+  assert.equal(event.id,'profit');
+  assert.equal(event.alertId,'deal-42');
 });
