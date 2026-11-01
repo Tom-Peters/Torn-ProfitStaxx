@@ -308,3 +308,9 @@ test('ProfitStaxx diagnostics are non-sensitive and report statuses, not stored 
   assert.ok(!JSON.stringify(report).includes('TEST-SECRET-VALUE'));
   assert.ok(!('settings' in report));
 });
+
+test('balanced daily recommendations require travel time and reject high-risk item deals',()=>{
+ assert.match(source,/if\(x\.kind==='travel'&&!minutes\)continue/);
+ assert.match(source,/dealRisk\(observed\)\.level==='High'/);
+ assert.match(source,/if\(minutes&&activeMinutes\+minutes>budget\)continue/);
+});
