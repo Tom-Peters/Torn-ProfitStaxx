@@ -67,7 +67,7 @@
     document.documentElement.append(css, root);
 
     const entries = [
-      {id:"profit",label:"ProfitStaxx",icon:"PS",desc:"Markets · Museum · Ledger"},
+      {id:"profit",label:"ProfitStaxx",icon:"PS",desc:"Markets · Stocks · Income"},
       {id:"company",label:"Company Helper",icon:"CO",desc:"Staff · Training · Growth"},
       {id:"happy",label:"Happy Jump",icon:"HJ",desc:"Gym · Schedule · Recovery"}
     ];
@@ -223,6 +223,7 @@
       if(path==="/gym.php")return {id:"happy",name:"Gym"};
       if(path==="/companies.php")return {id:"company",name:"Company"};
       if(path==="/page.php"&&/\bsid=itemmarket\b/i.test(String(location.search||"")))return {id:"profit",name:"Item Market"};
+      if(path==="/page.php"&&/\bsid=stocks\b/i.test(String(location.search||"")))return {id:"profit",name:"Stock Market"};
       return null;
     }
     function contextEnabled(){return safeRead("staxx-hub-context-v1",true)!==false;}
