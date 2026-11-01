@@ -1,5 +1,12 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-01 — touch-safe StaxxHub v2.7 (standard 2026.11.01.5)
+
+- Removed inline native-page Next Action cards on touch and narrow layouts, including TornPDA desktop-scaled mobile pages. Existing tool actions remain accessible through the shared S drawer, which does not interrupt gym controls.
+- On larger fine-pointer desktops, native guidance requires a sufficiently wide heading parent and a fresh, substantive recommendation; stale refresh-only prompts remain inside the tool rather than being rendered over the game. Layout changes trigger re-evaluation on window resize.
+- Synchronized the canonical StaxxHub bundle in ProfitStaxx 1.18.0, Company Helper 1.18.0 and Happy Jump Preview 0.27.0. The latter accepts successful lightweight gym observations as fresh for the action queue and begins eligible full-data checks after a foreground light refresh, with existing 45-minute attempt backoff.
+- No Torn gameplay writes or automatic button presses are introduced. Android TornPDA visual verification remains pending.
+
 ## 2026-11-01 — automatic foreground intelligence (standard 2026.11.01.4)
 
 - **ProfitStaxx 1.16.0:** Recorded open item positions join watched-item scans automatically; quick refresh preferentially checks aged owned-item quotes. Local-only timestamps retain automatic API-check backoff across navigation, and the fast-scan interval is eight minutes.
