@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.14.0
+// @version      1.15.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -1634,10 +1634,42 @@
       (exits.length?'<div class="card"><h3>Positions worth reviewing for sale</h3><p class="muted">Estimated from current asking prices, less a 5% market selling fee. Not an executable bid.</p></div>'+exits.slice(0,10).map(x=>'<div class="card" id="ps-alert-exit-'+Number(x.itemId)+'"><h3>SELL REVIEW · '+esc(x.name)+'</h3><p><b>Recorded holdings:</b> '+Math.floor(x.qty)+' · <b>breakeven ask:</b> '+fmt(x.breakeven)+'/unit</p><p class="positive">Indicative gain '+fmt(x.upside)+' · '+pct(x.roi)+' based on asking prices</p><button class="btn secondary" data-action="market-view" data-id="'+Number(x.itemId)+'">Inspect live market listings</button></div>').join(''):'');
   }
   function verifiedOwnedV114(name){return state.inventoryAt>0&&now()-state.inventoryAt<60*60000?Math.floor(number(state.inventoryOwned[name])):null;}
+
+  // Asking-price observations, never completed sales or guaranteed opportunities.
+  function renderMarketPulseV115(){
+    const movements=Object.entries(state.snapshots||{}).flatMap(([id,history])=>{
+      const rows=(Array.isArray(history)?history:[]).filter(x=>Number(x?.price)>0&&Number(x?.at)>0).sort((a,b)=>a.at-b.at);
+      const last=rows[rows.length-1];if(!last||now()-last.at>6*3600000)return [];
+      const previous=rows.slice(0,-1).reverse().find(x=>last.at-x.at>=2*60000&&last.at-x.at<=7*86400000);
+      if(!previous)return [];
+      const change=100*(Number(last.price)-Number(previous.price))/Number(previous.price);
+      if(!Number.isFinite(change)||Math.abs(change)<3)return [];
+      const item=Object.values(state.catalog||{}).find(x=>Number(x.id)===Number(id));
+      return [{id:Number(id),name:item?.name||state.quotes[id]?.name||'Item '+id,before:Number(previous.price),after:Number(last.price),change,at:last.at}];
+    }).filter(x=>Number.isFinite(x.id)&&x.id>0).sort((a,b)=>Math.abs(b.change)-Math.abs(a.change)).slice(0,5);
+    let h='<div class="card"><h3>Market Pulse · biggest movements</h3><p class="muted">Scanned lowest ASK changes, not actual sale prices. Only swings of 3%+ observed within the last 6 hours are shown.</p>';
+    if(!movements.length)return h+'<p class="muted">No qualifying movements yet. More verified scans will build the comparison.</p><button class="btn secondary" data-action="quickscan">Scan watched prices</button></div>';
+    for(const x of movements)h+='<div class="line"><span><b>'+esc(x.name)+'</b><small> · '+esc(age(x.at))+' · '+fmt(x.before)+' → '+fmt(x.after)+'</small></span><b class="'+(x.change<0?'negative':'positive')+'">'+(x.change>0?'+':'')+x.change.toFixed(1)+'%</b></div>'+
+      '<button class="btn secondary" data-action="market-view" data-id="'+x.id+'">Check '+esc(x.name)+' listings</button>';
+    return h+'<p class="muted">Falling offers can also mean weaker demand. Recheck live listing depth and risk before buying.</p></div>';
+  }
+  function renderTradeStressV115(d){
+    if(!d||!(d.buy>0&&d.qty>0&&d.reference>0))return '';
+    const qty=Math.floor(d.qty),capital=qty*d.buy;
+    const cases=[0,5,10].map(drop=>({drop,net:Math.floor(Math.floor(d.reference*(1-drop/100))*.95)*qty-capital}));
+    return '<div class="card"><h3>Trade stress test · '+esc(d.name)+'</h3>'+
+      '<p class="muted">Proposed '+qty+' units. Profit/loss after a 5% market fee if resale ASK prices fall. Bazaar may differ; none of these are executable bids.</p>'+
+      cases.map(x=>'<div class="line"><span>Resale ASK -'+x.drop+'%</span><b class="'+(x.net<0?'negative':'positive')+'">'+(x.net>=0?'+':'')+fmt(x.net)+'</b></div>').join('')+
+      '<p class="muted">Break-even market ASK ≈ '+fmt(Math.ceil(d.buy/.95))+'/unit · cash exposure '+fmt(capital)+'. Time-to-sale and actual buyer demand unknown.</p>'+
+      '<button class="btn" data-action="market-buy" data-id="'+Number(d.id)+'">Check live listing &amp; prepare quantity</button></div>';
+  }
+
   function renderScan(){
     const d=deals().filter(x=>now()-x.at<8*60000),p=portfolio();
     const pick=d[0];
     let html=pick?'<div class="card"><h3>Best opportunity to review</h3><p><b>'+esc(pick.name)+'</b> · up to '+Math.floor(pick.qty)+' units</p><p>Capital '+fmt(pick.qty*pick.buy)+' · modeled gain <span class="positive">'+fmt(pick.profit)+'</span> · '+pct(pick.roi)+' ROI</p><button class="btn" data-action="market-buy" data-id="'+Number(pick.id)+'">Review live listing and prepare quantity</button></div>':'';
+    html+=renderTradeStressV115(pick);
+    html+=renderMarketPulseV115();
     html+=allocationPanel();
     html+='<div class="statrow"><div class="stat"><small>Working capital</small><b>'+human(state.settings.capital)+'</b></div>'+
       '<div class="stat"><small>Recorded invested</small><b>'+human(p.invested)+'</b></div></div>';
