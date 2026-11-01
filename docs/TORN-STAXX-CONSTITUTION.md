@@ -1,5 +1,5 @@
 # Torn Staxx — shared development constitution
-Version: 1.0.0 | Owner attribution: IamEEKY | Scope: every Torn script/tool in the Staxx ecosystem
+Version: 1.2.0 | Owner attribution: IamEEKY | Scope: every Torn script/tool in the Staxx ecosystem
 
 ## Mandatory starting procedure
 1. Before modifying ANY Torn tool, read this constitution and `docs/STAXX-HUB-INTEGRATION.md` from Torn-ProfitStaxx's main branch.
@@ -33,6 +33,15 @@ Version: 1.0.0 | Owner attribution: IamEEKY | Scope: every Torn script/tool in t
 - Persist only minimal local alert metadata; never API keys, sensitive details or full imported records in Hub.
 - Notifications must remain actionable: click to open the responsible script. Avoid obstructing the Torn page or open panels.
 
+## Shared action queue
+
+- Each installed, enabled active script publishes actionable, **verified** recommendations through `staxx:actions`.
+- Hub prioritises urgent problems first, then immediate tasks, upcoming deadlines, review tasks and optional opportunities. Each action must route to its corresponding tool Alerts card and a safe manual Torn workflow.
+- Prefer **quantified advice**: number of trains, purchase quantity, required capital, estimated profit, stock deficit, guardrail headroom, or energy available. Clearly label estimated, advisory, and last-observed information.
+- Never report a sell as executable at the lowest ask; label asking-price exit models and show user-confirmed transactions only.
+- Stale information generates a **refresh action**, not a potentially dangerous imperative.
+- This contract is mandatory when adding a fourth tool. Keep the source-of-truth in the suite standard and integration guide.
+
 ## Combined overview
 - Cards for ProfitStaxx, Company Helper, Happy Jump and any newly registered tool.
 - Include seven-day trends **only where dated historical samples are actually available**; distinguish observed results from projections and from missing data. Avoid silently manufacturing backfill or conflating training forecast with recorded gains.
@@ -64,5 +73,6 @@ Version: 1.0.0 | Owner attribution: IamEEKY | Scope: every Torn script/tool in t
 - [ ] Explain what was changed, which versions to install and what needs Torn PDA testing.
 
 ## Change log
+- 1.2.0 (2026-11-01): Shared priority queue, exact per-action navigation, decision transparency and quantified action guidance across all tools.
 - 1.1.0 (2026-11-01): Per-alert navigation, actionable tool views and guarded user-led field preparation; defer detailed event contracts to the canonical suite standard.
 - 1.0.0 (2026-11-01): Established shared Staxx design, Hub lifecycle, snooze/countdown/trends/reordering requirements, integration and release discipline.
