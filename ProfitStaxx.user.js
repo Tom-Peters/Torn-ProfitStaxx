@@ -1562,7 +1562,7 @@
           try{replacement.setSelectionRange(edit.start,edit.end);}catch(_){}}
       }
     }
-    if(state.alertFocus){const id=Number(state.alertFocus.replace(/^(deal|exit)-/,''));const target=shell.querySelector('#ps-alert-'+(state.alertFocus==='refresh-scan'?'refresh-scan':state.alertFocus.startsWith('exit-')?'exit-'+id:'deal-'+id));
+    if(state.alertFocus){const focus='ps-alert-'+String(state.alertFocus);const target=[...shell.querySelectorAll('[id]')].find(x=>x.id===focus);
       if(target){target.style.outline='2px solid #54d7fa';target.scrollIntoView?.({block:'nearest'});}state.alertFocus='';}
   }
   async function exportFile(name,text,mime){
