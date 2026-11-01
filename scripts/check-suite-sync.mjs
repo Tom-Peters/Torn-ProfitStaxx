@@ -13,11 +13,8 @@ function hubRegion(body) {
   if(end<0)throw Error('Unterminated embedded StaxxHub');
   return body.slice(start,end+6).trimEnd();
 }
-const targets=[
-  ['Torn-ProfitStaxx','ProfitStaxx.user.js'],
-  ['Torn-Company-Helper','Torn-Company-Helper.user.js'],
-  ['Torn-Happy-Jump-Helper','Torn-Happy-Jump-Helper-preview.user.js']
-];
+const manifest=JSON.parse(readFileSync(new URL('../suite/manifest.json',import.meta.url),'utf8'));
+const targets=manifest.active.map(x=>[x.repository,x.entrypoint,Boolean(x.versioned_snapshot)]);
 let failures=0;
 async function get(repo,path){
   const url=base+'/'+repo+'/main/'+path;
@@ -25,13 +22,13 @@ async function get(repo,path){
   if(!response.ok)throw Error('HTTP '+response.status+' '+url);
   return await response.text();
 }
-for(const [repo,path] of targets){
+for(const [repo,path,hasSnapshot] of targets){
   try{
     const body=repo==='Torn-ProfitStaxx'?readFileSync(new URL('../'+path,import.meta.url),'utf8'):await get(repo,path);
     const embedded=hubRegion(body);
     if(embedded!==canonical)throw Error('Bundled StaxxHub does not match canonical shared/staxx-hub.js');
     console.log('PASS '+repo+'/'+path+' — canonical match');
-    if(path.endsWith('-preview.user.js')){
+    if(hasSnapshot){
       const version=body.match(/^\/\/ @version\s+(\S+)/m)?.[1];
       if(!version)throw Error('Preview has no version header');
       const snapshot='Torn-Happy-Jump-Helper-v'+version+'-preview.user.js';
