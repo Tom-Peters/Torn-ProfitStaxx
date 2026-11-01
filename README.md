@@ -1,3 +1,10 @@
+## v1.16.0 — stronger foreground automation
+
+- Recorded **open trading positions automatically join the watched-item pool**, even when removed from a manual watchlist. The fast scan prioritises old quotes for recorded holdings before other watched items.
+- Foreground quick scans now run on an approximately eight-minute cadence when eligible, while full market, stocks, foreign prices, inventory and cash remain bounded and refresh independently.
+- The automatic task attempt clock survives page reloads in local-only timestamp storage, reducing repeated API work when navigating Torn. Neither API credentials nor trading amounts are stored in that scheduler key.
+- Scans, alerts and risk calculations are advisory. Live listings, trades and income receipts still require the player to verify and confirm them.
+
 ## v1.15.0 — Market Pulse and trade risk sandbox
 
 - **Market Pulse:** Highlights 3%+ movements in saved lowest asking-price observations from watched items, using a recently scanned point and a separate earlier sample. Each row opens the live market for manual checking. Changes are not completed sale prices or trading signals.
