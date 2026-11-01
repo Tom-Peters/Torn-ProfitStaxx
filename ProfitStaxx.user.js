@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.7.1
+// @version      1.8.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -475,7 +475,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.7.1';
+  const VERSION = '1.8.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -495,6 +495,8 @@
     trades:[],income:[],status:'Ready',error:'',busy:false,lastScan:0,pointsPrice:0,
     tab:'scan',open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
+  const scrollPositions=Object.create(null);
+  let lastRenderedTab=null;
   const fmt=n=>Number.isFinite(Number(n)) ? '$'+Math.round(Number(n)).toLocaleString('en-US') : '—';
   const pct=n=>Number.isFinite(n) ? n.toFixed(1)+'%' : '—';
   const number=n=>Math.max(0,Number(n)||0);
@@ -1142,6 +1144,15 @@
     const active=state.tab;
     const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
       active==='portfolio'?renderPortfolio():active==='stocks'?renderStockPanel():active==='income'?renderRevenuePanel():renderSettings();
+    // Preserve the actual inner scroll container across progressive scans and any other renders.
+    // TornPDA WebView otherwise snaps to the beginning when shell.innerHTML is replaced.
+    const previousBody=shell.querySelector('.body'),previousTabs=shell.querySelector('.tabs');
+    if(previousBody&&lastRenderedTab)scrollPositions[lastRenderedTab]=previousBody.scrollTop;
+    const tabScroll=previousTabs?previousTabs.scrollLeft:0;
+    const focused=root.activeElement;
+    const edit=focused&&shell.contains(focused)&&/^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)?{
+      id:focused.id,name:focused.name,value:focused.value,start:focused.selectionStart,end:focused.selectionEnd,
+      checked:focused.type==='checkbox'?focused.checked:null,tab:lastRenderedTab}:null;
     shell.innerHTML='<div class="panel" role="dialog" aria-modal="true" aria-label="ProfitStaxx">'+
       '<div class="heading"><div><div class="brand">Profit<span style="color:#54d7fa">Staxx</span></div><div class="sub">Profit intelligence · v'+VERSION+'</div></div>'+
       '<button class="close" data-action="close">Close ×</button></div>'+
@@ -1149,6 +1160,18 @@
       '" data-tab="'+name+'">'+labels[i]+'</button>').join('')+'</nav>'+
       '<main class="body">'+content+'</main><div class="footer">'+
       'Estimates only · API cached · Never auto-trades · '+esc(state.status)+'</div></div>';
+    lastRenderedTab=active;
+    const body=shell.querySelector('.body'),nav=shell.querySelector('.tabs');
+    if(body)body.scrollTop=scrollPositions[active]||0;
+    if(nav)nav.scrollLeft=tabScroll;
+    if(edit&&edit.tab===active){
+      const replacement=[...shell.querySelectorAll('input,textarea,select')].find(x=>edit.id?x.id===edit.id:x.name===edit.name);
+      if(replacement){replacement.value=edit.value;if(edit.checked!==null)replacement.checked=edit.checked;
+        replacement.focus({preventScroll:true});
+        if(Number.isInteger(edit.start)&&Number.isInteger(edit.end)&&typeof replacement.setSelectionRange==='function'){
+          try{replacement.setSelectionRange(edit.start,edit.end);}catch(_){}}
+      }
+    }
     if(state.alertFocus){const id=Number(state.alertFocus.replace(/^(deal|exit)-/,''));const target=shell.querySelector('#ps-alert-'+(state.alertFocus==='refresh-scan'?'refresh-scan':state.alertFocus.startsWith('exit-')?'exit-'+id:'deal-'+id));
       if(target){target.style.outline='2px solid #54d7fa';target.scrollIntoView?.({block:'nearest'});}state.alertFocus='';}
   }
