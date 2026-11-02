@@ -922,12 +922,24 @@
       const b=e.target.closest("button");if(!b)return;
       if(b.dataset.hubView){setFindOpen(false);switchHubView(b.dataset.hubView);return;}
       if(b.dataset.taskFilter){taskFilter=b.dataset.taskFilter;expandedTaskList=false;renderTasks();return;}
+      if(b.hasAttribute('data-change-clear')){clearChangeFlags();return;}
+      if(b.hasAttribute('data-vote-reset')){feedback=Object.create(null);saveLocal(feedbackKey,feedback);renderTasks();return;}
+      if(b.dataset.voteOwner&&b.dataset.voteId){
+        const item=taskRowsV25().find(x=>x.owner===b.dataset.voteOwner&&x.id===b.dataset.voteId);
+        if(!item||item.cached||!active[item.owner])return;
+        const vote=Number(b.dataset.voteValue);
+        if(vote!==1&&vote!==-1)return;
+        const key=actionKey(item.owner,item.id),prior=feedback[key]?.vote||0;
+        if(prior===vote)delete feedback[key];else feedback[key]={vote,at:Date.now()};
+        feedback=Object.fromEntries(Object.entries(feedback).slice(-80));
+        saveLocal(feedbackKey,feedback);renderTasks();return;
+      }
       if(b.dataset.reviewOwner&&b.dataset.reviewId){
         const item=taskRowsV25().find(x=>x.owner===b.dataset.reviewOwner&&x.id===b.dataset.reviewId);
         if(item)markReviewed(item,b.dataset.reviewUndo!=='1');return;
       }
       if(b.hasAttribute('data-usage-reset')){usage=[];saveLocal(usageKey,usage);renderFrequent();return;}
-      if(b.hasAttribute('data-activity-clear')){activity=[];saveLocal(activityKey,activity);renderActivity();return;}
+      if(b.hasAttribute('data-activity-clear')){activity=[];saveLocal(activityKey,activity);renderActivity();renderDailyReport();return;}
       if(b.hasAttribute('data-hub-find')){setFindOpen(!findOpen);return;}
       if(b.dataset.hubSectionTool){openTool(b.dataset.hubSectionTool,null,b.dataset.hubSectionTab);return;}
       if(b.dataset.hubGuideDone){saveLocal('staxx-hub-onboarded-v1',true);renderWelcome();return;}
@@ -1079,6 +1091,7 @@
         reviewMinutes:Number.isInteger(Number(a.reviewMinutes))&&Number(a.reviewMinutes)>=1&&Number(a.reviewMinutes)<=60?Number(a.reviewMinutes):null
       })):[];
       const next={items,updated:Number(d.updated)||Date.now(),cached:false};
+      noteObservedActions(id,items,next.updated);
       if(JSON.stringify(actionSets[id])!==JSON.stringify(next)){actionSets[id]=next;remember();render();}
     });
     document.addEventListener('staxx:activity',e=>{
@@ -1100,7 +1113,7 @@
         changed=true;
       }
       if(changed){activity=activity.filter(x=>x.at>Date.now()-30*86400000)
-        .sort((a,b)=>b.at-a.at).slice(0,120);saveLocal(activityKey,activity);renderActivity();}
+        .sort((a,b)=>b.at-a.at).slice(0,120);saveLocal(activityKey,activity);renderActivity();renderDailyReport();}
     });
     document.addEventListener("staxx:summary",e=>{
       const d=e.detail||{},id=d.id;if(!idOk(id)||!entries.some(x=>x.id===id))return;
@@ -1110,10 +1123,11 @@
       if(JSON.stringify(summaries[id])!==JSON.stringify(entry)){summaries[id]=entry;recordTrend(id,entry);remember();if(expanded&&overviewShown)showOverview();renderDashboard();}
     });
     window.setInterval(()=>{if(!document.hidden&&entries.some(e=>Number(controls[e.id]?.snoozeUntil)>0&&Number(controls[e.id]?.snoozeUntil)<=Date.now())){for(const e of entries){if(Number(controls[e.id]?.snoozeUntil)>0&&Number(controls[e.id]?.snoozeUntil)<=Date.now()){controls[e.id]={...controls[e.id],snoozeUntil:0};saveLocal("staxx-hub-alert-control-"+e.id,controls[e.id]);}}render();}else if(!document.hidden&&expanded&&entries.some(e=>activeNotice(e.id)?.dueAt)){render();}},60000);
-    window.addEventListener?.("hashchange",renderContext);
-    window.addEventListener?.("popstate",renderContext);
+    window.addEventListener?.("hashchange",()=>{renderContext();renderPageShortcut();});
+    window.addEventListener?.("popstate",()=>{renderContext();renderPageShortcut();});
     window.addEventListener?.("resize",renderContext);
-    window.setInterval?.(()=>{if(!document.hidden)renderContext();},15000);
+    window.setInterval?.(()=>{if(!document.hidden){renderContext();if(expanded)renderPageShortcut();}},15000);
+    window.setInterval?.(()=>{if(!document.hidden&&expanded){renderEarlyWarnings();if(hubView==='dashboard')renderDailyReport();}},60000);
     // Older v1 notifications cannot be trusted for dismiss-state comparisons.
     render();
     document.dispatchEvent(new CustomEvent("staxx:ping"));
