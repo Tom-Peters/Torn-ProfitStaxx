@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -377,4 +377,58 @@ test('watched Torn market items share the verified inventory sync without inferr
  assert.match(source,/function verifiedOwnedV114\(name\)/);
  assert.match(source,/Verified Torn inventory:/);
  assert.doesNotMatch(source,/autoExecuteTrade\(/);
+});
+
+
+test('3.4 verified dividend parser requires exact Torn stock cash log fields',()=>{
+ const {parseStockCashReceipt}=harness(),timestamp=Math.floor(Date.now()/1000);
+ const good={id:'dividend-log-42',timestamp,details:{title:'Stock dividend cash received'},
+   data:{cash_received:4000000,stock_acronym:'GRN'}};
+ const receipt=parseStockCashReceipt(good);
+ assert.equal(receipt.id,'dividend-log-42');
+ assert.equal(receipt.amount,4000000);
+ assert.equal(receipt.stock,'GRN');
+ assert.equal(parseStockCashReceipt({...good,data:{amount:4000000}}),null,
+  'unqualified amount may mean item count or shares, not confirmed cash');
+ assert.equal(parseStockCashReceipt({...good,details:{title:'Stock shares purchased'}}),null,
+  'share purchases must not count as income');
+ assert.equal(parseStockCashReceipt({...good,data:{cash_received:'4000000'}}),null,
+  'text cash values are not proof of structured API money receipt');
+ assert.equal(parseStockCashReceipt({...good,id:'bad id'}),null);
+ assert.equal(parseStockCashReceipt({...good,timestamp:timestamp-91*86400}),null);
+ assert.match(source,/user\/log\?cat=134&limit=100/);
+ assert.doesNotMatch(source,/PDA_http(?:Post|Put|Patch|Delete)\s*\(/);
+});
+test('3.4 stock benefit ranking accounts for current shares and protected trading cash',()=>{
+ const {state,stockState,stockBlockOpportunities}=harness();
+ const now=Date.now();state.settings.capital=100000;state.settings.reservePct=20;
+ stockState.at=now;stockState.ownedAt=now;
+ stockState.all=[{id:1,acronym:'GRN',name:'Cash dividend',market:{price:1000},
+  bonus:{requirement:100,passive:false}}];
+ stockState.owned=[{id:1,shares:30,bonus:{increment:0}}];
+ let opportunities=stockBlockOpportunities();
+ assert.equal(opportunities.length,1);
+ assert.equal(opportunities[0].need,70);
+ assert.equal(opportunities[0].cost,70000);
+ assert.equal(opportunities[0].affordable,true);
+ assert.ok(opportunities[0].marginalYield>0);
+ state.settings.reservePct=40;
+ assert.equal(stockBlockOpportunities()[0].affordable,false,
+  'protected reserve must remain protected');
+ stockState.ownedAt=now-31*60000;
+ assert.equal(stockBlockOpportunities().length,0,'no ranking without fresh holdings');
+});
+test('3.4 independently verified stock cash stays separate from manually recorded earnings',()=>{
+ const {state,stockCashReceipts,renderStockCashReceipts,renderRevenuePanel}=harness();
+ const now=Date.now();state.stockReceipts=[{id:'receipt-1',at:now,amount:4000000,stock:'GRN'}];
+ state.income=[{id:'manual-1',at:now,source:'stocks',net:4000000}];
+ assert.equal(stockCashReceipts(30).length,1);
+ const card=renderStockCashReceipts();
+ assert.match(card,/4,000,000/);
+ assert.match(card,/Matched Torn log/);
+ const revenue=renderRevenuePanel();
+ assert.match(revenue,/Verified stock cash receipts/);
+ assert.match(revenue,/manual income entries/i);
+ assert.match(revenue,/do not add|NOT added|NOT added together/i,
+  'manual and API receipts must never be summed as a fake combined total');
 });
