@@ -50,10 +50,11 @@ function fixture(){
   const modified=hub.replace('root.id = "staxx-hub-root";',
     'root.id = "staxx-hub-root"; root.querySelector = selector => document.__selectors[selector]; root.querySelectorAll = selector => [];');
   assert.notEqual(modified,hub);
+  const local=createStore();
   vm.runInNewContext(modified,{document:doc,window:win,location:loc,CustomEvent:CE,
-    localStorage:createStore(),sessionStorage:createStore(),Date,Math,Number,String,JSON,Set,Map},{timeout:2000});
+    localStorage:local,sessionStorage:createStore(),Date,Math,Number,String,JSON,Set,Map},{timeout:2000});
   assert.ok(doc.mounted);
-  return {doc,loc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
+  return {doc,loc,local,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
 test('suite dashboard renders all tools with labelled snapshot metrics',()=>{
  const h=fixture();
@@ -194,6 +195,7 @@ test('3.3 explicit relevance votes are bounded to priority within the same urgen
  assert.equal(rows[0].dataset.openAlertId,'high');
  const less=h.q['#staxx-hub-tasks'].children.find(x=>x.dataset.voteId==='high'&&x.dataset.voteValue==='-1');
  h.root.fire('click',less);
+ assert.equal(JSON.parse(h.local.getItem('staxx-hub-feedback-v1')||'{}')['profit/high']?.vote,-1,'feedback is stored only on this device');
  rows=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
  assert.equal(rows[0].dataset.openAlertId,'low');
  h.emit('staxx:actions',{id:'profit',updated:now+1,items:[
