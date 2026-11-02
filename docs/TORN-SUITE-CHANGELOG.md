@@ -1,5 +1,16 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — StaxxHub 3.3 five-part intelligence upgrade
+
+- NEW/UPDATED badges compare locally hashed action signatures against each tool's first accepted fresh baseline. A visible Changed filter and clear control highlight updates without claiming actions were completed.
+- Daily evidence report shows the current UK-day count of actually verified Torn logs, observed snapshots and locally recorded activity for all three helpers, plus their timestamped last-reported summaries.
+- Source-dated heads-up panel appears when an active, fresh actionable recommendation has a future due time within 60 minutes. No inferred deadlines or autonomous notifications.
+- Context-sensitive Today shortcut opens an existing approved section for known Torn gym, company, inventory, points, item-market and stock-market pages. Nothing is written to Torn.
+- Explicit Useful/Less relevant feedback fine-tunes priority inside existing urgency/due-time ordering. Local votes may be reset; no passive profiling or network analytics.
+- ProfitStaxx 1.22.4, Company Helper 1.25.4 and Happy Jump Preview 0.31.4 share the exact StaxxHub 3.3 bundle and an immutable Happy Jump preview snapshot. Stable Happy Jump remains unchanged. CI cannot replace on-device TornPDA testing.
+
+
+
 ## 2026-11-02 — StaxxHub 3.2 local reviewed queue and source status
 
 - Added a locally persisted **Checked for now** control for fresh, nonurgent recommendations in all three tools. Checked items return after four hours, and automatically reappear when their source evidence changes.
