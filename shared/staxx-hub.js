@@ -222,7 +222,7 @@
     const storedReviews=safeRead(reviewKey,{});
     if(storedReviews&&typeof storedReviews==='object'&&!Array.isArray(storedReviews)){
       for(const [key,value] of Object.entries(storedReviews).slice(-60)){
-        if(/^[a-z][a-z0-9-]{0,31}\\/[a-z][a-z0-9-]{0,63}$/.test(key)&&
+        if(/^[a-z][a-z0-9-]{0,31}[/][a-z][a-z0-9-]{0,63}$/.test(key)&&
           value&&typeof value.sig==='string'&&value.sig.length<=700&&
           Number.isFinite(Number(value.at))&&Number(value.at)<=Date.now()&&
           Date.now()-Number(value.at)<reviewWindowMs)reviewed[key]={sig:value.sig,at:Number(value.at)};
