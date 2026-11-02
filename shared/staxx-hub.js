@@ -215,6 +215,7 @@
       if(id==="company"&&!/^\/companies\.php$/i.test(location.pathname)){
         try{
           sessionStorage.setItem("staxx-open-company","1");
+          sessionStorage.setItem("staxx-open-company-at",String(Date.now()));
           if(alertId)sessionStorage.setItem("staxx-open-company-alert",alertId);
           else sessionStorage.removeItem("staxx-open-company-alert");
           if(validSection&&!alertId)sessionStorage.setItem("staxx-open-company-section",validSection);
