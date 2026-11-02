@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.02.8** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.02.9** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -33,6 +33,15 @@ This file is the single source of truth for *cross-script* behaviour, design and
 - Tool dashboards are bounded overlays with a small header, compact **top** navigation and scrollable content. Avoid large persistent bottom bars. Respect mobile safe areas and browser zoom.
 - A single launcher (the S tab) opens a left sidebar of ~302 px; it disappears **while a tool is open or the drawer is expanded**, returns when closed, and can be repositioned vertically. Never overlay main controls with duplicate floating action buttons.
 - Sidebar offers registered tool navigation, combined overview, notifications, urgency, custom snoozes, dismissal and persistent ordering. A proposed always-visible mini-summary remains **optional, not enabled by default**.
+
+## StaxxHub 3.4 — verified completion, session fit and truthful income (2026-11-02)
+
+- **Daily checklist:** display current per-tool recommendations alongside separate evidence-confirmed completions. Only a source-specific, matched API event may close a recommendation; `staxx:activity` can include a validated `completedActionId` tied to the exact active action and its current fingerprint, same UK day. Never infer completion from visiting, tapping Checked, a forecast, a balance change, or a generic log. Reappear immediately if the source task meaning changes.
+- **Session fit:** keep a local, explicit 5/10/15/30/60-minute preference (or Any). Within the **same urgency and due-time order**, prefer recommendations whose source-supplied `reviewMinutes` fit the available time. Unknown durations must remain unknown, not be filtered into quick work. No source urgency, true deadline, safety condition or stale-data gate is demoted.
+- **ProfitStaxx:** use fresh actual holdings, share increments and quoted prices to rank the marginal shares/cash needed for the next stock benefit block; respect saved capital reserve, optionally verified wallet cap, and mark any expected yield as modelling, never realised income. Omit opportunities without fresh holdings and quote evidence. User approves all purchases.
+- **Stock cash receipts:** optionally reconcile only exact, uniquely identified Torn `user/log` cash stock-benefit events, with validated amount and timestamp, storing bounded deduplicated local records. Torn `user/log` requires Full access; use an existing permitted key only, back off on lack of access, never publish account data. Do not equate a stock benefit `available` flag, item benefit, or cash balance change with a verified receipt; do not double-count matching manual income.
+- **Income truth:** show independently verified API cash receipts, user-entered income and locally recorded completed trading ledger P/L in explicitly separate categories; exclude all ask-derived opportunities and passive-income scenarios from realised totals. Warn when manually recorded stock income may overlap synced receipts.
+- Preserve StaxxHub bundle parity in ProfitStaxx, Company Helper and Happy Jump Preview plus immutable versioned snapshot, keep Happy stable pinned, no new gameplay writes, and test API permission denial and local-storage bounds.
 
 ## Stock benefit status versus manual claims (2026-11-02)
 
