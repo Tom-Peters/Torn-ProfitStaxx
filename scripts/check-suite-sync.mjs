@@ -35,6 +35,11 @@ for(const [repo,path,hasSnapshot] of targets){
       'Torn-Company-Helper':'data-act="staxx-find"',
       'Torn-Happy-Jump-Helper':"data-act='staxx-find'" }[repo];
     if(!control||!body.includes(control))throw Error('Missing in-tool Find button: '+repo);
+    const localSource=body.slice(body.indexOf('\n})();',body.indexOf('/* StaxxHub v'))+6);
+    if(!canonical.includes('StaxxHub v3.1')||!canonical.includes("staxx:activity"))
+      throw Error('Canonical Hub must include the v3.1 activity contract');
+    if(!localSource.includes('staxx:activity')||!localSource.includes('reviewMinutes'))
+      throw Error('Active tool must publish source-backed activity and review-time estimates: '+repo);
     console.log('PASS '+repo+'/'+path+' — canonical match');
     if(hasSnapshot){
       const version=body.match(/^\/\/ @version\s+(\S+)/m)?.[1];
