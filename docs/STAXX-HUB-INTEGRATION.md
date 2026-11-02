@@ -1,4 +1,18 @@
-# StaxxHub 3.2 integration
+# StaxxHub 3.3 integration
+
+## Five cross-tool upgrades (3.3)
+
+**Changed since last review:** fresh staxx:actions reports are compared locally with bounded hashes of prior action signatures. The first report establishes a baseline. Later new or materially changed recommendations are highlighted until the user marks changes seen. No raw recommendation text is stored in the change index.
+
+**Daily evidence:** Dashboard counts today's staxx:activity events by source, tool and Europe/London date. Verified API logs, observed snapshots and local entries remain separate. A zero count means no evidence was captured on this device, not that no action took place.
+
+**Early warnings:** Today shows actionable source-reported urgent/now/soon items with a valid future dueAt within 60 minutes. Never invent deadlines or treat checked suggestions as completed Torn actions. Existing alert suppression is respected.
+
+**Page context:** Today offers a single existing-section shortcut for recognised gym, company, inventory, points, item market and stocks Torn pages. It does not edit any native form fields.
+
+**Personal relevance:** Explicit Useful/Less relevant votes adjust rank by up to ten points, only after source urgency and actual due time. No inferred popularity, external analytics, automated gameplay or extra API permissions. Votes can be reset in More.
+
+
 
 Author: IamEEKY. Read-only visual launcher for Torn PDA. The canonical implementation lives in `shared/staxx-hub.js` and is bundled directly into each participating userscript. No remote `@require` dependency is needed.
 
