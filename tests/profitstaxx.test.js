@@ -426,6 +426,9 @@ test('3.4 independently verified stock cash stays separate from manually recorde
  const card=renderStockCashReceipts();
  assert.match(card,/4,000,000/);
  assert.match(card,/Matched Torn log/);
+ state.stockReceipts=[];
+ assert.match(renderStockCashReceipts(),/No verified receipts/,'no matching log cannot be treated as zero confirmed stock income');
+ state.stockReceipts=[{id:'receipt-1',at:now,amount:4000000,stock:'GRN'}];
  const revenue=renderRevenuePanel();
  assert.match(revenue,/Verified stock cash receipts/);
  assert.match(revenue,/manual income entries/i);
