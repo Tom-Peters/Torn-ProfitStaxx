@@ -40,6 +40,10 @@ for(const [repo,path,hasSnapshot] of targets){
       throw Error('Canonical Hub must include the v3.1 activity contract');
     if(!localSource.includes('staxx:activity')||!localSource.includes('reviewMinutes'))
       throw Error('Active tool must publish source-backed activity and review-time estimates: '+repo);
+    if(!localSource.includes('staxx:visit'))
+      throw Error('Active tool must publish user-clicked section visits: '+repo);
+    if(!canonical.includes('staxx-hub-dashboard')||!canonical.includes('staxx-hub-activity')||!canonical.includes('staxx-hub-usage-v1'))
+      throw Error('Canonical hub must preserve dashboard, activity and local adaptive shortcuts');
     console.log('PASS '+repo+'/'+path+' — canonical match');
     if(hasSnapshot){
       const version=body.match(/^\/\/ @version\s+(\S+)/m)?.[1];
