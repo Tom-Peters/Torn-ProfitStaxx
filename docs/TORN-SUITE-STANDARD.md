@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.02.6** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.02.7** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -33,6 +33,15 @@ This file is the single source of truth for *cross-script* behaviour, design and
 - Tool dashboards are bounded overlays with a small header, compact **top** navigation and scrollable content. Avoid large persistent bottom bars. Respect mobile safe areas and browser zoom.
 - A single launcher (the S tab) opens a left sidebar of ~302 px; it disappears **while a tool is open or the drawer is expanded**, returns when closed, and can be repositioned vertically. Never overlay main controls with duplicate floating action buttons.
 - Sidebar offers registered tool navigation, combined overview, notifications, urgency, custom snoozes, dismissal and persistent ordering. A proposed always-visible mini-summary remains **optional, not enabled by default**.
+
+## StaxxHub 3.3 — evidence-aware personal command centre (2026-11-02)
+
+- **Changed since last review:** compare bounded, locally stored *hashes* of current source-reported action title/detail/status/priority/dueAt; never store source text in the change index. The first valid report per tool establishes a baseline and must not invent past changes. Subsequent new or materially changed actions display New/Updated until the player deliberately clears highlights. Never imply Torn actions were executed; ignore stale/cached reports and do not learn from passive opening or renders. Preserve 3.2 review controls.
+- **Daily evidence report:** the Dashboard summarises local-day (Europe/London) counts of recorded, snapshot-observed and actually verified Torn-API activity separately, per tool, alongside time-labelled source summaries and recommendations. Counts only reflect events captured on this device, not exhaustive game performance; no inferred income or stat gains or invented day-on-day returns. No new API requests or cloud analytics.
+- **Early warnings:** surface a clearly labelled, fresh-source, time-bound *heads-up* when an existing actionable (urgent/now/soon) source recommendation includes a valid future dueAt within 60 minutes. Do not invent due times, issue browser notifications, or convert advisories into verified events. Advisory review markers must not silence time-bound heads-up. Respect the existing dismissed/snoozed alerts.
+- **Page-aware shortcuts:** on recognised Torn routes (gym, company, item inventory, points, item market, stocks), offer one compact in-Hub review link to a verified, allowlisted section of the relevant helper. Do not inject anything over mobile Torn controls, infer hidden page data or prefill/submit gameplay forms. Re-evaluate links on in-app route change.
+- **Helpful/less relevant learning:** only explicit player feedback may adjust ordering within the *same urgency category and equivalent due-time group*, with bounded tie-breaking weight. Feedback must never outrank urgent status, real due times, cached gating or snooze/dismiss rules. Store only a short-lived/bounded local vote keyed by tool+action ID, allow reset, no upload, API scopes, automated gameplay or personally identifying fields.
+- Preserve exact canonical StaxxHub parity in three active userscripts and current immutable Happy Jump preview, pinned Happy Jump stable, testable semantic controls and existing source-driven domain calculations. CI parsing/parity and device-level TornPDA verification are different checks.
 
 ## StaxxHub 3.2 — checked reviews and per-tool evidence status (2026-11-02)
 
