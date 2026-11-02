@@ -1,5 +1,15 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — StaxxHub 3.2 local reviewed queue and source status
+
+- Added a locally persisted **Checked for now** control for fresh, nonurgent recommendations in all three tools. Checked items return after four hours, and automatically reappear when their source evidence changes.
+- Urgent and stale recommendations cannot be checked. This is a review-queue convenience, NOT confirmation of Torn gameplay, and does not hide notifications.
+- Added three small per-tool source freshness indicators to Today. No extra API scopes, gameplay writes or background actions.
+- Published ProfitStaxx **1.22.3**, Company Helper **1.25.3**, Happy Jump Preview **0.31.3** and its matching immutable snapshot. Happy Jump stable is pinned.
+- Shared Hub remains identical in all active scripts; device-level TornPDA layout verification remains separate from syntax and CI.
+
+
+
 ## 2026-11-02 — StaxxHub 3.1 unified dashboard, action priorities and activity
 
 - **Q1:** One Dashboard view presents last-reported, timestamped headline figures and up to four metrics for each registered tool. Forecasts are explicitly not recorded Torn actions; refresh is available on demand.
