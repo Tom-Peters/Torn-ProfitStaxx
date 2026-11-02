@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.21.1
+// @version      1.22.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -777,7 +777,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.21.1';
+  const VERSION = '1.22.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -983,6 +983,12 @@
     if(side==='sell'&&!validateSell(item.id,qty))throw new Error('Not enough units in your recorded position.');
     state.trades.push({id:now()+'_'+Math.random().toString(36).slice(2,7),side,itemId:item.id,name:item.name,qty,price,
       fee:side==='sell'?clamp(Number(fee)||0,0,100):0,method:String(method||'manual'),at:now()});
+    const recorded=state.trades[state.trades.length-1];
+    document.dispatchEvent?.(new CustomEvent('staxx:activity',{detail:{id:'profit',events:[{
+      id:'trade-'+String(recorded.id).replace(/[^a-z0-9_-]/gi,'').slice(0,64),at:recorded.at,
+      source:'recorded',section:'portfolio',title:'Manual '+side+' recorded in ProfitStaxx',
+      detail:qty+' × '+item.name+' · Ledger entry only, not a verified Torn trade'
+    }]}}));
     persist();render();
   }
   function normalizeMarket(payload,id,name){
@@ -1158,6 +1164,11 @@
       const rows=await api('torn/stocks');
       if(!Array.isArray(rows.stocks))throw Error('Invalid stock quote response.');
       stockState.all=rows.stocks;stockState.at=now();
+      document.dispatchEvent?.(new CustomEvent('staxx:activity',{detail:{id:'profit',events:[{
+        id:'stock-quotes-'+Math.floor(stockState.at/(6*3600000)),at:stockState.at,
+        source:'snapshot',section:'stocks',title:'Torn stock quotes observed',
+        detail:stockState.all.length+' reported stock entries · Price observation, not a completed trade'
+      }]}}));
       const bucket=Math.floor(stockState.at/(6*3600000));
       for(const item of stockState.all){
         if(!(Number(item.id)>0&&number(item.market?.price)>0))continue;
@@ -2041,7 +2052,9 @@
     const valid=activeDealAlerts(),claims=dueDividends(),stockNotices=stockSignals(),noticeCount=valid.length+claims.length+stockNotices.length;
     if(badge){badge.textContent=noticeCount?String(Math.min(99,noticeCount)):'';badge.style.display=noticeCount?'block':'none';}
     document.dispatchEvent?.(new CustomEvent('staxx:notice',{detail:{id:'profit',count:noticeCount,level:claims.length?'urgent':stockNotices.length||valid.length?'warning':'info',summary:claims.length+' dividends · '+stockNotices.length+' stock targets · '+valid.length+' market deals',items:claims.slice(0,2).map(x=>'Collect '+x.acronym+' dividend').concat(stockNotices.slice(0,2).map(x=>x.title)).concat(valid.slice(0,2).map(d=>String(d.name||d.itemName||'Market opportunity'))),alerts:[...claims.map(x=>({id:'stock-claim',title:'Claim '+x.acronym+' dividend',detail:'Ready for withdrawal in Torn Stock Exchange'})),...stockNotices.map(x=>({id:x.id,title:x.title,detail:x.why})),...valid.slice(0,25).map(d=>({id:'deal-'+Number(d.id),title:'Buy up to '+Math.floor(d.qty)+' '+String(d.name||'items'),detail:'Estimated profit '+fmt(d.profit)+' · max '+fmt(d.buy)+'/unit'}))]}}));
-    document.dispatchEvent?.(new CustomEvent('staxx:actions',{detail:{id:'profit',items:profitNextActions(),updated:state.lastScan||now()}}));
+    document.dispatchEvent?.(new CustomEvent('staxx:actions',{detail:{id:'profit',items:profitNextActions().map(a=>({
+      ...a,reviewMinutes:a.id==='daily-plan'?5:a.id==='refresh-scan'?2:a.id==='stock-claim'?2:3
+    })),updated:state.lastScan||now()}}));
     const summaryPortfolio=portfolio();
     document.dispatchEvent?.(new CustomEvent('staxx:summary',{detail:{id:'profit',headline:state.lastScan?'Last scan '+age(state.lastScan):'Awaiting market scan',metrics:[
       {label:'Fresh deals',value:state.lastScan?String(valid.length):'Not scanned'},
@@ -2218,7 +2231,14 @@
       if(![a,b,minutes].every(n=>Number.isFinite(n)&&n>=0&&n<=1e12)){alert('Use non-negative figures.');return;}
       const source=String(f.get('source'));if(!incomeRoutes.some(x=>x[0]===source))return;
       const records=moneyRecords();records.push({id:now()+'_'+Math.random().toString(36).slice(2,6),at:now(),source,net:a-b,minutes,note:String(f.get('note')||'').slice(0,100)});
-      putMoney(records);render();
+      putMoney(records);
+      const entry=records[records.length-1];
+      document.dispatchEvent?.(new CustomEvent('staxx:activity',{detail:{id:'profit',events:[{
+        id:'income-'+String(entry.id).replace(/[^a-z0-9_-]/gi,'').slice(0,64),at:entry.at,
+        source:'recorded',section:'income',title:'Income entry recorded locally',
+        detail:String(entry.source)+' · User-entered amount, not verified Torn income'
+      }]}}));
+      render();
     }else if(event.target.id==='ps_daily_limits'){
       event.preventDefault();const f=new FormData(event.target),minutes=Number(f.get('dailyReviewMinutes'));
       if(!Number.isFinite(minutes)||minutes<1||minutes>240){alert('Enter between 1 and 240 minutes.');return;}
