@@ -5,7 +5,7 @@
 - Shared Torn drawer now launches on **Today**: top two ranked actions and direct shortcuts to the three installed tools, with a toggle for further ranked recommendations.
 - **Tools**, **Alerts**, and **More** tabs keep secondary functions out of the way while preserving tool reordering, per-alert deep-link/snooze/dismiss, combined dashboard, diagnostics, and contextual guidance.
 - Refreshes update figures without forcing the drawer back to the top; Today resets only when reopening the drawer. No change to stockless-company rules, paid-training eligibility, gameplay read-only safeguards or preview/stable distinction.
-- Planned release: ProfitStaxx 1.19.0, Company Helper 1.22.0, Happy Jump Preview 0.28.0. Device QA remains necessary.
+- Released ProfitStaxx 1.19.0, Company Helper 1.22.1 and Happy Jump Preview 0.28.0, with immutable matching Happy Jump snapshot. Company Helper 1.22.1 also makes verified imminent train-bank overflow alerts independent of paid training obligations, without activating zero-availability paid-train alerts. Device QA remains necessary.
 
 
 ## 2026-11-01 — Company Helper 1.20.0 paid-training alert eligibility (standard 2026.11.01.6)
