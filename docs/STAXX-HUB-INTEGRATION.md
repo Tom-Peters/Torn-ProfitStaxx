@@ -1,6 +1,33 @@
-# StaxxHub 3.0 integration
+# StaxxHub 3.1 integration
 
 Author: IamEEKY. Read-only visual launcher for Torn PDA. The canonical implementation lives in `shared/staxx-hub.js` and is bundled directly into each participating userscript. No remote `@require` dependency is needed.
+
+## Unified dashboard and evidence timeline (3.1)
+
+The StaxxHub **Dashboard** is a single current/last-observed read-only view of every registered helper's existing `staxx:summary` metrics. The **Today** tab ranks fresh `staxx:actions` using source urgency, due date and priority, and groups additional recommendations under **Do now**, **Soon** and **Optional**.
+
+An optional `reviewMinutes` integer (1–60) on each action supplies a *human review-time estimate*. The hub does not guess durations when missing and never represents an estimate as time to carry out a Torn operation. Freshness filtering avoids presenting cached advice as a live verified opportunity.
+
+The **Activity** timeline accepts source-backed events only through the following local event. It does not inspect user transactions automatically from the DOM and does not send user data to an external endpoint:
+
+```js
+document.dispatchEvent(new CustomEvent('staxx:activity', {
+  detail: {
+    id: 'my-next-staxx',
+    events: [
+      { id: 'source-log-123', at: Date.now(), source: 'api',
+        title: 'Example confirmed event', detail: 'Confirmed from Torn API log',
+        section: 'history' }
+    ]
+  }
+}));
+```
+
+The hub requires a bounded unique event ID, a timestamp within the last 30 days, and one of `source:'api'` (**Verified Torn log**), `source:'snapshot'` (**Observed snapshot**) or `source:'recorded'` (**Locally recorded**). A provider must only use `api` for an actual matched Torn log; a modelled daily return, a forecast, a planned train, or a manual ledger entry is never proof of a completed Torn action. Events are deduplicated and stored locally, capped at 120. Users can clear activity from its tab.
+
+**Your shortcuts** learn only from repeated user-initiated opens through the shared hub. The usage history is local-only, capped and has a reset control in **More**. This never modifies the ordering of the standard tool navigation or collects background browsing activity.
+
+The data provenance, no API key publication, read-only gameplay safeguards, stockless company alert exclusions and paid-train availability gates remain mandatory.
 
 ## Find and section deep links (3.0)
 
