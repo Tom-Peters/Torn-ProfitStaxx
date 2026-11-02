@@ -1,6 +1,12 @@
-# StaxxHub 2.3 integration
+# StaxxHub 2.9 integration
 
 Author: IamEEKY. Read-only visual launcher for Torn PDA. The canonical implementation lives in `shared/staxx-hub.js` and is bundled directly into each participating userscript. No remote `@require` dependency is needed.
+
+## Shared usability state (2.9)
+
+Every installed active tool uses the same local `staxx-hub-mode-v1` JSON string. The default is `"simple"`; `"advanced"` exposes all existing navigation. StaxxHub sends `staxx:mode` after an in-app mode switch; a tool reads the saved value and re-renders its visible tab strip, leaving the current active tab, calculations, local records, alert targets and form values intact. Each Simple tab strip includes a **More** control to expose the remaining views without changing global mode.
+
+StaxxHub Today includes a first-run guide. Dismissing it stores `staxx-hub-onboarded-v1` as JSON `true`. Users may replay it under the hub More tab; onboarding is optional and never requests new API scopes or gameplay writes.
 
 ## Existing scripts
 - ProfitStaxx: `profit`
