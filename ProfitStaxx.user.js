@@ -1530,6 +1530,83 @@
     ['bounty','Bounty hunting','/bounties.php'],['revive','Reviving / services','/hospitalview.php'],
     ['museum','Museum arbitrage','/museum.php'],['points','Points trading','/pmarket.php'],['other','Other earned income','/city.php']];
   const stockState={all:[],owned:[],at:0,ownedAt:0,loading:false,error:''};
+
+  const stockLogStatus={busy:false,error:'',partial:false,unparsed:0};
+  // User/log category 134 = Stock special events. Benefits merely flagged available are not receipts.
+  function parseStockCashReceipt(entry){
+    if(!entry||!entry.id||!Number.isFinite(Number(entry.timestamp)))return null;
+    const title=String(entry.details?.title||'');
+    if(!/(?:dividend|stock benefit|stock reward)/i.test(title))return null;
+    const d=entry.data||{},cashKeys=['money_received','cash_received','dividend_amount','cash_amount','money','cash','dividend','payout'];
+    let amount=null;
+    for(const key of cashKeys)if(typeof d[key]==='number'&&Number.isSafeInteger(d[key])&&d[key]>0){amount=d[key];break;}
+    if(amount===null&&/cash|money|dividend/i.test(title)&&
+      (d.currency==='USD'||d.currency==='$'||d.currency==='money')&&
+      Number.isSafeInteger(d.amount)&&d.amount>0)amount=d.amount;
+    const at=Number(entry.timestamp)*1000,id=String(entry.id);
+    if(amount===null||amount>1e12||!/^[a-z0-9_-]{1,90}$/i.test(id)||
+      at<now()-90*86400000||at>now()+60000)return null;
+    return {id,at,amount,stock:String(d.stock_name||d.stock||d.stock_acronym||'').slice(0,45)};
+  }
+  function stockCashReceipts(days=30){
+    return (Array.isArray(state.stockReceipts)?state.stockReceipts:[]).filter(x=>Number(x.at)>=now()-days*86400000&&Number(x.amount)>0);
+  }
+  function stockBlockOpportunities(){
+    if(!stockState.at||!stockState.ownedAt||now()-stockState.at>=30*60000||
+      now()-stockState.ownedAt>=30*60000)return [];
+    const modelCap=Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost());
+    const wallet=liveWalletCashV113(),cap=Math.min(modelCap,wallet===null?Infinity:wallet);
+    return stockRows().filter(x=>x.block>0&&x.need>0&&x.need<1e10&&Number.isFinite(x.p)&&x.p>0)
+      .map(x=>{
+        const cost=x.need*x.p,dividend=dividendCash[x.acronym];
+        const annual=dividend?dividend[0]*365/dividend[1]:null;
+        return {id:Number(x.id),acronym:String(x.acronym),name:String(x.name),need:Math.ceil(x.need),
+          owned:Math.floor(x.shares),nextShares:Math.ceil(x.shares+x.need),cost,
+          cashCap:cap,affordable:cost>0&&cost<=cap,annual,
+          marginalYield:annual!==null&&cost>0?100*annual/cost:null,fullYield:x.annualYield};
+      }).filter(x=>Number.isFinite(x.cost)&&x.cost>0)
+      .sort((a,b)=>Number(b.affordable)-Number(a.affordable)||
+        (b.marginalYield??-1)-(a.marginalYield??-1)||a.cost-b.cost).slice(0,30);
+  }
+  async function refreshStockCashLogs(manual=false){
+    if(stockLogStatus.busy||!apiKey()||document.hidden||state.settings.stockLogSync===false)return;
+    if(!manual&&(now()-state.stockLogCheckedAt<3600000||now()<state.stockLogRetryAt))return;
+    stockLogStatus.busy=true;stockLogStatus.error='';state.stockLogCheckedAt=now();render();
+    let cursor='user/log?cat=134&limit=100&from='+Math.floor((now()-90*86400000)/1000);
+    const existing=new Set((state.stockReceipts||[]).map(x=>x.id)),added=[];
+    try{
+      let pages=0;stockLogStatus.partial=false;stockLogStatus.unparsed=0;
+      while(cursor&&pages<3){
+        const response=await api(cursor);pages++;
+        if(!Array.isArray(response.log))throw Error('Torn returned no stock-log list.');
+        for(const log of response.log){
+          const receipt=parseStockCashReceipt(log);
+          if(receipt&&!existing.has(receipt.id)){existing.add(receipt.id);added.push(receipt);}
+          else if(/dividend|cash/i.test(String(log?.details?.title||''))&&!receipt)stockLogStatus.unparsed++;
+        }
+        const next=response._metadata?.links?.next;
+        if(!next||!response.log.length){cursor='';break;}
+        const u=new URL(next,'https://api.torn.com');
+        if(u.origin!=='https://api.torn.com'||u.pathname!=='/v2/user/log'||
+          u.searchParams.get('cat')!=='134')throw Error('Unsafe stock-log cursor rejected');
+        cursor=u.pathname.slice(4)+u.search;
+      }
+      stockLogStatus.partial=!!cursor;
+      state.stockReceipts=[...(state.stockReceipts||[]),...added]
+        .filter(x=>x&&Number(x.at)>=now()-90*86400000&&Number(x.amount)>0)
+        .sort((a,b)=>b.at-a.at).slice(0,180);
+      state.stockLogRetryAt=0;persist();
+      if(added.length)document.dispatchEvent?.(new CustomEvent('staxx:activity',{detail:{id:'profit',events:added.slice(0,20).map(x=>({
+        id:'stock-dividend-'+x.id.slice(0,70),at:x.at,source:'api',section:'income',
+        title:'Cash stock dividend received · '+fmt(x.amount),
+        detail:(x.stock||'Torn stock benefit')+' · Matched cash receipt in user/log'
+      }))}}));
+    }catch(e){
+      stockLogStatus.error='Dividend log sync unavailable: '+String(e.message||e).slice(0,145);
+      state.stockLogRetryAt=now()+24*3600000;persist();
+    }finally{stockLogStatus.busy=false;render();}
+  }
+
   function moneyRecords(){return state.income||[]}
   function putMoney(rows){state.income=rows.slice(-1000);persist()}
   function stockRows(){
