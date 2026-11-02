@@ -706,7 +706,7 @@
     }
     function renderEarlyWarnings(){
       const host=root.querySelector('#staxx-hub-early');if(!host)return;host.replaceChildren();
-      const now=Date.now(),soon=taskRowsV25().filter(x=>!x.cached&&active[x.owner]&&
+      const now=Date.now(),soon=taskRowsV25().filter(x=>!x.cached&&active[x.owner]&&!completionFor(x)&&
         ['urgent','now','soon'].includes(x.status)&&Number.isFinite(x.dueAt)&&
         x.dueAt>now&&x.dueAt<=now+3600000).slice(0,3);
       if(!soon.length)return;
@@ -720,7 +720,7 @@
     }
     function renderChangedActions(){
       const host=root.querySelector('#staxx-hub-changes');if(!host)return;host.replaceChildren();
-      const changed=taskRowsV25().filter(x=>!x.cached&&active[x.owner]&&flagOf(x)).slice(0,4);
+      const changed=taskRowsV25().filter(x=>!x.cached&&active[x.owner]&&!completionFor(x)&&flagOf(x)).slice(0,4);
       if(!changed.length)return;
       const panel=node('div','staxx-intel');panel.append(node('strong','','NEW OR UPDATED RECOMMENDATIONS'));
       for(const item of changed){
