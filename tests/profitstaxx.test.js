@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -149,7 +149,7 @@ test('capital allocator respects deployable funds and per-item constraints',()=>
 });
 
 test('stock cash yields need a real market price and fixed-cash payout metadata',()=>{
-  const {stockState,stockRows,dueDividends}=harness();
+  const {state,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel}=harness();
   stockState.all=[
     {id:1,acronym:'CNC',name:'Cash Dividends',market:{price:1000000},bonus:{requirement:1000,description:'Cash benefit',passive:false}},
     {id:2,acronym:'OTHER',name:'Unknown reward',market:{price:2000000},bonus:{requirement:100,description:'Utility'}},
@@ -162,7 +162,20 @@ test('stock cash yields need a real market price and fixed-cash payout metadata'
   assert.equal(rows[0].acronym,'CNC');
   assert.ok(rows[0].annualYield>0);
   assert.equal(rows[1].annualYield,null,'unknown reward cannot be assigned a fabricated yield');
-  assert.equal(dueDividends().length,1);
+  assert.equal(reportedReadyDividends().length,1,'fresh active stock benefit can be reported without making it a task');
+  assert.equal(state.settings.stockClaimReminders,false,'withdrawal reminders start off for existing and new users');
+  assert.equal(dueDividends().length,0,'no unrequested claim reminder when Torn handles the payout');
+  assert.equal(profitNextActions().some(x=>x.id==='stock-claim'),false,'Hub action queue must not nag about automatic stock payouts');
+  assert.match(renderStockPanel(),/Off · enable/,'player can opt into manual claim reminders');
+  state.settings.stockClaimReminders=true;
+  assert.equal(dueDividends().length,1,'explicit preference enables active benefit review');
+  assert.equal(profitNextActions().find(x=>x.id==='stock-claim')?.status,'review','API status must not masquerade as urgent manual gameplay');
+  stockState.owned[0].bonus.available=false;
+  assert.equal(dueDividends().length,0,'a benefit already credited must clear on the next holdings refresh');
+  stockState.owned[0].bonus.available=true;
+  stockState.all[0].bonus.passive=true;
+  assert.equal(dueDividends().length,0,'passive benefits never require a claim, even if API reports available');
+  stockState.all[0].bonus.passive=false;
   stockState.ownedAt=Date.now()-1800001;
   assert.equal(dueDividends().length,0,'expired readings cannot keep a dividend alert active');
 });
