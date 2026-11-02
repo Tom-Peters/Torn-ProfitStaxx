@@ -45,13 +45,13 @@ for(const [repo,path,hasSnapshot] of targets){
       'Torn-Happy-Jump-Helper':"data-act='staxx-find'" }[repo];
     if(!control||!body.includes(control))throw Error('Missing in-tool Find button: '+repo);
     const localSource=body.slice(body.indexOf('\n})();',body.indexOf('/* StaxxHub v'))+6);
-    if(!canonical.includes('StaxxHub v3.2')||!canonical.includes("staxx:activity")||!canonical.includes('staxx-hub-reviewed-v1'))
-      throw Error('Canonical Hub must include the v3.2 review and activity contracts');
+    if(!canonical.includes('StaxxHub v3.3')||!canonical.includes("staxx:activity")||!canonical.includes('staxx-hub-reviewed-v1'))
+      throw Error('Canonical Hub must include the v3.3 intelligence and activity contracts');
     if(!localSource.includes('staxx:activity')||!localSource.includes('reviewMinutes'))
       throw Error('Active tool must publish source-backed activity and review-time estimates: '+repo);
     if(!localSource.includes('staxx:visit'))
       throw Error('Active tool must publish user-clicked section visits: '+repo);
-    if(!canonical.includes('staxx-hub-dashboard')||!canonical.includes('staxx-hub-activity')||!canonical.includes('staxx-hub-usage-v1')||!canonical.includes('staxx-hub-source-status'))
+    if(!canonical.includes('staxx-hub-dashboard')||!canonical.includes('staxx-hub-activity')||!canonical.includes('staxx-hub-usage-v1')||!canonical.includes('staxx-hub-source-status')||!canonical.includes('staxx-hub-daily')||!canonical.includes('staxx-hub-feedback-v1'))
       throw Error('Canonical hub must preserve dashboard, activity and local adaptive shortcuts');
     console.log('PASS '+repo+'/'+path+' — canonical match');
     if(hasSnapshot){
