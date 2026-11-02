@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.02.5** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.02.6** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -33,6 +33,16 @@ This file is the single source of truth for *cross-script* behaviour, design and
 - Tool dashboards are bounded overlays with a small header, compact **top** navigation and scrollable content. Avoid large persistent bottom bars. Respect mobile safe areas and browser zoom.
 - A single launcher (the S tab) opens a left sidebar of ~302 px; it disappears **while a tool is open or the drawer is expanded**, returns when closed, and can be repositioned vertically. Never overlay main controls with duplicate floating action buttons.
 - Sidebar offers registered tool navigation, combined overview, notifications, urgency, custom snoozes, dismissal and persistent ordering. A proposed always-visible mini-summary remains **optional, not enabled by default**.
+
+## StaxxHub 3.2 — checked reviews and per-tool evidence status (2026-11-02)
+
+- Today permits an explicit **Checked for now** action only on fresh, nonurgent source recommendations. This is a local review marker, never proof that a Torn action was performed.
+- The default Pending, Do now, Soon and Optional filters exclude checked recommendations for at most four hours. Checked shows those markers and lets users restore individual entries.
+- Any change to title, detail, status, priority or dueAt immediately returns the recommendation to the review queue. IDs are namespaced by tool.
+- Urgent and stale/cached recommendations cannot be checked. No checked marker affects the Alerts view, per-tool badges, activity history or underlying tool calculations.
+- Reviewed fingerprints stay in local device storage only, capped at 60 and expiring after four hours. Never send them over the network.
+- Today shows evidence status for all three tools based on registered availability, recent source action reports and the per-tool freshness window. Recent report is not equivalent to live Torn verification or completion.
+- Retain the 3.1 dashboard, activity, shortcuts, all stable URLs, source provenance and strict bundled Hub parity. Happy Jump stable remains pinned; no gameplay writes or new API scopes.
 
 ## StaxxHub 3.1 — unified decisions, habit shortcuts and evidence timeline (2026-11-02)
 
