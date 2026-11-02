@@ -9,7 +9,7 @@ function actionList(fresh){
  const code=source.slice(start,end)+";profitNextActions";
  const fn=vm.runInNewContext(code,{
    activeDealAlerts:()=>fresh,exitSignals:()=>[],dailyPlanV111:()=>({items:[],activeMinutes:0}),
-   dueDividends:()=>[],stockSignals:()=>[],state,now:()=>20000000,
+   dueDividends:()=>[],stockSignals:()=>[],stockBlockOpportunities:()=>[],state,now:()=>20000000,
    fmt:n=>String(n),pct:n=>String(n)+"%"
  });
  return [...fn()];
