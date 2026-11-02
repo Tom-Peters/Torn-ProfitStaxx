@@ -27,6 +27,8 @@ for(const [repo,path,hasSnapshot] of targets){
     const body=repo==='Torn-ProfitStaxx'?readFileSync(new URL('../'+path,import.meta.url),'utf8'):await get(repo,path);
     const embedded=hubRegion(body);
     if(embedded!==canonical)throw Error('Bundled StaxxHub does not match canonical shared/staxx-hub.js');
+    if(!body.includes('staxx-more-tabs')||!body.includes('staxx-hub-mode-v1')||!body.includes("staxx:mode"))
+      throw Error('Tool does not implement the shared Simple/Advanced navigation contract');
     console.log('PASS '+repo+'/'+path+' — canonical match');
     if(hasSnapshot){
       const version=body.match(/^\/\/ @version\s+(\S+)/m)?.[1];
