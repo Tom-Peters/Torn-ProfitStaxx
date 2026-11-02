@@ -404,3 +404,21 @@ test('StaxxHub 3.1 retains bounded, deduplicated provenance-labelled activity on
   h.root.fire('click',h.q['[data-activity-clear]']);
   assert.equal(JSON.parse(h.local.getItem('staxx-hub-activity-v1')).length,0);
 });
+
+test('StaxxHub 3.1 learns deliberate tool tab visits, never background section claims',()=>{
+  const h=mounted();
+  h.emit('staxx:register',{id:'company'});
+  const frequent=h.q['#staxx-hub-frequent'];
+  h.emit('staxx:visit',{id:'unknown',section:'training'});
+  h.emit('staxx:visit',{id:'company',section:'unregistered-section'});
+  assert.equal(h.local.getItem('staxx-hub-usage-v1'),null,'unknown sections must not be counted');
+  h.emit('staxx:visit',{id:'company',section:'training'});
+  let saved=JSON.parse(h.local.getItem('staxx-hub-usage-v1'));
+  assert.equal(saved.length,1);
+  assert.equal(saved[0].section,'training');
+  assert.equal(saved[0].count,1);
+  h.emit('staxx:visit',{id:'company',section:'training'});
+  saved=JSON.parse(h.local.getItem('staxx-hub-usage-v1'));
+  assert.equal(saved[0].count,1,'a duplicate tab event within 10 seconds must be ignored');
+  assert.ok(frequent.children.some(x=>/after you open/.test(x.textContent)));
+});
