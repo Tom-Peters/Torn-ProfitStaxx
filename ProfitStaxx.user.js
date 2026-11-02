@@ -1909,17 +1909,25 @@
 
   function renderRevenuePanel(){
     const records=moneyRecords(),sum=days=>records.filter(x=>x.at>=now()-days*86400000).reduce((n,x)=>n+Number(x.net||0),0);
-    let h='<div class="statrow"><div class="stat"><small>7-day realised net</small><b>'+fmt(sum(7))+'</b></div><div class="stat"><small>30-day realised net</small><b>'+fmt(sum(30))+'</b></div></div>'+
+    const receipts=stockCashReceipts(30),cash=receipts.reduce((n,x)=>n+Number(x.amount),0);
+    const trades=portfolio();
+    let h='<div class="card"><h3>Actual versus estimated · separate evidence</h3>'+
+      '<div class="statrow"><div class="stat"><small>Verified stock cash receipts · 30d</small><b>'+fmt(cash)+'</b></div>'+
+      '<div class="stat"><small>Manual income entries · 30d</small><b>'+fmt(sum(30))+'</b></div>'+
+      '<div class="stat"><small>Recorded completed trade P/L (ledger)</small><b>'+fmt(trades.realised)+'</b></div></div>'+
+      '<p class="muted">Torn API-verified cash receipts are separate from locally recorded figures. Manually recorded stock income may duplicate synced dividends; totals are deliberately NOT added together. All buy opportunities and future benefit yields are estimates, not actual income.</p></div>'+
+      '<div class="statrow"><div class="stat"><small>7-day manually recorded net</small><b>'+fmt(sum(7))+'</b></div><div class="stat"><small>30-day manually recorded net</small><b>'+fmt(sum(30))+'</b></div></div>'+
       '<div class="card"><h3>Record completed income or losses</h3><form id="ps_revenue"><div class="field"><label>Income source</label><select name="source">'+incomeRoutes.map(r=>'<option value="'+esc(r[0])+'">'+esc(r[1])+'</option>').join('')+'</select></div>'+
       '<div class="duo">'+field('received','Received ($)',0)+field('spent','Spent ($)',0)+'</div><div class="duo">'+field('minutes','Minutes of active work',0)+field('note','Note','','text','maxlength="100"')+'</div><button class="btn" type="submit">Save income</button></form></div>'+
       '';
+    h+=renderStockCashReceipts();
     h+=incomeComparisonPanel();
     h+='<h3>Explore other Torn revenue sources</h3>';
     for(const r of incomeRoutes)h+='<div class="card"><div class="line"><strong>'+esc(r[1])+'</strong><button class="btn secondary" data-action="incomepage" data-source="'+esc(r[0])+'">Open Torn</button></div></div>';
     h+='<h3>Income history</h3>';
     for(const x of records.slice(-30).reverse())h+='<div class="card"><div class="line"><b>'+esc(incomeRoutes.find(r=>r[0]===x.source)?.[1]||'Other')+'</b><span>'+fmt(x.net)+'</span></div>'+
       '<div class="line"><span class="muted">'+esc(x.note||new Date(x.at).toLocaleDateString())+'</span><button class="btn red" data-income-id="'+esc(x.id)+'">Delete</button></div></div>';
-    return h+notice('Only completed earnings are recorded. Stock holding values, unrealised resale estimates and bank scenarios are not counted as earned income.');
+    return h+notice('Manual income and ledger entries are not API-verified; independently matched dividend receipts are. Future stock cashflows, unsold items, asks and bank scenarios do not count as earned income.');
   }
 
 
@@ -2030,7 +2038,7 @@
         '<div class="toolbar"><button class="btn" data-action="rank-open" data-rank-id="'+esc(x.id)+'">Review in Torn</button>'+
         '<button class="btn secondary" data-daily-review="'+esc(x.id)+'">'+mark+'</button></div></div>';
     }
-    return html+notice('Review status is stored locally per UTC date, and never treated as a completed transaction or receipt. Use Ledger or Income to record actual results.');
+    return html+notice('ProfitStaxx uses the Hub time budget when selected. Review markers never prove a trade was completed. Only an exact Torn stock cash log is labelled independently verified.');
   }
 
   function renderRankings(){
@@ -2161,7 +2169,7 @@
   function renderHistory(){
     const n=[7,30,90].includes(state.chartDays)?state.chartDays:30,h=profitHistory(n),
       highest=Math.max(1,...h.daily.map(x=>Math.abs(x.net)));
-    let out='<div class="card"><h3>Realised profit history</h3>'+
+    let out=renderStockCashReceipts()+'<div class="card"><h3>Locally recorded realised profit history</h3>'+
       '<p class="muted">Based on dated, completed item sales in Ledger and manually recorded Income entries. Includes losses. No unrealised shares, forecast returns or unsold inventory.</p>'+
       '<div class="toolbar">'+[7,30,90].map(d=>'<button class="btn '+(d===n?'':'secondary')+'" data-chart-days="'+d+'">'+d+' days</button>').join('')+'</div>'+
       '<div class="statrow"><div class="stat"><small>Selected-period net</small><b class="'+(h.total<0?'negative':'positive')+'">'+fmt(h.total)+'</b></div>'+
@@ -2175,7 +2183,7 @@
       out+='<div class="line"><span>'+esc(key)+'</span><b class="'+(value<0?'negative':'positive')+'">'+fmt(value)+'</b></div>'+
         '<div class="meter"><i style="width:'+clamp(Math.abs(value)/max*100,0,100).toFixed(1)+'%;background:'+(value<0?'#fa7484':'#43cbef')+'"></i></div>';
     }
-    out+='</div><div class="card"><h3>What counts?</h3><p class="muted">Income logged separately as Item Market earnings may duplicate sales already in Ledger. Stock dividend receipts should be recorded once in Income when actually received. Historical data starts only when you started recording, and is not proof of missing earnings.</p>'+
+    out+='</div><div class="card"><h3>What counts?</h3><p class="muted">These charts are locally recorded income and completed ledger sales, NOT independently verified. Synced stock cash receipts appear separately above; do not re-enter the same stock dividend manually or you may double-count it. No unsold positions or modelled returns are included.</p>'+
       '<div class="toolbar"><button class="btn secondary" data-tab="income">Record income</button><button class="btn secondary" data-tab="portfolio">Trade ledger</button></div></div>';
     return out;
   }
@@ -2568,8 +2576,8 @@
     document.dispatchEvent?.(new CustomEvent('staxx:summary',{detail:{id:'profit',headline:state.lastScan?'Last scan '+age(state.lastScan):'Awaiting market scan',metrics:[
       {label:'Fresh deals',value:state.lastScan?String(valid.length):'Not scanned'},
       {label:'Recorded invested',value:human(summaryPortfolio.invested)},
-      {label:'Realised P/L',value:fmt(summaryPortfolio.realised)},
-      {label:'30d other income',value:fmt(moneyRecords().filter(x=>x.at>=now()-30*86400000).reduce((n,x)=>n+Number(x.net||0),0))}
+      {label:'Recorded trade P/L',value:fmt(summaryPortfolio.realised)},
+      {label:'30d verified stock cash',value:stockCashReceipts(30).length?fmt(stockCashReceipts(30).reduce((n,x)=>n+Number(x.amount),0)):'No matched receipts'}
     ],updated:state.lastScan||now()}}));
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
