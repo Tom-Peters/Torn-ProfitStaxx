@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.01.6** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.02.1** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -33,6 +33,13 @@ This file is the single source of truth for *cross-script* behaviour, design and
 - Tool dashboards are bounded overlays with a small header, compact **top** navigation and scrollable content. Avoid large persistent bottom bars. Respect mobile safe areas and browser zoom.
 - A single launcher (the S tab) opens a left sidebar of ~302 px; it disappears **while a tool is open or the drawer is expanded**, returns when closed, and can be repositioned vertically. Never overlay main controls with duplicate floating action buttons.
 - Sidebar offers registered tool navigation, combined overview, notifications, urgency, custom snoozes, dismissal and persistent ordering. A proposed always-visible mini-summary remains **optional, not enabled by default**.
+
+## StaxxHub 2.8 — simple everyday navigation (2026-11-02)
+
+- The shared left drawer starts on a compact **Today** view with the two highest-ranked verified recommendations and one-tap access to installed tools. An optional **Show more** expands to the existing six-ranked action limit without altering scores or changing source data.
+- Separate top-level **Tools**, **Alerts**, and **More** views replace the long mixed drawer. Tools retains persistent reordering; Alerts retains individual alert deep-links and dismiss/snooze; More retains the combined seven-day dashboard, diagnostics and page-guidance toggle.
+- On reopening the drawer show Today, so the immediate decision is always visible. Only reset drawer scroll on explicit tab changes or reopening, never during automatic refresh or event-driven rendering. Show a numbered Alerts tab label only for unsnoozed, undismissed alerts.
+- Preserve the original `staxx:register`, `staxx:notice`, `staxx:actions`, `staxx:panel`, and tool-specific interaction contracts. Shared UX changes must be synchronized byte-for-byte across the canonical hub, all three active entrypoints and Happy Jump's matching preview snapshot; do not update the pinned stable installer.
 
 ## Canonical StaxxHub implementation
 Canonical source: `shared/staxx-hub.js` in **Torn-ProfitStaxx**.
