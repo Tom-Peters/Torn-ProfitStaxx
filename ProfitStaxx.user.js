@@ -1953,16 +1953,11 @@
           summary:'Components and point proceeds are asking-price estimates'});
       }
     }
-    if(stockState.at&&now()-stockState.at<30*60000){
-      for(const s of stockRows().filter(x=>x.annualYield!==null&&x.block*x.p>0)){
-        if(s.need<=0)continue;
-        const cost=s.need*s.p;
-        const payout=dividendCash[s.acronym],income=payout?payout[0]*30/payout[1]:0;
-        if(!income||cost>remaining)continue;
-        add({id:'stock-'+s.id,kind:'stock',label:s.acronym+' first/next cash benefit',category:'passive',
-          cost,net:income,minutes:0,confidence:65,period:'modelled 30 days after benefit eligibility',
-          route:'stocks',summary:'Fixed cash benefit only · stock price risk and eligibility delay excluded'});
-      }
+    for(const block of stockBlockOpportunities().filter(x=>x.affordable&&x.annual!==null)){
+      if(block.cost>remaining)continue;
+      add({id:'stock-'+block.id,kind:'stock',label:block.acronym+' next cash benefit increment',category:'passive',
+        cost:block.cost,net:block.annual*30/365,minutes:0,confidence:65,period:'modelled 30 days after benefit eligibility',
+        route:'stocks',summary:'Extra '+block.need+' shares · fixed cash payout only · excludes share-price risk and eligibility delay'});
     }
     const bank=state.settings;
     if(number(bank.bankPrincipal)>0&&number(bank.bankApr)>0)
@@ -1979,9 +1974,13 @@
   }
 
   // Daily review queue: choose distinct, priced opportunities and never treat proposals as completed earnings.
+  function hubPlayMinutes(){
+    try{const n=JSON.parse(localStorage.getItem('staxx-hub-session-minutes-v1')||'0');return [5,10,15,30,60].includes(n)?n:0;}
+    catch(_){return 0;}
+  }
   function dailyPlanV111(){
     const day=new Date().toISOString().slice(0,10),settings=state.settings,
-      budget=Math.max(1,number(settings.dailyReviewMinutes)||15),
+      budget=hubPlayMinutes()||Math.max(1,number(settings.dailyReviewMinutes)||15),
       spendable=Math.min(Math.max(0,number(settings.capital)*(1-number(settings.reservePct)/100)-openCost()),liveWalletCashV113()??Infinity),
       candidates=incomeCandidates().filter(x=>x&&x.net>0&&x.cost>0&&x.score>=20);
     const categories=new Map(),items=[];let activeMinutes=0,committed=0;
@@ -2016,7 +2015,7 @@
     const plan=dailyPlanV111(),done=plan.items.filter(x=>x.reviewed).length;
     let html='<div class="card" id="ps-alert-daily-plan"><h3>Today · five profit decisions</h3>'+
       '<p class="muted">A short, risk-aware review queue across priced income sources. Scores are heuristics. Passive options show a 30-day cashflow equivalent, whereas item flips and travel are one-off opportunities; they cannot be summed as a daily income forecast.</p>'+
-      '<form id="ps_daily_limits"><div class="duo">'+field('dailyReviewMinutes','Time available today (min)',plan.budget)+
+      '<form id="ps_daily_limits"><div class="duo">'+field('dailyReviewMinutes','Time available today (min)',state.settings.dailyReviewMinutes||15)+
       field('dailyReviewCap','Maximum reviewed opportunities',5,'number','disabled')+'</div><button class="btn secondary" type="submit">Save time budget</button></form>'+
       '<div class="statrow"><div class="stat"><small>Reviewed today</small><b>'+done+'/'+plan.items.length+'</b></div>'+
       '<div class="stat"><small>Modelled active time</small><b>'+plan.activeMinutes+' / '+plan.budget+' min</b></div></div>'+
@@ -2245,6 +2244,10 @@
   function profitNextActions(){
     const fresh=activeDealAlerts(),exits=exitSignals(),actions=[];
     const daily=dailyPlanV111();
+    const topStock=stockBlockOpportunities().find(x=>x.affordable&&x.annual!==null);
+    if(topStock)actions.push({id:'stock-block-'+topStock.id,title:'Review '+topStock.acronym+' next benefit block',
+      detail:topStock.need.toLocaleString('en-GB')+' more shares · '+fmt(topStock.cost)+' modeled cash · '+fmt(topStock.annual)+'/year expected cash before risks',
+      status:'review',priority:67});
     if(daily.items.length)actions.push({id:'daily-plan',title:'Review '+daily.items.length+' best money-making options today',
       detail:daily.items.filter(x=>!x.reviewed).length+' not yet reviewed · '+daily.activeMinutes+' modelled active minutes · manual checks only',status:'review',priority:76});
     if(dueDividends().length)actions.push({id:'stock-claim',title:'Verify available stock benefits on Torn',detail:dueDividends().map(x=>x.acronym).join(', ')+' · API status only; may already be credited',status:'review',priority:68});
@@ -2350,7 +2353,9 @@
   function renderAlerts(){
     const list=activeDealAlerts();
     const exits=exitSignals();
-    return (stockSignals().length?stockSignals().map(x=>'<div class="card" id="ps-alert-'+esc(x.id)+'"><h3>'+esc(x.title)+'</h3><p>'+esc(x.why)+'</p><button class="btn" data-action="stockpage">Inspect stock</button></div>').join(''):'')+(dueDividends().length?'<div class="card" id="ps-alert-stock-claim"><h3>Reported stock benefits · verify on Torn</h3><p>'+dueDividends().map(x=>esc(x.acronym)).join(', ')+'</p><button class="btn" data-action="stockpage">Verify status on Torn</button></div>':'')+'<div class="card" id="ps-alert-refresh-scan"><h3>What should I do next?</h3><p>'+esc(state.lastScan?'Last market scan '+age(state.lastScan):'No confirmed scan yet')+'. Check prices on Torn before deciding to trade.</p><button class="btn secondary" data-action="scan">↻ Refresh opportunities</button></div>'+
+    const bestStock=stockBlockOpportunities().find(x=>x.affordable&&x.annual!==null);
+    return (bestStock?'<div class="card" id="ps-alert-stock-block-'+bestStock.id+'"><h3>Next stock benefit block · '+esc(bestStock.acronym)+'</h3><p>Review '+bestStock.need.toLocaleString('en-GB')+' additional shares, costing '+fmt(bestStock.cost)+' at observed prices. Modelled payout is not earned income.</p><button class="btn" data-action="stockpage">Review Torn stocks</button></div>':'')+
+      (stockSignals().length?stockSignals().map(x=>'<div class="card" id="ps-alert-'+esc(x.id)+'"><h3>'+esc(x.title)+'</h3><p>'+esc(x.why)+'</p><button class="btn" data-action="stockpage">Inspect stock</button></div>').join(''):'')+(dueDividends().length?'<div class="card" id="ps-alert-stock-claim"><h3>Reported stock benefits · verify on Torn</h3><p>'+dueDividends().map(x=>esc(x.acronym)).join(', ')+'</p><button class="btn" data-action="stockpage">Verify status on Torn</button></div>':'')+'<div class="card" id="ps-alert-refresh-scan"><h3>What should I do next?</h3><p>'+esc(state.lastScan?'Last market scan '+age(state.lastScan):'No confirmed scan yet')+'. Check prices on Torn before deciding to trade.</p><button class="btn secondary" data-action="scan">↻ Refresh opportunities</button></div>'+
       (list.length?list.slice(0,30).map(x=>'<div class="card" id="ps-alert-deal-'+Number(x.id)+'"><h3>BUY · '+esc(x.name)+'</h3><p><b>Quantity:</b> up to '+Math.floor(x.qty)+' · <b>maximum:</b> '+fmt(x.buy)+'/unit.</p><p><b>Capital required:</b> '+fmt(x.buy*x.qty)+' · <b>Score:</b> '+Math.floor(x.score)+'/100</p><p class="positive">Potential profit '+fmt(x.profit)+' · '+pct(x.roi)+' estimated ROI after modelled fees</p><p class="muted">Buy only at or below the suggested cap. Re-check inventory, listings and prices.</p><button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Open market · prepare '+Math.floor(x.qty)+'</button></div>').join(''):'<div class="empty">No fresh qualifying buy opportunities — do not force a trade.</div>')+
       (exits.length?'<div class="card"><h3>Positions worth reviewing for sale</h3><p class="muted">Estimated from current asking prices, less a 5% market selling fee. Not an executable bid.</p></div>'+exits.slice(0,10).map(x=>'<div class="card" id="ps-alert-exit-'+Number(x.itemId)+'"><h3>SELL REVIEW · '+esc(x.name)+'</h3><p><b>Recorded holdings:</b> '+Math.floor(x.qty)+' · <b>breakeven ask:</b> '+fmt(x.breakeven)+'/unit</p><p class="positive">Indicative gain '+fmt(x.upside)+' · '+pct(x.roi)+' based on asking prices</p><button class="btn secondary" data-action="market-view" data-id="'+Number(x.itemId)+'">Inspect live market listings</button></div>').join(''):'');
   }
@@ -2694,6 +2699,8 @@
         if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).catch(()=>{alert('Clipboard unavailable; use StaxxHub diagnostics to view the report.');});
         else alert('Clipboard unavailable; use StaxxHub diagnostics to view the report.');break;}
       case 'stockrefresh':refreshStocks();break;
+      case 'stock-log-sync':refreshStockCashLogs(true);break;
+      case 'stock-log-toggle':state.settings.stockLogSync=state.settings.stockLogSync===false;state.stockLogRetryAt=0;state.stockLogCheckedAt=0;persist();render();if(state.settings.stockLogSync)void refreshStockCashLogs(true);break;
       case 'stock-reminders':state.settings.stockClaimReminders=state.settings.stockClaimReminders!==true;persist();render();break;
       case 'travelscan':scanTravel();break;
       case 'inventoryscan':refreshInventoryV112();break;
@@ -2889,6 +2896,9 @@
       if(time-stockState.at>=10*60000&&time-autoChecksV112.stocks>=10*60000){
         noteAutoAttemptV116('stocks',time);await refreshStocks();return;
       }
+      if(state.settings.stockLogSync!==false&&time-state.stockLogCheckedAt>=3600000&&time>=state.stockLogRetryAt){
+        await refreshStockCashLogs(false);return;
+      }
       if(time-state.inventoryAt>=30*60000&&time-autoChecksV112.inventory>=30*60000){
         noteAutoAttemptV116('inventory',time);await refreshInventoryV112();return;
       }
@@ -2935,6 +2945,7 @@
     document.addEventListener('visibilitychange',()=>{if(!document.hidden){render();void autoTickV112();}});
     document.addEventListener('staxx:refresh-request',()=>{void autoTickV112();});
     document.addEventListener('staxx:mode',()=>{profitTabsExpanded=false;if(state.open)render();});
+    document.addEventListener('staxx:time-budget',()=>{if(state.open&&state.tab==='daily')render();});
 
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
