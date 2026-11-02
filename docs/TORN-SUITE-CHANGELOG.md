@@ -1,5 +1,13 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — ProfitStaxx stock benefit status correction
+
+- ProfitStaxx 1.22.5 separates API-reported active dividends from user-required actions. Passive benefits never generate stock-claim prompts, and manually collected active dividends only generate verification reminders when the player explicitly enables the option in Stocks.
+- Default stock-withdrawal reminders are off, including for existing settings without that option. The Stocks view still reports API availability without claiming completion or requiring a click. When an API benefit clears on refresh, its reminder clears.
+- Removed false stock-claim obligations across the ProfitStaxx badge, alerts and StaxxHub Today/action queue; existing market notifications, stock price targets and active portfolio analysis are unchanged. Added regression coverage.
+- Shared StaxxHub 3.3 remains unchanged and byte-identical across the three active tools; Company Helper and Happy Jump Preview versions are unchanged.
+
+
 ## 2026-11-02 — StaxxHub 3.3 five-part intelligence upgrade
 
 - NEW/UPDATED badges compare locally hashed action signatures against each tool's first accepted fresh baseline. A visible Changed filter and clear control highlight updates without claiming actions were completed.
