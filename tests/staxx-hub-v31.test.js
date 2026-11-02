@@ -25,7 +25,7 @@ function fixture(){
     '#staxx-hub-tools':'section','#staxx-hub-alerts':'section','#staxx-hub-tasks':'section',
     '#staxx-hub-count':'span','#staxx-hub-total':'span','#staxx-hub-quick-tools':'section',
     '#staxx-hub-best':'section','#staxx-hub-task-filters':'section','#staxx-hub-frequent':'section',
-    '#staxx-hub-dashboard':'section','#staxx-hub-activity':'section','#staxx-hub-welcome':'section',
+    '#staxx-hub-dashboard':'section','#staxx-hub-activity':'section','#staxx-hub-welcome':'section','#staxx-hub-source-status':'section',
     '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section',
     '[data-diagnostics]':'button','[data-arrange]':'button','[data-hub-find]':'button',
     '#staxx-hub-find':'section','#staxx-hub-find-input':'input','#staxx-hub-find-status':'p',
@@ -106,4 +106,38 @@ test('frequent shortcuts learn from repeated user opens only, and can be reset',
  h.root.fire('click',tool);h.root.fire('click',tool);
  const shortcuts=h.q['#staxx-hub-frequent'].children.filter(x=>x.tag==='button');
  assert.ok(shortcuts.length>=1,'two user clicks should promote the tool');
+});
+
+test('3.2 review queue checks only fresh nonurgent advice and reopens changed evidence',()=>{
+ const h=fixture();
+ h.emit('staxx:register',{id:'happy',freshnessMs:900000});
+ const now=Date.now();
+ const items=[
+   {id:'gym-current',title:'Review energy',detail:'Energy available',status:'now',priority:80,reviewMinutes:2},
+   {id:'gym-soon',title:'Review cooldown',detail:'Next Xanax window',status:'soon',priority:60}
+ ];
+ h.emit('staxx:actions',{id:'happy',updated:now,items});
+ const best=h.q['#staxx-hub-best'];
+ assert.equal(best.children.find(x=>x.dataset.openAlertId)?.dataset.openAlertId,'gym-current');
+ assert.equal(h.q['#staxx-hub-source-status'].children.length,3);
+ assert.ok(h.q['#staxx-hub-source-status'].children.some(x=>x.className.includes('fresh')));
+ const mark=best.children.find(x=>x.dataset.reviewId==='gym-current');
+ assert.ok(mark,'routine best recommendation should have its own check button');
+ h.root.fire('click',mark);
+ assert.equal(best.children.find(x=>x.dataset.openAlertId)?.dataset.openAlertId,'gym-soon');
+ assert.match(h.q['#staxx-hub-task-filters'].children.find(x=>x.dataset.taskFilter==='all').textContent,/Pending · 1/);
+ const checked=h.q['#staxx-hub-task-filters'].children.find(x=>x.dataset.taskFilter==='reviewed');
+ assert.match(checked.textContent,/Checked · 1/);
+ h.root.fire('click',checked);
+ assert.ok(h.q['#staxx-hub-tasks'].children.some(x=>x.dataset.openAlertId==='gym-current'));
+ assert.ok(!h.q['#staxx-hub-tasks'].children.some(x=>x.dataset.openAlertId==='gym-soon'));
+ h.emit('staxx:actions',{id:'happy',updated:now+1000,items:[
+   {...items[0],detail:'Energy changed after refresh'},items[1]
+ ]});
+ assert.match(h.q['#staxx-hub-task-filters'].children.find(x=>x.dataset.taskFilter==='reviewed').textContent,/Checked · 0/);
+ h.root.fire('click',h.q['#staxx-hub-task-filters'].children.find(x=>x.dataset.taskFilter==='all'));
+ assert.equal(best.children.find(x=>x.dataset.openAlertId)?.dataset.openAlertId,'gym-current');
+ h.emit('staxx:actions',{id:'happy',updated:now+2000,items:[{id:'gym-urgent',title:'Urgent recovery',status:'urgent',priority:100}]});
+ assert.equal(best.children.find(x=>x.dataset.openAlertId)?.dataset.openAlertId,'gym-urgent');
+ assert.ok(!best.children.some(x=>x.dataset.reviewId==='gym-urgent'),'urgent recommendations must stay visible');
 });
