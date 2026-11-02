@@ -25,8 +25,17 @@ async function get(repo,path){
 for(const [repo,path,hasSnapshot] of targets){
   try{
     const body=repo==='Torn-ProfitStaxx'?readFileSync(new URL('../'+path,import.meta.url),'utf8'):await get(repo,path);
-    const embedded=hubRegion(body);
-    if(embedded!==canonical)throw Error('Bundled StaxxHub does not match canonical shared/staxx-hub.js');
+    let embedded=hubRegion(body);
+    // The raw GitHub CDN can briefly serve an earlier main revision just after
+    // downstream commits. Recheck before reporting a genuine cross-repo drift.
+    if(repo!=='Torn-ProfitStaxx'){
+      for(let retry=0;retry<3&&embedded!==canonical;retry++){
+        await new Promise(resolve=>setTimeout(resolve,2500*(retry+1)));
+        body=await get(repo,path);
+        embedded=hubRegion(body);
+      }
+    }
+    if(embedded!==canonical)throw Error('Bundled StaxxHub differs from canonical after refresh (embedded '+embedded.length+' bytes; canonical '+canonical.length+')');
     if(!body.includes('staxx-more-tabs')||!body.includes('staxx-hub-mode-v1')||!body.includes("staxx:mode"))
       throw Error('Tool does not implement the shared Simple/Advanced navigation contract');
     if(!body.includes('staxx:find')||!body.includes('data-hub-find')||!body.includes('e.detail.section'))
