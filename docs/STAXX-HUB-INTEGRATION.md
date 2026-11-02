@@ -1,6 +1,14 @@
-# StaxxHub 3.1 integration
+# StaxxHub 3.2 integration
 
 Author: IamEEKY. Read-only visual launcher for Torn PDA. The canonical implementation lives in `shared/staxx-hub.js` and is bundled directly into each participating userscript. No remote `@require` dependency is needed.
+
+## Local review queue and source freshness (3.2)
+
+Today displays a **Pending** review queue. A player may mark a fresh, nonurgent recommendation **Checked for now** to hide it from Pending and Best Next Review for four hours at most. The **Checked** filter lets the player restore it. A materially changed source recommendation (title, detail, status, priority or due time) reappears automatically, even before expiry. This action does NOT indicate a completed Torn training, purchase, payment, trade, or consumable use.
+
+Urgent and stale/cached recommendations cannot be marked checked. Alerts and tool badges continue unchanged. Fingerprints are stored locally in a bounded `staxx-hub-reviewed-v1` record (max 60) and never transmitted. Source status indicators distinguish recently reported actions from previous reports, missing reports and tools not active on this Torn page. Recent report does not prove live Torn state.
+
+Existing `staxx:actions` publishers require no changes. Use stable IDs and evidence-grounded details to support reliable change detection.
 
 ## Unified dashboard and evidence timeline (3.1)
 
