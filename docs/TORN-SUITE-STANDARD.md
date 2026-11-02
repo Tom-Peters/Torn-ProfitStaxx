@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.02.2** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.02.3** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -33,6 +33,16 @@ This file is the single source of truth for *cross-script* behaviour, design and
 - Tool dashboards are bounded overlays with a small header, compact **top** navigation and scrollable content. Avoid large persistent bottom bars. Respect mobile safe areas and browser zoom.
 - A single launcher (the S tab) opens a left sidebar of ~302 px; it disappears **while a tool is open or the drawer is expanded**, returns when closed, and can be repositioned vertically. Never overlay main controls with duplicate floating action buttons.
 - Sidebar offers registered tool navigation, combined overview, notifications, urgency, custom snoozes, dismissal and persistent ordering. A proposed always-visible mini-summary remains **optional, not enabled by default**.
+
+## StaxxHub 3.0 — Find and navigate (2026-11-02)
+
+- Add one accessible **Find** control in the shared StaxxHub header and in each active tool's own header. It searches known tools, explicitly registered tool sections, current actionable alerts, and existing recommendations. Filter locally and immediately, case-insensitive and token-based. Never send search terms to Torn, an analytics service, or persistent storage.
+- Use the verified existing `staxx:actions` and `staxx:notice` state, respecting snoozes and dismissals; mark stale/cached results as **last observed** and never imply a cached recommendation is live. No fabricated actions, countdowns or deep links. Empty or missing data must show a helpful no-results message.
+- Search results are buttons with semantic labels, reasonable mobile touch targets and keyboard support; use DOM `textContent` for untrusted values. Opening a result uses the existing hub's `openTool` and emits `staxx:open` with optional **`section`** (a short allowlisted tab identifier) or `alertId`. Only one tool may remain open.
+- For Company Helper, section routing from other Torn pages must use short-lived same-origin session state and the existing explicit `/companies.php` navigation. Alert focus takes priority over `section`; never overwrite user-entered form values or silently submit any Torn action.
+- A tool's **Find** button emits `staxx:find` after closing its own panel. The hub opens its search without launching a second panel or exposing a duplicate launcher. Closing search restores the previous Today/Tools/Alerts/More selection; closing the drawer clears the ephemeral query. Mobile tap works without keyboard shortcuts; optional Ctrl/Cmd+K operates only while the hub drawer is open.
+- Registerable sections may be supplied as `staxx:register.detail.sections=[{id,label}]`; the hub must validate/cap entries. Built-in sections for the three active tools must match their existing tab identifiers; unknown tools expose only verified registration metadata until they register routes.
+- Keep the current 302 px drawer, independent per-tool read-only models, scroll/focus preservation, the suite-wide Simple/Advanced control, alert visibility, and all stable install URLs. Verify unit tests, shared hub parity, preview snapshot parity and unchanged pinned Happy Jump stable installer. Test on TornPDA separately from CI.
 
 ## StaxxHub 2.9 — unified Simple/Advanced navigation and first-run guide (2026-11-02)
 
