@@ -1,5 +1,13 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — StaxxHub 2.8 simplified navigation
+
+- Shared Torn drawer now launches on **Today**: top two ranked actions and direct shortcuts to the three installed tools, with a toggle for further ranked recommendations.
+- **Tools**, **Alerts**, and **More** tabs keep secondary functions out of the way while preserving tool reordering, per-alert deep-link/snooze/dismiss, combined dashboard, diagnostics, and contextual guidance.
+- Refreshes update figures without forcing the drawer back to the top; Today resets only when reopening the drawer. No change to stockless-company rules, paid-training eligibility, gameplay read-only safeguards or preview/stable distinction.
+- Planned release: ProfitStaxx 1.19.0, Company Helper 1.22.0, Happy Jump Preview 0.28.0. Device QA remains necessary.
+
+
 ## 2026-11-01 — Company Helper 1.20.0 paid-training alert eligibility (standard 2026.11.01.6)
 
 - Company Helper no longer raises a paid-train alert just because employees have outstanding confirmed purchases. An alert now requires a verified nonzero available train bank and at least one oldest-first allocation to an eligible employee.
