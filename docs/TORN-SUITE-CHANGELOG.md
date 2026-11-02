@@ -1,5 +1,16 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — StaxxHub 3.1 unified dashboard, action priorities and activity
+
+- **Q1:** One Dashboard view presents last-reported, timestamped headline figures and up to four metrics for each registered tool. Forecasts are explicitly not recorded Torn actions; refresh is available on demand.
+- **Q2:** Today actions can be filtered to **Do now**, **Soon** or **Optional**. Review times appear only when the source provides a bounded estimate (1–60 minutes); otherwise the time is not estimated.
+- **Q3:** A bounded, locally stored usage counter learns shortcuts from deliberate tool/section navigation (not passive refresh). The user can reset the history; entries expire after 30 days.
+- **Q4:** Activity displays only deduplicated, provenance-labelled API log, snapshot or locally recorded events. Forecasts are excluded; records expire after 30 days, and activity can be cleared locally.
+- **Q5:** **Best Next Action** uses current tool-reported priorities, status and due times, excluding stale recommendations. It opens the relevant helper for review and does not perform Torn gameplay writes.
+- Suite versions: ProfitStaxx **1.22.0**, Company Helper **1.25.0**, Happy Jump Preview **0.31.0**; all embed the same StaxxHub 3.1 code. Happy Jump's stable rollback remains unchanged.
+- This is a source-backed advisory interface, not a claim of live TornPDA on-device validation.
+
+
 ## 2026-11-02 — StaxxHub 3.0 action finder and direct section navigation
 
 - Upgraded shared StaxxHub with touch-friendly Find in the drawer header, searching connected tools, supported sections, actionable alerts and source-provided recommendations. Terms remain local; cached results are labelled and dismissed or snoozed alerts are excluded. Common plurals such as **stocks** resolve to **stock market**.
