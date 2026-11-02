@@ -105,8 +105,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v2.6 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v2\.7/);
+test('v2.8 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v2\.8/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -224,4 +224,35 @@ test('future tools join daily dashboard, expose safe diagnostics and do not prom
   const card=panel.children.find(x=>x.className==='staxx-overview-card'&&x.children[0].textContent.includes('New Tool'));
   assert.ok(card,'automatically registered tool must be visible in diagnostics');
   assert.ok(card.children.some(x=>x.textContent.includes('Version 0.1.0')));
+});
+
+test('Today shows two priority cards, with an explicit way to reveal the rest',()=>{
+  const h=mounted();
+  h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:actions',{id:'profit',updated:Date.now(),items:[
+    {id:'task-1',title:'Urgent review',status:'urgent',priority:100},
+    {id:'task-2',title:'Second review',status:'now',priority:80},
+    {id:'task-3',title:'Later review',status:'review',priority:20}
+  ]});
+  let shown=h.q['#staxx-hub-tasks'].children;
+  assert.equal(shown.length,3,'two actions plus an expand control');
+  assert.equal(shown[0].dataset.openAlertId,'task-1');
+  assert.equal(shown[1].dataset.openAlertId,'task-2');
+  assert.equal(shown[2].dataset.toggleTasks,'1');
+  h.root.fire('click',shown[2]);
+  shown=h.q['#staxx-hub-tasks'].children;
+  assert.equal(shown.length,4,'expanding shows all three and a collapse control');
+  assert.equal(shown[2].dataset.openAlertId,'task-3');
+  h.root.fire('click',shown[3]);
+  assert.equal(h.q['#staxx-hub-tasks'].children.length,3,'collapse stays available');
+});
+test('Today-first navigation keeps deep links and advanced options accessible',()=>{
+  assert.match(source,/data-hub-view="today"/);
+  assert.match(source,/data-hub-view="tools"/);
+  assert.match(source,/data-hub-view="alerts"/);
+  assert.match(source,/data-hub-view="more"/);
+  assert.match(source,/data-hub-section="more" hidden/);
+  assert.match(source,/switchHubView\("today"\)/);
+  assert.match(source,/data-hub-section/);
+  assert.match(source,/if\(scroll\)scroll.scrollTop=0/);
 });
