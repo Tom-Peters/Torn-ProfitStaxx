@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.22.1
+// @version      1.22.2
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -821,6 +821,15 @@
       renderContext();
     });
     document.addEventListener('staxx:mode',e=>{const m=e.detail?.mode;if((m==='simple'||m==='advanced')&&m!==uiMode){uiMode=m;saveLocal('staxx-hub-mode-v1',m);expandedTaskList=false;render();}});
+    document.addEventListener('staxx:visit',e=>{
+      const d=e.detail||{},id=d.id;
+      if(!idOk(id)||!active[id])return;
+      const entry=entries.find(x=>x.id===id),routes=sectionsByTool[id]||entry?.sections||[];
+      if(!routes.some(route=>route[0]===d.section))return;
+      const key=id+'/'+d.section,prior=storedUse(key);
+      if(prior&&Date.now()-Number(prior.last)<10000)return;
+      recordUse(id,d.section);
+    });
     document.addEventListener("staxx:register",e=>{
       const d=e.detail||{},id=d.id;if(!idOk(id))return;
       let entry=entries.find(x=>x.id===id);
@@ -927,7 +936,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.22.1';
+  const VERSION = '1.22.2';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -2303,7 +2312,10 @@
     if(el.dataset.rankFilter){state.rankFilter=['all','active','passive'].includes(el.dataset.rankFilter)?el.dataset.rankFilter:'all';render();return;}
     if(el.dataset.action==='staxx-find'){state.open=false;render();document.dispatchEvent(new CustomEvent('staxx:find'));return;}
     if(el.dataset.action==='staxx-more-tabs'){profitTabsExpanded=!profitTabsExpanded;render();return;}
-    if(el.dataset.tab){state.tab=el.dataset.tab;render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
+    if(el.dataset.tab){state.tab=el.dataset.tab;
+      if(['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics'].includes(state.tab))
+        document.dispatchEvent?.(new CustomEvent('staxx:visit',{detail:{id:'profit',section:state.tab}}));
+      render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
       owned[name]=Math.max(0,Math.floor(number(owned[name])+Number(el.dataset.delta||0)));
       state.settings.museumOwned=owned;persist();render();return;}
