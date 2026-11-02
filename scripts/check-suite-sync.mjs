@@ -45,8 +45,15 @@ for(const [repo,path,hasSnapshot] of targets){
       'Torn-Happy-Jump-Helper':"data-act='staxx-find'" }[repo];
     if(!control||!body.includes(control))throw Error('Missing in-tool Find button: '+repo);
     const localSource=body.slice(body.indexOf('\n})();',body.indexOf('/* StaxxHub v'))+6);
-    if(!canonical.includes('StaxxHub v3.4')||!canonical.includes("staxx:activity")||!canonical.includes('staxx-hub-reviewed-v1')||!canonical.includes('staxx-hub-session-minutes-v1')||!canonical.includes('completedActionId'))
-      throw Error('Canonical Hub must include the v3.3 intelligence and activity contracts');
+    if(!canonical.includes('StaxxHub v3.4')||!canonical.includes("staxx:activity")||
+       !canonical.includes('staxx-hub-reviewed-v1')||!canonical.includes('staxx-hub-session-minutes-v1')||
+       !canonical.includes('completedActionId')||!canonical.includes('staxx-hub-checklist')||
+       !canonical.includes('staxx-hub-session')||!canonical.includes('staxx:time-budget-request'))
+      throw Error('Canonical Hub must include the v3.4 verified checklist and session-fit contracts');
+    if(repo==='Torn-ProfitStaxx'&&(!localSource.includes('parseStockCashReceipt')||
+       !localSource.includes('stockBlockOpportunities')||!localSource.includes('stockCashReceipts')||
+       !localSource.includes('stockLogSync')))
+      throw Error('ProfitStaxx must preserve stock cash receipt reconciliation and marginal block analysis');
     if(!localSource.includes('staxx:activity')||!localSource.includes('reviewMinutes'))
       throw Error('Active tool must publish source-backed activity and review-time estimates: '+repo);
     if(!localSource.includes('staxx:visit'))
