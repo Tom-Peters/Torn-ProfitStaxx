@@ -1,5 +1,13 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — StaxxHub 3.0 action finder and direct section navigation
+
+- Upgraded shared StaxxHub with touch-friendly Find in the drawer header, searching connected tools, supported sections, actionable alerts and source-provided recommendations. Terms remain local; cached results are labelled and dismissed or snoozed alerts are excluded. Common plurals such as **stocks** resolve to **stock market**.
+- ProfitStaxx **1.21.1**, Company Helper **1.24.1** and Happy Jump Preview **0.30.1** expose Find inside their existing tool headers and handle verified direct section destinations. Company Helper can stage a time-limited section route to its company page without losing an alert-focused jump.
+- Preserved all trading, training, company growth, overdoses, pricing and ledgers as read-only models. No automatic Torn gameplay, new API scopes, remote search calls or persistent query logs.
+- Bundled the canonical Hub into each active script and an immutable Happy Jump 0.30.1 preview snapshot. Happy Jump stable rollback remains pinned. Added Find regression coverage and cross-repository parity enforcement; browser/PDA device layout still requires hands-on QA.
+
+
 ## 2026-11-02 — StaxxHub 2.9 unified usability release
 
 - Added one persistent Simple/Advanced display preference across ProfitStaxx 1.20.1, Company Helper 1.23.1, and Happy Jump preview 0.29.1. Simple shows high-use tabs and a More control; Advanced restores every section. Alert deep links continue to reveal less-common destinations.
