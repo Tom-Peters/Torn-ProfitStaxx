@@ -26,7 +26,7 @@ function fixture(){
     '#staxx-hub-count':'span','#staxx-hub-total':'span','#staxx-hub-quick-tools':'section',
     '#staxx-hub-best':'section','#staxx-hub-task-filters':'section','#staxx-hub-frequent':'section',
     '#staxx-hub-dashboard':'section','#staxx-hub-activity':'section','#staxx-hub-welcome':'section','#staxx-hub-source-status':'section',
-    '#staxx-hub-page-shortcut':'section','#staxx-hub-early':'section','#staxx-hub-changes':'section','#staxx-hub-daily':'section',
+    '#staxx-hub-page-shortcut':'section','#staxx-hub-early':'section','#staxx-hub-changes':'section','#staxx-hub-daily':'section','#staxx-hub-session':'section','#staxx-hub-checklist':'section',
     '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section',
     '[data-diagnostics]':'button','[data-arrange]':'button','[data-hub-find]':'button',
     '#staxx-hub-find':'section','#staxx-hub-find-input':'input','#staxx-hub-find-status':'p',
