@@ -24,7 +24,7 @@ async function get(repo,path){
 }
 for(const [repo,path,hasSnapshot] of targets){
   try{
-    const body=repo==='Torn-ProfitStaxx'?readFileSync(new URL('../'+path,import.meta.url),'utf8'):await get(repo,path);
+    let body=repo==='Torn-ProfitStaxx'?readFileSync(new URL('../'+path,import.meta.url),'utf8'):await get(repo,path);
     let embedded=hubRegion(body);
     // The raw GitHub CDN can briefly serve an earlier main revision just after
     // downstream commits. Recheck before reporting a genuine cross-repo drift.
