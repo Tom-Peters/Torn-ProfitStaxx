@@ -26,6 +26,7 @@ function fixture(){
     '#staxx-hub-count':'span','#staxx-hub-total':'span','#staxx-hub-quick-tools':'section',
     '#staxx-hub-best':'section','#staxx-hub-task-filters':'section','#staxx-hub-frequent':'section',
     '#staxx-hub-dashboard':'section','#staxx-hub-activity':'section','#staxx-hub-welcome':'section','#staxx-hub-source-status':'section',
+    '#staxx-hub-page-shortcut':'section','#staxx-hub-early':'section','#staxx-hub-changes':'section','#staxx-hub-daily':'section',
     '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section',
     '[data-diagnostics]':'button','[data-arrange]':'button','[data-hub-find]':'button',
     '#staxx-hub-find':'section','#staxx-hub-find-input':'input','#staxx-hub-find-status':'p',
@@ -52,7 +53,7 @@ function fixture(){
   vm.runInNewContext(modified,{document:doc,window:win,location:loc,CustomEvent:CE,
     localStorage:createStore(),sessionStorage:createStore(),Date,Math,Number,String,JSON,Set,Map},{timeout:2000});
   assert.ok(doc.mounted);
-  return {doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
+  return {doc,loc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
 test('suite dashboard renders all tools with labelled snapshot metrics',()=>{
  const h=fixture();
@@ -140,4 +141,93 @@ test('3.2 review queue checks only fresh nonurgent advice and reopens changed ev
  h.emit('staxx:actions',{id:'happy',updated:now+2000,items:[{id:'gym-urgent',title:'Urgent recovery',status:'urgent',priority:100}]});
  assert.equal(best.children.find(x=>x.dataset.openAlertId)?.dataset.openAlertId,'gym-urgent');
  assert.ok(!best.children.some(x=>x.dataset.reviewId==='gym-urgent'),'urgent recommendations must stay visible');
+});
+
+test('3.3 first fresh source report establishes a baseline; later new and changed items stand out',()=>{
+ const h=fixture(),now=Date.now();h.emit('staxx:register',{id:'profit'});
+ h.emit('staxx:actions',{id:'profit',updated:now,items:[{id:'stock-a',title:'Review owned stock',status:'review',detail:'One visible position'}]});
+ assert.equal(h.q['#staxx-hub-changes'].children.length,0,'first report cannot invent historical changes');
+ h.emit('staxx:actions',{id:'profit',updated:now+1,items:[
+   {id:'stock-a',title:'Review owned stock',status:'review',detail:'Fresh quote changed'},
+   {id:'stock-b',title:'Review new item',status:'soon',detail:'Observed opportunity'}
+ ]});
+ const changed=h.q['#staxx-hub-changes'];
+ assert.equal(changed.children.length,1);
+ const buttons=changed.children[0].children.filter(x=>x.tag==='button');
+ assert.ok(buttons.some(x=>/UPDATED/.test(x.textContent)));
+ assert.ok(buttons.some(x=>/NEW/.test(x.textContent)));
+ h.root.fire('click',buttons.find(x=>x.dataset.changeClear));
+ assert.equal(changed.children.length,0);
+ h.emit('staxx:actions',{id:'profit',updated:now+2,items:[
+   {id:'stock-a',title:'Review owned stock',status:'review',detail:'Fresh quote changed'},
+   {id:'stock-b',title:'Review new item',status:'soon',detail:'Observed opportunity'}
+ ]});
+ assert.equal(changed.children.length,0,'same refreshed evidence must not recreate cleared highlights');
+});
+test('3.3 early warnings require real future due times and fresh actionable source data',()=>{
+ const h=fixture(),now=Date.now();h.emit('staxx:register',{id:'happy',freshnessMs:60000});
+ h.emit('staxx:actions',{id:'happy',updated:now,items:[
+   {id:'xanax-soon',title:'Review cooldown',status:'soon',dueAt:now+20*60000},
+   {id:'optional-later',title:'Read gym information',status:'optional',dueAt:now+10*60000},
+   {id:'no-clock',title:'No actual due time',status:'now'}
+ ]});
+ const early=h.q['#staxx-hub-early'];
+ assert.equal(early.children.length,1);
+ assert.ok(early.children[0].children.some(x=>x.dataset.openAlertId==='xanax-soon'));
+ assert.ok(!early.children[0].children.some(x=>x.dataset.openAlertId==='optional-later'));
+ const clock=h.q['#staxx-hub-tasks'].children.find(x=>x.dataset.reviewId==='xanax-soon');
+ h.root.fire('click',clock);
+ assert.ok(early.children[0].children.some(x=>x.dataset.openAlertId==='xanax-soon'),
+  'checking advice never silences a timed heads-up');
+ h.emit('staxx:actions',{id:'happy',updated:now-900000,items:[
+   {id:'xanax-soon',title:'Old cooldown',status:'soon',dueAt:now+20*60000}
+ ]});
+ assert.equal(early.children.length,0,'stale source cannot generate imminent warnings');
+});
+test('3.3 explicit relevance votes are bounded to priority within the same urgency and due order',()=>{
+ const h=fixture(),now=Date.now();h.emit('staxx:register',{id:'profit',freshnessMs:900000});
+ h.emit('staxx:actions',{id:'profit',updated:now,items:[
+   {id:'high',title:'High priority',status:'now',priority:50},
+   {id:'low',title:'Lower priority',status:'now',priority:43}
+ ]});
+ let rows=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
+ assert.equal(rows[0].dataset.openAlertId,'high');
+ const less=h.q['#staxx-hub-tasks'].children.find(x=>x.dataset.voteId==='high'&&x.dataset.voteValue==='-1');
+ h.root.fire('click',less);
+ rows=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
+ assert.equal(rows[0].dataset.openAlertId,'low');
+ h.emit('staxx:actions',{id:'profit',updated:now+1,items:[
+   {id:'high',title:'High priority',status:'now',priority:50},
+   {id:'low',title:'Lower priority',status:'now',priority:43},
+   {id:'urgent',title:'Urgent',status:'urgent',priority:0}
+ ]});
+ rows=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
+ assert.equal(rows[0].dataset.openAlertId,'urgent','feedback cannot outrank source urgency');
+});
+test('3.3 local UK-day evidence report never merges verified, observed and manual records',()=>{
+ const h=fixture(),now=Date.now();h.emit('staxx:register',{id:'happy'});
+ h.emit('staxx:activity',{id:'happy',events:[
+   {id:'gym-real',source:'api',at:now-1000,title:'Verified gym log'},
+   {id:'snapshot-real',source:'snapshot',at:now-900,title:'Observed stat difference'},
+   {id:'note-real',source:'recorded',at:now-800,title:'Manual note'}
+ ]});
+ const daily=h.q['#staxx-hub-daily'].children[0];
+ assert.ok(daily.children.some(x=>/UK TIME/.test(x.textContent)));
+ const card=daily.children.find(x=>x.className==='staxx-overview-card'&&x.children[0]?.textContent==='Happy Jump');
+ assert.ok(card);
+ assert.match(card.children[1].textContent,/Verified Torn logs: 1/);
+ assert.match(card.children[1].textContent,/Observed changes: 1/);
+ assert.match(card.children[1].textContent,/Locally recorded: 1/);
+});
+test('3.3 context shortcut targets a verified section and leaves the native page alone',()=>{
+ const h=fixture();h.loc.pathname='/gym.php';
+ h.emit('staxx:register',{id:'happy'});
+ const panel=h.q['#staxx-hub-page-shortcut'].children[0];
+ assert.ok(panel);
+ const go=panel.children.find(x=>x.dataset.hubSectionTool==='happy');
+ assert.ok(go);
+ assert.equal(go.dataset.hubSectionTab,'today');
+ h.loc.pathname='/unknown.php';
+ h.emit('staxx:actions',{id:'happy',updated:Date.now(),items:[]});
+ assert.equal(h.q['#staxx-hub-page-shortcut'].children.length,0);
 });
