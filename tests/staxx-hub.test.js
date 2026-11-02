@@ -84,12 +84,16 @@ function mounted(){
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
     '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-tasks':'section','#staxx-hub-count':'span',
     '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section','[data-diagnostics]':'button','[data-arrange]':'button','#staxx-hub-total':'span',
-    '#staxx-hub-find':'section','#staxx-hub-find-input':'input','#staxx-hub-find-results':'section','#staxx-hub-find-status':'p','[data-hub-find]':'button','.staxx-scroll':'div'
+    '#staxx-hub-find':'section','#staxx-hub-find-input':'input','#staxx-hub-find-results':'section','#staxx-hub-find-status':'p','[data-hub-find]':'button','.staxx-scroll':'div',
+    '#staxx-hub-best':'section','#staxx-hub-task-filters':'div','#staxx-hub-dashboard':'section',
+    '#staxx-hub-activity':'section','#staxx-hub-frequent':'div','[data-activity-clear]':'button','[data-usage-reset]':'button'
   }))q[name]=new Element(tag);
   q["[data-overview]"].setAttribute("data-overview","");
   q["[data-diagnostics]"].setAttribute("data-diagnostics","");
   q["[data-arrange]"].setAttribute("data-arrange","");
   q["[data-hub-find]"].setAttribute("data-hub-find","");
+  q["[data-activity-clear]"].setAttribute("data-activity-clear","");
+  q["[data-usage-reset]"].setAttribute("data-usage-reset","");
   const doc={
     readyState:'complete',hidden:false,mounted:null,__selectors:q,
     getElementById:()=>null,
@@ -103,9 +107,10 @@ function mounted(){
   const w={innerHeight:850,addEventListener(){},setInterval(){}};
   w.top=w;w.self=w;
   const loc={hostname:'www.torn.com',pathname:'/index.php',origin:'https://www.torn.com',assign(){}};
-  vm.runInNewContext(injected,{document:doc,window:w,location:loc,CustomEvent:CE,localStorage:store(),sessionStorage:store(),Date,Math,JSON,Number,String,Set},{timeout:1000});
+  const local=store();
+  vm.runInNewContext(injected,{document:doc,window:w,location:loc,CustomEvent:CE,localStorage:local,sessionStorage:store(),Date,Math,JSON,Number,String,Set},{timeout:1000});
   assert.ok(doc.mounted);
-  return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
+  return {document:doc,root:doc.mounted,q,local,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
 test('v3.1 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
   assert.match(main,/StaxxHub v3\.1/);
@@ -328,4 +333,74 @@ test('Find is local, accessible and never introduces gameplay submission',()=>{
   assert.match(source,/staxx-open-company-section/);
   assert.match(source,/staxx-open-company-at/);
   assert.doesNotMatch(source,/fetch\s*\(\s*["']https:\/\/api\.torn\.com/);
+});
+
+test('StaxxHub 3.1 shows source-labelled suite dashboard and a freshness-ranked best review',()=>{
+  const h=mounted(),now=Date.now();
+  h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:register',{id:'company'});
+  h.emit('staxx:summary',{id:'profit',headline:'Cash performance',updated:now,metrics:[{label:'Fresh deals',value:'3'},{label:'Modelled profit',value:'£5k'}]});
+  h.emit('staxx:summary',{id:'company',headline:'Company rating 4 stars',updated:now,metrics:[{label:'Star rating',value:'4 / 10'}]});
+  const cards=h.q['#staxx-hub-dashboard'].children.filter(x=>x.className==='staxx-overview-card');
+  assert.equal(cards.length,3);
+  assert.ok(cards[0].children.some(x=>/Cash performance/.test(x.textContent)));
+  assert.ok(cards[1].children.some(x=>/Company rating/.test(x.textContent)));
+  h.emit('staxx:actions',{id:'profit',updated:now-86400000,items:[{id:'old-deal',title:'Old stock alert',status:'urgent',priority:100}]});
+  h.emit('staxx:actions',{id:'company',updated:now,items:[{id:'loss-review',title:'Review company loss',status:'urgent',priority:95,reviewMinutes:3}]});
+  let best=h.q['#staxx-hub-best'].children.find(x=>x.dataset?.openAlertId==='loss-review');
+  assert.ok(best,'the best suggestion must not be the stale urgent stock alert');
+  assert.ok(best.children.some(x=>/3 min review/.test(x.textContent)));
+  assert.ok(h.q['#staxx-hub-best'].children.some(x=>/Ranked using source urgency/.test(x.textContent)));
+});
+
+test('StaxxHub 3.1 uses Do now, Soon and Optional filters and bounds effort estimates',()=>{
+  const h=mounted(),now=Date.now();h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:actions',{id:'profit',updated:now,items:[
+    {id:'do',title:'Act now',status:'urgent',reviewMinutes:1},
+    {id:'soon',title:'Check soon',status:'soon',reviewMinutes:2},
+    {id:'optional',title:'Inspect later',status:'review',reviewMinutes:999}
+  ]});
+  const filter=h.q['#staxx-hub-task-filters'],tasks=h.q['#staxx-hub-tasks'];
+  assert.equal(filter.children.length,4);
+  assert.ok(tasks.children.some(x=>x.dataset.openAlertId==='do'));
+  h.root.fire('click',filter.children.find(x=>x.dataset.taskFilter==='soon'));
+  assert.equal(tasks.children.filter(x=>x.dataset?.openAlertId).length,1);
+  assert.equal(tasks.children[0].dataset.openAlertId,'soon');
+  h.root.fire('click',filter.children.find(x=>x.dataset.taskFilter==='optional'));
+  assert.ok(tasks.children[0].children.some(x=>/not estimated/.test(x.textContent)));
+});
+
+test('StaxxHub 3.1 learns shortcuts only from actual user navigation and allows reset',()=>{
+  const h=mounted();h.emit('staxx:register',{id:'profit'});h.emit('staxx:register',{id:'company'});
+  const quick=h.q['#staxx-hub-frequent'];
+  assert.ok(quick.children.some(x=>/after you open/.test(x.textContent)));
+  const tool=h.q['#staxx-hub-tools'].children.find(x=>x.dataset.openStaxx==='profit');
+  h.root.fire('click',tool);
+  h.emit('staxx:panel',{id:'profit',open:false});
+  assert.ok(quick.children.some(x=>/after you open/.test(x.textContent)),'one visit is not a learned shortcut');
+  h.root.fire('click',tool);
+  h.emit('staxx:panel',{id:'profit',open:false});
+  assert.ok(quick.children.some(x=>x.dataset.openStaxx==='profit'));
+  const saved=JSON.parse(h.local.getItem('staxx-hub-usage-v1'));
+  assert.ok(saved.some(x=>x.tool==='profit'&&x.count===2));
+  h.root.fire('click',h.q['[data-usage-reset]']);
+  assert.equal(JSON.parse(h.local.getItem('staxx-hub-usage-v1')).length,0);
+});
+
+test('StaxxHub 3.1 retains bounded, deduplicated provenance-labelled activity only',()=>{
+  const h=mounted(),now=Date.now();h.emit('staxx:register',{id:'happy'});
+  const event={id:'gym-abc',at:now-1000,source:'api',section:'progress',title:'Gym +450 Strength',detail:'Official log record'};
+  h.emit('staxx:activity',{id:'happy',events:[event,event,{id:'forecast',at:now,source:'forecast',title:'Not real'},{id:'future',at:now+86400000,source:'api',title:'Future event'}]});
+  let stored=JSON.parse(h.local.getItem('staxx-hub-activity-v1'));
+  assert.equal(stored.length,1);
+  assert.equal(stored[0].source,'api');
+  let cards=h.q['#staxx-hub-activity'].children.filter(x=>x.className==='staxx-overview-card');
+  assert.equal(cards.length,1);
+  assert.ok(cards[0].children.some(x=>/Verified Torn log/.test(x.textContent)));
+  h.emit('staxx:activity',{id:'happy',events:[{id:'record-1',at:now,source:'recorded',title:'Manual entry'}]});
+  stored=JSON.parse(h.local.getItem('staxx-hub-activity-v1'));
+  assert.equal(stored.length,2);
+  assert.ok(h.q['#staxx-hub-activity'].children.some(x=>x.children?.some(y=>/Locally recorded/.test(y.textContent))));
+  h.root.fire('click',h.q['[data-activity-clear]']);
+  assert.equal(JSON.parse(h.local.getItem('staxx-hub-activity-v1')).length,0);
 });
