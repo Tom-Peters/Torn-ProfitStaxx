@@ -1756,7 +1756,7 @@
     const rows=stockCashReceipts(30),total=rows.reduce((n,x)=>n+Number(x.amount),0);
     let html='<div class="card"><h3>Verified cash stock dividends · last 30 days</h3>'+
       '<div class="statrow"><div class="stat"><small>Matched Torn log receipts</small><b>'+rows.length+'</b></div>'+
-      '<div class="stat"><small>Cash from matched logs</small><b>'+fmt(total)+'</b></div></div>'+
+      '<div class="stat"><small>Cash from matched logs</small><b>'+(rows.length?fmt(total):'No verified receipts')+'</b></div></div>'+
       '<p class="muted">Only money receipts from Torn user/log stock category 134 count here. Full access (or matching custom log permission) is needed. Unavailable data is not proof of zero income.</p>'+
       '<div class="toolbar"><button class="btn secondary" data-action="stock-log-sync" '+(stockLogStatus.busy||state.settings.stockLogSync===false?'disabled':'')+'>'+
         (stockLogStatus.busy?'Reading logs…':'Sync stock cash logs')+'</button>'+
