@@ -1,4 +1,12 @@
-# StaxxHub 3.3 integration
+# StaxxHub 3.4 integration
+
+## Session budget and API-verified checklist (3.4)
+
+Today includes an explicit local-only session length preference: Any or 5, 10, 15, 30, 60 minutes. It improves tie-breaking among actions of **equal urgency and due time** based on source-supplied `reviewMinutes`; a suggested check does not promise the full gameplay operation fits. An optional **Fits** filter shows only fresh actions with a measured review estimate within the budget.
+
+A Daily checklist shows captured API-verified completions distinct from source recommendations, locally reviewed suggestions, snapshots, and manual notes. Source-published `staxx:activity` events may include `completedActionId` only when an actual individual Torn API event conclusively closes the named live recommendation. The Hub validates this against the live action report, stores only a bounded locally derived signature, and removes that action from Pending until the recommendation changes or the UK calendar day changes. Without exact evidence, it stays pending even if a similar log exists.
+
+ProfitStaxx 1.22.6 optionally reads Torn's Full-access `user/log` with existing key permission and strict source matching to reconcile actual cash stock dividend receipts; when permissions are insufficient, it leaves receipt totals unverified rather than reporting zero. Realised receipts are kept separate from manual income, ledger P/L and estimated forecasts. Stock benefit blocks are ranked by current holdings, required incremental shares, capital reserve and verified wallet when available. No automatic purchasing or claiming.
 
 ## Five cross-tool upgrades (3.3)
 
