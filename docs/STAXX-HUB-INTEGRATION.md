@@ -25,7 +25,17 @@ document.dispatchEvent(new CustomEvent('staxx:activity', {
 
 The hub requires a bounded unique event ID, a timestamp within the last 30 days, and one of `source:'api'` (**Verified Torn log**), `source:'snapshot'` (**Observed snapshot**) or `source:'recorded'` (**Locally recorded**). A provider must only use `api` for an actual matched Torn log; a modelled daily return, a forecast, a planned train, or a manual ledger entry is never proof of a completed Torn action. Events are deduplicated and stored locally, capped at 120. Users can clear activity from its tab.
 
-**Your shortcuts** learn only from repeated user-initiated opens through the shared hub. The usage history is local-only, capped and has a reset control in **More**. This never modifies the ordering of the standard tool navigation or collects background browsing activity.
+**Your shortcuts** learn from repeated user-initiated opens through the shared hub **and deliberate tab clicks inside a helper**. A helper should dispatch an event only from its real tab-click handler, after validating the selected section:
+
+```js
+document.dispatchEvent(new CustomEvent('staxx:visit', {
+  detail: {id: 'my-next-staxx', section: 'history'}
+}));
+```
+
+The Hub rejects unregistered tools and unknown sections, suppresses duplicate events within 10 seconds, and never counts background renders or automatic refreshes.
+
+**Your shortcuts** learn from explicitly chosen sections. The usage history is local-only, capped and has a reset control in **More**. This never modifies the ordering of the standard tool navigation or collects background browsing activity.
 
 The data provenance, no API key publication, read-only gameplay safeguards, stockless company alert exclusions and paid-train availability gates remain mandatory.
 
