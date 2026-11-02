@@ -112,8 +112,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,local,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v3.1 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v3\.1/);
+test('v3.2 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v3\.2/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -195,7 +195,7 @@ test('ranked next actions navigate directly to their matching tool alert',()=>{
     {id:'deal-42',title:'Review 42 items',detail:'Estimated resale spread',status:'review',priority:72},
     {id:'refresh-scan',title:'Refresh prices',detail:'Quote age unknown',status:'now',priority:90}
   ]});
-  const items=h.q['#staxx-hub-tasks'].children;
+  const items=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
   assert.equal(items.length,2);
   assert.equal(items[0].dataset.openAlertId,'refresh-scan','Do-now actions should sort before review suggestions');
   assert.equal(items[1].dataset.openAlertId,'deal-42');
@@ -242,16 +242,15 @@ test('Today shows two priority cards, with an explicit way to reveal the rest',(
     {id:'task-3',title:'Later review',status:'review',priority:20}
   ]});
   let shown=h.q['#staxx-hub-tasks'].children;
-  assert.equal(shown.length,3,'two actions plus an expand control');
-  assert.equal(shown[0].dataset.openAlertId,'task-1');
-  assert.equal(shown[1].dataset.openAlertId,'task-2');
-  assert.equal(shown[2].dataset.toggleTasks,'1');
-  h.root.fire('click',shown[2]);
+  assert.deepEqual(shown.filter(x=>x.dataset.openAlertId).map(x=>x.dataset.openAlertId),['task-1','task-2']);
+  let toggle=shown.find(x=>x.dataset.toggleTasks==='1');
+  assert.ok(toggle,'two action cards have a separate review control and an expand button');
+  h.root.fire('click',toggle);
   shown=h.q['#staxx-hub-tasks'].children;
-  assert.equal(shown.length,4,'expanding shows all three and a collapse control');
-  assert.equal(shown[2].dataset.openAlertId,'task-3');
-  h.root.fire('click',shown[3]);
-  assert.equal(h.q['#staxx-hub-tasks'].children.length,3,'collapse stays available');
+  assert.deepEqual(shown.filter(x=>x.dataset.openAlertId).map(x=>x.dataset.openAlertId),['task-1','task-2','task-3']);
+  toggle=shown.find(x=>x.dataset.toggleTasks==='1');
+  h.root.fire('click',toggle);
+  assert.equal(h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId).length,2,'collapse stays available');
 });
 test('Today-first navigation keeps deep links and advanced options accessible',()=>{
   assert.match(source,/data-hub-view="today"/);
@@ -353,7 +352,7 @@ test('StaxxHub 3.1 shows source-labelled suite dashboard and a freshness-ranked 
   assert.ok(h.q['#staxx-hub-best'].children.some(x=>/Ranked using source urgency/.test(x.textContent)));
 });
 
-test('StaxxHub 3.1 uses Do now, Soon and Optional filters and bounds effort estimates',()=>{
+test('StaxxHub 3.2 also exposes a Checked filter and bounds review-time estimates',()=>{
   const h=mounted(),now=Date.now();h.emit('staxx:register',{id:'profit'});
   h.emit('staxx:actions',{id:'profit',updated:now,items:[
     {id:'do',title:'Act now',status:'urgent',reviewMinutes:1},
@@ -361,7 +360,7 @@ test('StaxxHub 3.1 uses Do now, Soon and Optional filters and bounds effort esti
     {id:'optional',title:'Inspect later',status:'review',reviewMinutes:999}
   ]});
   const filter=h.q['#staxx-hub-task-filters'],tasks=h.q['#staxx-hub-tasks'];
-  assert.equal(filter.children.length,4);
+  assert.equal(filter.children.length,5);
   assert.ok(tasks.children.some(x=>x.dataset.openAlertId==='do'));
   h.root.fire('click',filter.children.find(x=>x.dataset.taskFilter==='soon'));
   assert.equal(tasks.children.filter(x=>x.dataset?.openAlertId).length,1);
