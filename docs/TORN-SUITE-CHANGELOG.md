@@ -1,5 +1,13 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — StaxxHub 2.9 unified usability release
+
+- Added one persistent Simple/Advanced display preference across ProfitStaxx 1.20.1, Company Helper 1.23.1, and Happy Jump preview 0.29.1. Simple shows high-use tabs and a More control; Advanced restores every section. Alert deep links continue to reveal less-common destinations.
+- Introduced a lightweight, dismissible/replayable first-run guide in the hub Today view. Advanced can show all six top actions without hiding the existing alert routing, detailed dashboards, diagnostics or source freshness.
+- Fixed event handling for valueless mode/guide controls and kept Company Helper event listeners compatible with minimal environments. No domain calculations, saved data structures or Torn gameplay safety safeguards were changed.
+- Synchronized canonical StaxxHub 2.9 to all three active scripts and the matching immutable Happy Jump preview snapshot. Stable Happy Jump install URL remains pinned. GitHub CI is necessary but not equivalent to TornPDA on-device verification.
+
+
 ## 2026-11-02 — StaxxHub 2.8 simplified navigation
 
 - Shared Torn drawer now launches on **Today**: top two ranked actions and direct shortcuts to the three installed tools, with a toggle for further ranked recommendations.
