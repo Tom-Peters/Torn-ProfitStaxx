@@ -1,3 +1,11 @@
+## v1.22.6 — stock income evidence, next benefit blocks and StaxxHub 3.4
+
+- **Actual dividend cash:** optional, read-only, rate-bounded reconciliation of matching cash stock events from Torn API `user/log?cat=134` using the player's existing key. Full or scoped log permission is needed; when absent, receipts remain unverified rather than assumed zero. Imported log IDs deduplicate, and cash entries are stored only on-device.
+- **Next stock block:** ranks extra shares and modelled cash to qualify for the next benefit using recently verified holdings, share price, the saved protected capital reserve, and actual cash on hand when available. Utility benefits remain unpriced, stock risk and delayed qualification are disclosed, and no shares are bought by the script.
+- **Income truth:** verified stock cash, manual income, locally recorded trade P/L and estimated future income remain separate. Don't double-count manually entered stock payouts that were also matched from Torn logs.
+- **StaxxHub 3.4:** shared daily pending/checked/API-verified completion checklist and player-chosen review-session lengths (Any, 5, 10, 15, 30, 60 min). Urgency and actual deadlines take precedence; no gameplay is automated.
+- Permanent install URL is unchanged. ProfitStaxx 1.22.6 shares the byte-identical StaxxHub 3.4 with Company Helper 1.25.5 and Happy Jump Preview 0.31.5. All source-only tests do not replace device-level TornPDA QA.
+
 ## v1.17.0 — faster evidence-based foreground market autopilot
 
 - **Fresh quick-scan quotes stay eligible** for the ranked action queue even when the previous comprehensive scan is older than eight minutes. Each suggested deal still requires an independently observed quote less than eight minutes old.
