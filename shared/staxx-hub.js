@@ -584,6 +584,7 @@
       const host=root.querySelector('#staxx-hub-activity');if(!host)return;
       host.replaceChildren();
       host.append(node('p','staxx-trendnote','API logs are verified events; snapshots are observed changes; manual entries are labelled locally recorded. Nothing here confirms a suggested action was completed.'));
+      let shown=0;
       for(const event of activity.slice(0,30)){
         const e=entries.find(x=>x.id===event.tool);
         if(!e)continue;
@@ -594,9 +595,9 @@
         const when=node('time','',new Date(event.at).toLocaleString('en-GB'));row.append(when);
         const go=node('button','staxx-overview-switch','View '+e.label);go.type='button';
         if(event.section){go.dataset.hubSectionTool=event.tool;go.dataset.hubSectionTab=event.section;}else go.dataset.openStaxx=event.tool;
-        row.append(go);host.append(row);
+        row.append(go);host.append(row);shown++;
       }
-      if(!host.children.some(x=>x.className==='staxx-overview-card'))host.append(node('p','staxx-empty','No source-backed events recorded yet. Activity appears after a helper observes a confirmed log, snapshot change, or local record.'));
+      if(!shown)host.append(node('p','staxx-empty','No source-backed events recorded yet. Activity appears after a helper observes a confirmed log, snapshot change, or local record.'));
     }
     function renderTasks(){
       if(!taskList)return;
