@@ -1,6 +1,30 @@
-# StaxxHub 2.9 integration
+# StaxxHub 3.0 integration
 
 Author: IamEEKY. Read-only visual launcher for Torn PDA. The canonical implementation lives in `shared/staxx-hub.js` and is bundled directly into each participating userscript. No remote `@require` dependency is needed.
+
+## Find and section deep links (3.0)
+
+The header **Find** button and each active tool's own Find button search a single local index of installed tools, registered sections, unsnoozed/undismissed alerts and source-provided next actions. The search runs entirely on-device; no additional Torn API call, network request or saved search history is introduced. Cached results are marked **Last observed**. Results are selected using the same read-only `staxx:open` / existing alert routing.
+
+Tools can offer safe in-tool section destinations by registering validated section identifiers:
+
+```js
+document.dispatchEvent(new CustomEvent('staxx:register', {
+  detail: {id:'my-next-staxx',label:'NextStaxx',
+    sections:[{id:'overview',label:'Today'},{id:'history',label:'History'}]}
+}));
+document.addEventListener('staxx:open', event=>{
+  if(event.detail?.id!=='my-next-staxx')return;
+  // Existing alertId has priority; otherwise choose a validated known section.
+  if(event.detail.alertId)showAlert(event.detail.alertId);
+  else if(['overview','history'].includes(event.detail.section))showSection(event.detail.section);
+  openExistingPanel();
+});
+```
+
+On a tool's **Find** button, first close its existing panel and publish `staxx:panel` with `open:false`, then dispatch `new CustomEvent('staxx:find')`. The shared hub opens Find with the current page's locally known data. It never opens multiple tools or submits any Torn gameplay action.
+
+The built-in `profit`, `company` and `happy` section lists match their current tab IDs. Company Helper navigation from other Torn pages uses the existing `/companies.php` route with a short-lived session handoff. Alert focus is prioritised over a section, and only the named destination is changed.
 
 ## Shared usability state (2.9)
 
