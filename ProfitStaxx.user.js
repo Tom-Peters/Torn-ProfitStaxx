@@ -1689,6 +1689,37 @@
     return h+'</div>';
   }
 
+  function renderStockCashReceipts(){
+    const rows=stockCashReceipts(30),total=rows.reduce((n,x)=>n+Number(x.amount),0);
+    let html='<div class="card"><h3>Verified cash stock dividends · last 30 days</h3>'+
+      '<div class="statrow"><div class="stat"><small>Matched Torn log receipts</small><b>'+rows.length+'</b></div>'+
+      '<div class="stat"><small>Cash from matched logs</small><b>'+fmt(total)+'</b></div></div>'+
+      '<p class="muted">Only money receipts from Torn user/log stock category 134 count here. Full access (or matching custom log permission) is needed. Unavailable data is not proof of zero income.</p>'+
+      '<div class="toolbar"><button class="btn secondary" data-action="stock-log-sync" '+(stockLogStatus.busy||state.settings.stockLogSync===false?'disabled':'')+'>'+
+        (stockLogStatus.busy?'Reading logs…':'Sync stock cash logs')+'</button>'+
+      '<button class="btn secondary" data-action="stock-log-toggle">'+(state.settings.stockLogSync===false?'Enable':'Disable')+' log checks</button></div>';
+    if(stockLogStatus.error)html+=notice(stockLogStatus.error,true);
+    else if(state.stockLogCheckedAt)html+='<p class="muted">Last checked '+age(state.stockLogCheckedAt)+(stockLogStatus.partial?' · partial log coverage (3-page cap)':'')+(stockLogStatus.unparsed?' · '+stockLogStatus.unparsed+' entries not safely parsed':'')+'.</p>';
+    else html+='<p class="muted">No verified dividend log check yet.</p>';
+    for(const x of rows.slice(0,6))html+='<div class="line"><span>'+esc(x.stock||'Cash dividend')+' · '+new Date(x.at).toLocaleDateString('en-GB')+'</span><b>'+fmt(x.amount)+'</b></div>';
+    return html+'</div>';
+  }
+  function renderStockBlockRanking(){
+    const rows=stockBlockOpportunities();
+    let h='<div class="card"><h3>Best next stock benefit blocks</h3>'+
+      '<p class="muted">Fresh holdings and stock quotes, protected capital reserve, and verified cash-on-hand when available. Marginal shares are the difference to the next block, not a new full-block purchase.</p>';
+    if(!rows.length)return h+'<p class="muted">Current holdings and quotes are needed. Refresh Stocks to rank without guessing.</p></div>';
+    h+='<p class="muted">Spendable cap '+fmt(rows[0].cashCap)+' · '+(liveWalletCashV113()===null?'based on saved trading capital (wallet not verified)':'also capped by observed Torn cash')+'.</p>';
+    for(const x of rows.slice(0,6)){
+      h+='<div class="line"><strong>'+esc(x.acronym)+' · '+fmt(x.cost)+'</strong><span class="pill">'+(x.affordable?'Within cap':'Over cap')+'</span></div>'+
+        '<p class="muted">Owned '+x.owned.toLocaleString('en-GB')+' · next increment needs '+x.need.toLocaleString('en-GB')+
+        ' shares · '+(x.annual===null?'Benefit value unpriced':'Modelled annual cash per earned increment '+fmt(x.annual)+
+        ' · marginal cash yield '+pct(x.marginalYield))+
+        ' · excludes eligibility delay and share-price movements.</p>';
+    }
+    return h+'<button class="btn secondary" data-action="stockpage">Inspect stock exchange</button></div>';
+  }
+
   function renderStockPanel(){
     const rows=stockRows(),reported=reportedReadyDividends(),due=dueDividends();
     let h='<div class="toolbar"><button class="btn" data-action="stockrefresh" '+(stockState.loading?'disabled':'')+'>'+(stockState.loading?'Refreshing…':'Refresh stocks')+
@@ -1696,6 +1727,8 @@
       notice('Block costs and share prices are from Torn API v2. Annual yield is shown only for fixed cash dividends; price appreciation is excluded. Selling shares incurs a 0.1% fee.');
     if(stockState.error)h+=notice(stockState.error,true);
     h+=stockWatchPanel();
+    h+=renderStockBlockRanking();
+    h+=renderStockCashReceipts();
     if(stockSignals().length)h+='<div class="card"><h3>Stock price targets reached</h3>'+stockSignals().map(x=>'<div class="line" id="ps-alert-'+esc(x.id)+'"><span>'+esc(x.title)+' · '+esc(x.why)+'</span><button class="btn secondary" data-action="stockpage">Inspect</button></div>').join('')+'</div>';
     if(!rows.length)return h+'<div class="empty">Press Refresh to load live stocks.</div>';
     h+='<div class="statrow"><div class="stat"><small>Market value of owned shares</small><b>'+(stockState.ownedAt?fmt(rows.reduce((n,x)=>n+x.shares*x.p,0)):'Limited key needed')+'</b></div>'+
@@ -1844,7 +1877,7 @@
       rentYield=asset>0?100*rentAnnual/asset:null,
       usable=Math.max(0,number(s.capital)*(1-number(s.reservePct)/100)-openCost());
     const liveStock=stockState.at&&now()-stockState.at<30*60000;
-    const stocks=liveStock?stockRows().filter(x=>x.annualYield!==null&&x.block*x.p>0&&x.block*x.p<=usable):[];
+    const stocks=stockBlockOpportunities().filter(x=>x.affordable&&x.annual!==null);
     const top=stocks[0];
     let html='<div class="card"><h3>Passive-income comparison</h3>'+
       '<p class="muted">Bank and property amounts are your own inputs. Stock block costs and fixed-cash yield come from recent Torn quotes. The returns have different risks and lock-up conditions.</p>'+
@@ -1856,8 +1889,8 @@
     html+='<div class="line"><span>Bank: yearly interest at entered rate</span><b>'+(bank&&bankApr?fmt(bankAnnual):'Add bank quote')+'</b></div>'+
       '<div class="line"><span>Rent: yearly net / annual yield</span><b>'+(asset&&weeklyRent?fmt(rentAnnual)+' / '+pct(rentYield):'Add rental terms')+'</b></div>'+
       '<div class="line"><span>Cash deployable under trading reserve</span><b>'+fmt(usable)+'</b></div>'+
-      (top?'<div class="line"><span>Highest fixed-cash stock yield within cash cap</span><b>'+esc(top.acronym)+' · '+pct(top.annualYield)+'</b></div>'+
-        '<p class="muted">First block costs '+fmt(top.block*top.p)+'. Indicative yield excludes stock depreciation, cash-flow interruption and foregone alternatives.</p>':
+      (top?'<div class="line"><span>Highest fixed-cash stock yield within cash cap</span><b>'+esc(top.acronym)+' · '+pct(top.marginalYield)+'</b></div>'+
+        '<p class="muted">Next increment: '+top.need.toLocaleString('en-GB')+' shares for '+fmt(top.cost)+'. Marginal yield is based on additional cash only; eligibility delay and share-price losses are excluded.</p>':
         '<p class="muted">'+(liveStock?'No priced cash-dividend block fits the available trading allocation.':'Stock quote comparison unavailable or over 30 minutes old. Open Stocks to refresh first.')+'</p>')+
       '<div class="toolbar"><button class="btn secondary" data-tab="stocks">Review stocks</button>'+
       '<button class="btn secondary" data-action="incomepage" data-source="bank">Open bank</button></div></div>';
