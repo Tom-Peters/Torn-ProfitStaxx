@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.02.1** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.02.2** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -33,6 +33,15 @@ This file is the single source of truth for *cross-script* behaviour, design and
 - Tool dashboards are bounded overlays with a small header, compact **top** navigation and scrollable content. Avoid large persistent bottom bars. Respect mobile safe areas and browser zoom.
 - A single launcher (the S tab) opens a left sidebar of ~302 px; it disappears **while a tool is open or the drawer is expanded**, returns when closed, and can be repositioned vertically. Never overlay main controls with duplicate floating action buttons.
 - Sidebar offers registered tool navigation, combined overview, notifications, urgency, custom snoozes, dismissal and persistent ordering. A proposed always-visible mini-summary remains **optional, not enabled by default**.
+
+## StaxxHub 2.9 — unified Simple/Advanced navigation and first-run guide (2026-11-02)
+
+- The default is **Simple** mode across **all** active tools. A persistent `staxx-hub-mode-v1` value (`simple` or `advanced`) determines which top-navigation tabs appear; hide secondary navigation only, **never remove or skip its underlying calculations**. A contextual **More** control must reveal all hidden tabs, and the current tab must remain accessible after a deep link.
+- **Advanced** displays all existing sections and up to six ranked actions on StaxxHub Today. Simple shows the most useful four to six tabs in each tool, the top two Today actions and the existing optional Show more; both modes retain all Alerts, Settings, diagnostics and drill-down destinations.
+- The hub **More → Display** button changes the shared mode, persists the choice locally and dispatches `staxx:mode` with `{detail:{mode:'simple'|'advanced'}}`; every active userscript listens and re-renders only its visible navigation. It must not clear saved account data or reset an open editor.
+- New installations show a compact dismissible **Welcome** guide in StaxxHub Today. Store dismissal in `staxx-hub-onboarded-v1`; More provides **Show getting-started guide** to replay it. No forced modal, extra API calls, or onboarding steps that gate gameplay.
+- Keep the existing v2.8 Today's actions, tool shortcuts, alert filters, one-tap routes, 302 px drawer, safe mobile layout, page-scroll preservation and unified navy/cyan design. Alert and action filtering remains source-driven, not based solely on whether a navigation tab is hidden.
+- Every suite-wide change must keep the four current active/snapshot hub regions byte-identical to `shared/staxx-hub.js`, check JavaScript parsing, and update tests tied to the current version and snapshot. The Happy Jump stable installer remains pinned.
 
 ## StaxxHub 2.8 — simple everyday navigation (2026-11-02)
 
