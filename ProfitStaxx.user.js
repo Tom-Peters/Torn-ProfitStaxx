@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.22.0
+// @version      1.22.1
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -260,7 +260,7 @@
       const old=storedUse(key);
       usage=usage.filter(x=>x&&x.key!==key&&now-Number(x.last)<30*86400000);
       const record={key,tool,section:section||'',count:Math.min(99,(old?.count||0)+1),last:now};
-      usage.push(record);usage=usage.slice(-50);saveLocal(usageKey,usage);
+      usage.push(record);usage=usage.slice(-50);saveLocal(usageKey,usage);renderFrequent();
     }
     function storedUse(key){return usage.find(x=>x.key===key);}
     function openTool(id,alertId,section){
@@ -902,7 +902,7 @@
       const entry={headline:String(d.headline||"").slice(0,90),
         metrics:Array.isArray(d.metrics)?d.metrics.slice(0,4).map(x=>({label:String(x.label||"").slice(0,36),value:String(x.value??"—").slice(0,45)})):[],
         updated:Number(d.updated)||Date.now()};
-      if(JSON.stringify(summaries[id])!==JSON.stringify(entry)){summaries[id]=entry;recordTrend(id,entry);remember();if(expanded&&overviewShown)showOverview();if(expanded)renderDashboard();}
+      if(JSON.stringify(summaries[id])!==JSON.stringify(entry)){summaries[id]=entry;recordTrend(id,entry);remember();if(expanded&&overviewShown)showOverview();renderDashboard();}
     });
     window.setInterval(()=>{if(!document.hidden&&entries.some(e=>Number(controls[e.id]?.snoozeUntil)>0&&Number(controls[e.id]?.snoozeUntil)<=Date.now())){for(const e of entries){if(Number(controls[e.id]?.snoozeUntil)>0&&Number(controls[e.id]?.snoozeUntil)<=Date.now()){controls[e.id]={...controls[e.id],snoozeUntil:0};saveLocal("staxx-hub-alert-control-"+e.id,controls[e.id]);}}render();}else if(!document.hidden&&expanded&&entries.some(e=>activeNotice(e.id)?.dueAt)){render();}},60000);
     window.addEventListener?.("hashchange",renderContext);
@@ -927,7 +927,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.22.0';
+  const VERSION = '1.22.1';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
