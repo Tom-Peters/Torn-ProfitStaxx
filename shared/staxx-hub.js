@@ -340,7 +340,7 @@
       if(tokens.length){
         results=results.filter(item=>{
           const hay=(item.title+' '+item.detail+' '+item.owner).toLocaleLowerCase();
-          return tokens.every(word=>hay.includes(word));
+          return tokens.every(word=>hay.includes(word)||(word.length>4&&word.endsWith('s')&&!word.endsWith('ss')&&hay.includes(word.slice(0,-1))));
         });
         results.sort((a,b)=>{
           const score=item=>(item.title.toLocaleLowerCase()===query?0:item.title.toLocaleLowerCase().startsWith(query)?1:2)*10+
