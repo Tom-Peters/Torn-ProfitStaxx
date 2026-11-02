@@ -233,3 +233,36 @@ test('3.3 context shortcut targets a verified section and leaves the native page
  h.emit('staxx:actions',{id:'happy',updated:Date.now(),items:[]});
  assert.equal(h.q['#staxx-hub-page-shortcut'].children.length,0);
 });
+
+
+test('3.4 session budget ranks fitting reviews only within matching urgency and due time',()=>{
+ const h=fixture(),now=Date.now();
+ h.emit('staxx:register',{id:'profit',freshnessMs:900000});
+ h.emit('staxx:actions',{id:'profit',updated:now,items:[
+  {id:'long-review',title:'Long opportunity',status:'review',priority:51,reviewMinutes:30},
+  {id:'short-review',title:'Quick opportunity',status:'review',priority:47,reviewMinutes:5},
+  {id:'urgent-review',title:'Important urgent action',status:'urgent',priority:1,reviewMinutes:40}
+ ]});
+ const options=h.q['#staxx-hub-session'].children[0].children.find(x=>x.className==='staxx-session-options');
+ assert.ok(options);
+ h.root.fire('click',options.children.find(x=>x.dataset.sessionMinutes==='5'));
+ assert.equal(JSON.parse(h.local.getItem('staxx-hub-session-minutes-v1')),5);
+ const rows=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
+ assert.equal(rows[0].dataset.openAlertId,'urgent-review');
+ assert.equal(rows[1].dataset.openAlertId,'short-review');
+ h.root.fire('click',h.q['#staxx-hub-task-filters'].children.find(x=>x.dataset.taskFilter==='fit'));
+ assert.deepEqual(Array.from(h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId),x=>x.dataset.openAlertId),['short-review']);
+});
+test('3.4 only current matched API log can clear matching action for today',()=>{
+ const h=fixture(),now=Date.now();
+ h.emit('staxx:register',{id:'happy',freshnessMs:900000});
+ h.emit('staxx:actions',{id:'happy',updated:now,items:[{id:'event-xanax',title:'Take Xanax now',status:'now',priority:90,reviewMinutes:1}]});
+ h.emit('staxx:activity',{id:'happy',events:[{id:'reported',at:now,source:'recorded',title:'I say I did this',completedActionId:'event-xanax'}]});
+ assert.equal(h.q['#staxx-hub-best'].children.find(x=>x.dataset.openAlertId)?.dataset.openAlertId,'event-xanax');
+ h.emit('staxx:activity',{id:'happy',events:[{id:'log-matched',at:now,source:'api',title:'Verified pill',completedActionId:'event-xanax'}]});
+ assert.equal(h.q['#staxx-hub-best'].children.find(x=>x.dataset.openAlertId),undefined);
+ const check=h.q['#staxx-hub-checklist'].children[0];
+ assert.ok(check.children.some(x=>/Verified complete 1/.test(x.textContent)));
+ h.emit('staxx:actions',{id:'happy',updated:now+100,items:[{id:'event-xanax',title:'Next dose on new schedule',status:'now',priority:90,reviewMinutes:1}]});
+ assert.equal(h.q['#staxx-hub-best'].children.find(x=>x.dataset.openAlertId)?.dataset.openAlertId,'event-xanax');
+});
