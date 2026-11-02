@@ -83,11 +83,13 @@ function mounted(){
   for(const [name,tag] of Object.entries({
     '#staxx-hub-toggle':'button','#staxx-hub-veil':'div','#staxx-hub-drawer':'aside',
     '#staxx-hub-tools':'div','#staxx-hub-alerts':'div','#staxx-hub-tasks':'section','#staxx-hub-count':'span',
-    '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section','[data-diagnostics]':'button','[data-arrange]':'button','#staxx-hub-total':'span'
+    '#staxx-hub-overview':'section','[data-overview]':'button','#staxx-hub-diagnostics':'section','[data-diagnostics]':'button','[data-arrange]':'button','#staxx-hub-total':'span',
+    '#staxx-hub-find':'section','#staxx-hub-find-input':'input','#staxx-hub-find-results':'section','#staxx-hub-find-status':'p','[data-hub-find]':'button','.staxx-scroll':'div'
   }))q[name]=new Element(tag);
   q["[data-overview]"].setAttribute("data-overview","");
   q["[data-diagnostics]"].setAttribute("data-diagnostics","");
   q["[data-arrange]"].setAttribute("data-arrange","");
+  q["[data-hub-find]"].setAttribute("data-hub-find","");
   const doc={
     readyState:'complete',hidden:false,mounted:null,__selectors:q,
     getElementById:()=>null,
@@ -105,8 +107,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v2.9 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v2\.9/);
+test('v3.0 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v3\.0/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -255,4 +257,75 @@ test('Today-first navigation keeps deep links and advanced options accessible',(
   assert.match(source,/switchHubView\("today"\)/);
   assert.match(source,/data-hub-section/);
   assert.match(source,/if\(scroll\)scroll.scrollTop=0/);
+});
+
+test('v3.0 Find indexes active tool sections, alert IDs and verified recommendations',()=>{
+  const h=mounted();
+  h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:register',{id:'company'});
+  h.emit('staxx:notice',{id:'profit',count:1,summary:'Review a medical trade',alerts:[{id:'deal-91',title:'Medical supply order',detail:'Buy only after checking the price'}]});
+  h.emit('staxx:actions',{id:'profit',updated:Date.now(),items:[{id:'stock-scan',title:'Review profitable stocks',status:'now',priority:85}]});
+  h.root.fire('click',h.q['[data-hub-find]']);
+  assert.equal(h.q['#staxx-hub-find'].hidden,false);
+  assert.equal(h.q['.staxx-scroll'].hidden,true);
+  const input=h.q['#staxx-hub-find-input'],results=h.q['#staxx-hub-find-results'];
+  input.value='stock';input.fire('input');
+  assert.ok(results.children.some(x=>x.dataset.hubSectionTool==='profit'&&x.dataset.hubSectionTab==='stocks'));
+  assert.ok(results.children.some(x=>x.dataset.openAlertId==='stock-scan'));
+  input.value='medical';input.fire('input');
+  const hit=results.children.find(x=>x.dataset.openAlertId==='deal-91');
+  assert.ok(hit);
+  let action=null;h.document.addEventListener('staxx:open',e=>action=e.detail);
+  h.root.fire('click',hit);
+  assert.equal(action.id,'profit');
+  assert.equal(action.alertId,'deal-91');
+  assert.equal(h.q['#staxx-hub-find'].hidden,true);
+});
+
+test('v3.0 section routing validates requested tabs, reuses one panel and supports registered future tools',()=>{
+  const h=mounted();
+  h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:register',{id:'other-tool',label:'Other Tool',sections:[{id:'ledger',label:'Transaction ledger'},{id:'<unsafe>',label:'Bad route'}]});
+  h.root.fire('click',h.q['[data-hub-find]']);
+  const input=h.q['#staxx-hub-find-input'],results=h.q['#staxx-hub-find-results'];
+  input.value='stocks';input.fire('input');
+  const button=results.children.find(x=>x.dataset.hubSectionTab==='stocks');
+  assert.ok(button);
+  let routed=null;h.document.addEventListener('staxx:open',e=>routed=e.detail);
+  h.root.fire('click',button);
+  assert.equal(routed.id,'profit');
+  assert.equal(routed.section,'stocks');
+  assert.equal(routed.alertId,null);
+  h.emit('staxx:find');
+  input.value='ledger';input.fire('input');
+  assert.ok(results.children.some(x=>x.dataset.hubSectionTool==='other-tool'&&x.dataset.hubSectionTab==='ledger'));
+  input.value='unsafe';input.fire('input');
+  assert.ok(!results.children.some(x=>x.dataset.hubSectionTab==='<unsafe>'));
+});
+
+test('Find suppresses dismissed alerts and does not treat stale actions as live urgent recommendations',()=>{
+  const h=mounted();h.emit('staxx:register',{id:'profit'});
+  h.emit('staxx:notice',{id:'profit',count:1,summary:'Old trade review',alerts:[{id:'deal-17',title:'Review item 17'}]});
+  h.emit('staxx:actions',{id:'profit',updated:Date.now()-3*3600000,items:[{id:'stale-review',title:'Review old quotes',status:'urgent',priority:100}]});
+  h.root.fire('click',h.q['[data-hub-find]']);
+  const input=h.q['#staxx-hub-find-input'],results=h.q['#staxx-hub-find-results'];
+  input.value='old';input.fire('input');
+  assert.ok(results.children.some(x=>x.children?.some(n=>/Last observed/.test(n.textContent))));
+  const alert=h.q['#staxx-hub-alerts'].children[0];
+  h.root.fire('click',alert.children.find(x=>x.className==='staxx-alert-actions').children[0]);
+  input.value='item 17';input.fire('input');
+  assert.ok(!results.children.some(x=>x.dataset.openAlertId==='deal-17'),'dismissed alerts must not reappear through Find');
+  h.document.dispatchEvent({type:'keydown',key:'Escape',preventDefault(){}});
+  assert.equal(h.q['#staxx-hub-find'].hidden,true);
+  assert.equal(h.q['#staxx-hub-drawer'].hidden,false,'Escape should close Find first');
+});
+
+test('Find is local, accessible and never introduces gameplay submission',()=>{
+  assert.match(source,/data-hub-find aria-label=/);
+  assert.match(source,/id="staxx-hub-find-input"/);
+  assert.match(source,/textContent=String\(value\)/);
+  assert.match(source,/staxx:find/);
+  assert.match(source,/staxx-open-company-section/);
+  assert.match(source,/staxx-open-company-at/);
+  assert.doesNotMatch(source,/fetch\s*\(\s*["']https:\/\/api\.torn\.com/);
 });
