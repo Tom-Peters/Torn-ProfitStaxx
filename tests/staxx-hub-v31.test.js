@@ -12,7 +12,7 @@ function fixture(){
     replaceChildren(...children){this.children=[...children];}
     get childElementCount(){return this.children.length;}
     setAttribute(k,v){this.attributes[k]=String(v);}
-    hasAttribute(k){return k in this.attributes;}
+    hasAttribute(k){const key=k.replace(/^data-/,'').replace(/-([a-z])/g,(_,c)=>c.toUpperCase());return k in this.attributes||(k.startsWith('data-')&&key in this.dataset);}
     addEventListener(k,fn){(this.handlers[k]??=[]).push(fn);}
     fire(k,target=this){for(const fn of this.handlers[k]||[])fn({target,key:'',pointerId:1,clientY:300,button:0,preventDefault(){}});}
     closest(selector){return selector==='button'&&this.tag==='button'?this:null;}
@@ -193,7 +193,7 @@ test('3.3 explicit relevance votes are bounded to priority within the same urgen
  ]});
  let rows=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
  assert.equal(rows[0].dataset.openAlertId,'high');
- const less=h.q['#staxx-hub-tasks'].children.find(x=>x.dataset.voteId==='high'&&x.dataset.voteValue==='-1');
+ const less=h.q['#staxx-hub-tasks'].children.flatMap(x=>x.children||[]).find(x=>x.dataset.voteId==='high'&&x.dataset.voteValue==='-1');
  h.root.fire('click',less);
  assert.equal(JSON.parse(h.local.getItem('staxx-hub-feedback-v1')||'{}')['profit/high']?.vote,-1,'feedback is stored only on this device');
  rows=h.q['#staxx-hub-tasks'].children.filter(x=>x.dataset.openAlertId);
