@@ -1,5 +1,12 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-02 — StaxxHub 3.4 daily checklist and money-truth upgrade
+
+- Five coordinated enhancements: API-confirmed checklist completions separate from review markers; on-device session budget/quick-fit ordering; ProfitStaxx marginal stock-block affordability ranks; read-only stock cash-receipt log reconciliation when Full access is already available; and separate verified receipts vs locally recorded ledger/income vs estimated offers.
+- Today's recommendations only close on an exact current matching verified Torn API event, never on predicted actions or time passing. Changes reopen the task. No gameplay is executed automatically.
+- ProfitStaxx **1.22.6**, Company Helper **1.25.5** and Happy Jump Preview **0.31.5** share canonical StaxxHub 3.4; the older Happy Jump stable remains pinned. Device UI verification remains separate from CI.
+
+
 ## 2026-11-02 — ProfitStaxx stock benefit status correction
 
 - ProfitStaxx 1.22.5 separates API-reported active dividends from user-required actions. Passive benefits never generate stock-claim prompts, and manually collected active dividends only generate verification reminders when the player explicitly enables the option in Stocks.
