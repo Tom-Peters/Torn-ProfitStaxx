@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.20.0
+// @version      1.20.1
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -505,8 +505,8 @@
       const b=e.target.closest("button");if(!b)return;
       if(b.dataset.hubView){switchHubView(b.dataset.hubView);return;}
       if(b.dataset.hubGuideDone){saveLocal('staxx-hub-onboarded-v1',true);renderWelcome();return;}
-      if(b.dataset.hubGuide){saveLocal('staxx-hub-onboarded-v1',false);switchHubView('today');renderWelcome();return;}
-      if(b.dataset.hubMode){uiMode=uiMode==='simple'?'advanced':'simple';saveLocal('staxx-hub-mode-v1',uiMode);expandedTaskList=false;publishMode();render();return;}
+      if(b.hasAttribute('data-hub-guide')){saveLocal('staxx-hub-onboarded-v1',false);switchHubView('today');renderWelcome();return;}
+      if(b.hasAttribute('data-hub-mode')){uiMode=uiMode==='simple'?'advanced':'simple';saveLocal('staxx-hub-mode-v1',uiMode);expandedTaskList=false;publishMode();render();return;}
       if(b.dataset.toggleTasks){expandedTaskList=!expandedTaskList;renderTasks();return;}
       if(b.dataset.contextToggle!==undefined){saveLocal("staxx-hub-context-v1",!contextEnabled());renderContext();return;}
       if(b.dataset.dismissStaxx){const id=b.dataset.dismissStaxx,n=notices[id];if(n){controls[id]={...controls[id],dismissed:n.fingerprint,snoozeUntil:0};saveLocal("staxx-hub-alert-control-"+id,controls[id]);render();}return;}
