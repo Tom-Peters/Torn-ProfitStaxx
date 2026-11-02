@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.02.7** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.02.8** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -33,6 +33,13 @@ This file is the single source of truth for *cross-script* behaviour, design and
 - Tool dashboards are bounded overlays with a small header, compact **top** navigation and scrollable content. Avoid large persistent bottom bars. Respect mobile safe areas and browser zoom.
 - A single launcher (the S tab) opens a left sidebar of ~302 px; it disappears **while a tool is open or the drawer is expanded**, returns when closed, and can be repositioned vertically. Never overlay main controls with duplicate floating action buttons.
 - Sidebar offers registered tool navigation, combined overview, notifications, urgency, custom snoozes, dismissal and persistent ordering. A proposed always-visible mini-summary remains **optional, not enabled by default**.
+
+## Stock benefit status versus manual claims (2026-11-02)
+
+- Torn `user/stocks` bonus `available` is an API-reported benefit status, not independent evidence that a player still needs to claim anything. Never derive an urgent claim instruction solely from this field or from cached holdings.
+- Filter out passive stock perks from withdrawal reminders. Check that active-benefit metadata and personal holdings are both present and fresh; refresh clears a resolved benefit when the availability flag disappears.
+- Default manual-withdrawal reminders **off** with a clear opt-in within ProfitStaxx Stocks; in the opt-in flow, describe remaining active dividends as **verify on Torn**, not a proven overdue obligation. Never execute a claim. Display API-reported status separately for informational use.
+- Suppress the opt-out claim task consistently in source alerts, Hub notifications, badge counts and action recommendations, without affecting non-stock alerts or the underlying stock analysis.
 
 ## StaxxHub 3.3 — evidence-aware personal command centre (2026-11-02)
 
