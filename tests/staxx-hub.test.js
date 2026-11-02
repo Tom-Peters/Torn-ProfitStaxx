@@ -112,8 +112,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,local,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v3.2 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v3\.2/);
+test('v3.3 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v3\.3/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -360,7 +360,7 @@ test('StaxxHub 3.2 also exposes a Checked filter and bounds review-time estimate
     {id:'optional',title:'Inspect later',status:'review',reviewMinutes:999}
   ]});
   const filter=h.q['#staxx-hub-task-filters'],tasks=h.q['#staxx-hub-tasks'];
-  assert.equal(filter.children.length,5);
+  assert.equal(filter.children.length,6);
   assert.ok(tasks.children.some(x=>x.dataset.openAlertId==='do'));
   h.root.fire('click',filter.children.find(x=>x.dataset.taskFilter==='soon'));
   assert.equal(tasks.children.filter(x=>x.dataset?.openAlertId).length,1);
