@@ -804,6 +804,15 @@
       renderContext();
     });
     document.addEventListener('staxx:mode',e=>{const m=e.detail?.mode;if((m==='simple'||m==='advanced')&&m!==uiMode){uiMode=m;saveLocal('staxx-hub-mode-v1',m);expandedTaskList=false;render();}});
+    document.addEventListener('staxx:visit',e=>{
+      const d=e.detail||{},id=d.id;
+      if(!idOk(id)||!active[id])return;
+      const entry=entries.find(x=>x.id===id),routes=sectionsByTool[id]||entry?.sections||[];
+      if(!routes.some(route=>route[0]===d.section))return;
+      const key=id+'/'+d.section,prior=storedUse(key);
+      if(prior&&Date.now()-Number(prior.last)<10000)return;
+      recordUse(id,d.section);
+    });
     document.addEventListener("staxx:register",e=>{
       const d=e.detail||{},id=d.id;if(!idOk(id))return;
       let entry=entries.find(x=>x.id===id);
