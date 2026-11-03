@@ -22,6 +22,12 @@
       "entrypoint": "Torn-Happy-Jump-Helper-preview.user.js",
       "channel": "preview",
       "versioned_snapshot": true
+    },
+    {
+      "id": "war",
+      "repository": "Torn-WarStaxx",
+      "entrypoint": "WarStaxx.user.js",
+      "channel": "stable"
     }
   ],
   "pinned": [
@@ -32,5 +38,5 @@
       "reason": "Preserve validated stable fallback; no StaxxHub 2.1 requirement"
     }
   ],
-  "onboarding": "For new Torn scripts, add active entry, copy AGENTS.md, bundle canonical StaxxHub, publish staxx:register/open/panel/summary events and run shared parity workflow."
+  "onboarding": "For each new Torn tool, register source-grounded Hub events, bundle canonical StaxxHub, add it to the manifest, run shared sync and each repository's tests. WarStaxx additionally requires read-only war history, clearly distinguished FF estimates and real in-war activity snapshots."
 }
