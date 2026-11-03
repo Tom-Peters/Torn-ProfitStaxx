@@ -1,9 +1,17 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.03.1** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.03.2** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
 This file is the single source of truth for *cross-script* behaviour, design and integration. Each repository keeps a small root-level `AGENTS.md` that links to this document and tells coding assistants to read the latest revision before changing Torn code. **Updating this file does not automatically change running userscripts**. Shared implementation changes must be synchronized, checked, committed and released in all affected repositories.
+
+## Installed-tool visibility and injection diagnostics (StaxxHub 3.5)
+
+- The four publicly released suite tools (`profit`, `company`, `happy`, `war`) are listed as known launch destinations by every current StaxxHub bundle, **even when a particular tool has not executed on the current Torn page**. A known entry is not proof of execution or successful injection: a tool is **active** only after its own `staxx:register` event.
+- When a known tool is inactive, its entry must say **Not running** and opening it must show an explicit diagnostic instruction inside StaxxHub, never silently fail or imply installation is complete.
+- New fifth-plus tools remain dynamic registrations, using `staxx:register`. Persisted entries are deduplicated against known entries; do not create duplicate cards on migration. Maintain exactly one shared S launcher per page.
+- Before attributing an absent running tool to JavaScript bugs, verify Torn PDA installed script version, enabled status, matched page, injection timing, permissions, and the browser DevTools **Scripts** view. Local test runners do not prove device-side injection.
+- Shared changes require a coordinated bump, identical bundle in all four repositories, and all preview snapshots/suite checks updated. WarStaxx should still provide its own independent startup probe and faction shortcut.
 
 ## Scope and inheritance
 1. Applies to ProfitStaxx, Torn Company Helper, Torn Happy Jump Helper, and **new** Torn tools. Retain project-specific calculations and features unless the task explicitly changes them.
