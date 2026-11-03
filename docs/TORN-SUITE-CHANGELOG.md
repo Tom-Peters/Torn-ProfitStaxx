@@ -1,5 +1,13 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-03 — WarStaxx joins StaxxHub as fourth tool
+
+- Created Torn-WarStaxx with stable install URL, shared launcher, multi-tab ranked-war command dashboard, live rosters, both sides' war history, incremental official report imports, local travel/activity observations, conservative target suggestions and per-member orders.
+- Added separate observed FF and modelled fair-fight comparisons, and an explicit opt-in FFScouter integration with independently supplied registered key and linked data policy. No unconfirmed opponent stats or historical travel facts are invented.
+- No automatic gameplay actions or cross-device faction chat/claim sync. All manual spies, API credentials, sampled data and orders stay local.
+- Added fourth repository to the suite manifest and cross-repository parity enforcement. Original three userscripts and canonical StaxxHub bundle are unchanged; Happy Jump stable remains pinned. CI cannot confirm TornPDA appearance without an on-device test.
+
+
 ## 2026-11-02 — StaxxHub 3.4 daily checklist and money-truth upgrade
 
 - Five coordinated enhancements: API-confirmed checklist completions separate from review markers; on-device session budget/quick-fit ordering; ProfitStaxx marginal stock-block affordability ranks; read-only stock cash-receipt log reconciliation when Full access is already available; and separate verified receipts vs locally recorded ledger/income vs estimated offers.
