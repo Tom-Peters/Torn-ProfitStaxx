@@ -1,5 +1,12 @@
 # Torn Staxx Suite — Shared Change Log
 
+## 2026-11-03 — StaxxHub 3.5 known-tool visibility and debugging
+
+- WarStaxx is enabled in Torn PDA screenshots but did not appear in StaxxHub. Root cause (script execution vs injection) remains unconfirmed: Hub's dynamic-only registration hid whether WarStaxx had executed.
+- Upgrade canonical launcher and the four active userscripts to list all four known suite entries with an explicitly distinct **Not running** status until registration is observed; clicking an inactive tool now opens an actionable in-Hub diagnostic rather than silently doing nothing.
+- Retain dynamic registration of future tools, deduplicate older local registry entries, preserve existing functionality and avoid extra floating buttons. Warn that CI/browser tests cannot validate script injection on the user's phone.
+
+
 ## 2026-11-03 — WarStaxx joins StaxxHub as fourth tool
 
 - Created Torn-WarStaxx with stable install URL, shared launcher, multi-tab ranked-war command dashboard, live rosters, both sides' war history, incremental official report imports, local travel/activity observations, conservative target suggestions and per-member orders.
