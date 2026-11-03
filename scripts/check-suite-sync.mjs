@@ -36,13 +36,16 @@ for(const [repo,path,hasSnapshot] of targets){
       }
     }
     if(embedded!==canonical)throw Error('Bundled StaxxHub differs from canonical after refresh (embedded '+embedded.length+' bytes; canonical '+canonical.length+')');
-    if(!body.includes('staxx-more-tabs')||!body.includes('staxx-hub-mode-v1')||!body.includes("staxx:mode"))
+    if(!body.includes('staxx-hub-mode-v1')||!body.includes("staxx:mode")||
+       (repo==='Torn-WarStaxx'?!body.includes('state.showMore'):!body.includes('staxx-more-tabs')))
       throw Error('Tool does not implement the shared Simple/Advanced navigation contract');
-    if(!body.includes('staxx:find')||!body.includes('data-hub-find')||!body.includes('e.detail.section'))
+    if(!body.includes('staxx:find')||!body.includes('data-hub-find')||
+       (repo==='Torn-WarStaxx'?!body.includes('detail.section'):!body.includes('e.detail.section')))
       throw Error('Tool does not implement the shared StaxxHub 3.0 Find contract');
     const control={ 'Torn-ProfitStaxx':'data-action="staxx-find"',
       'Torn-Company-Helper':'data-act="staxx-find"',
-      'Torn-Happy-Jump-Helper':"data-act='staxx-find'" }[repo];
+      'Torn-Happy-Jump-Helper':"data-act='staxx-find'",
+      'Torn-WarStaxx':'data-action="find"' }[repo];
     if(!control||!body.includes(control))throw Error('Missing in-tool Find button: '+repo);
     const localSource=body.slice(body.indexOf('\n})();',body.indexOf('/* StaxxHub v'))+6);
     if(!canonical.includes('StaxxHub v3.4')||!canonical.includes("staxx:activity")||
@@ -54,9 +57,9 @@ for(const [repo,path,hasSnapshot] of targets){
        !localSource.includes('stockBlockOpportunities')||!localSource.includes('stockCashReceipts')||
        !localSource.includes('stockLogSync')))
       throw Error('ProfitStaxx must preserve stock cash receipt reconciliation and marginal block analysis');
-    if(!localSource.includes('staxx:activity')||!localSource.includes('reviewMinutes'))
+    if(!(localSource.includes('staxx:activity')||(repo==='Torn-WarStaxx'&&localSource.includes("event('activity'")))||!localSource.includes('reviewMinutes'))
       throw Error('Active tool must publish source-backed activity and review-time estimates: '+repo);
-    if(!localSource.includes('staxx:visit'))
+    if(!(localSource.includes('staxx:visit')||(repo==='Torn-WarStaxx'&&localSource.includes("event('visit'"))))
       throw Error('Active tool must publish user-clicked section visits: '+repo);
     if(!canonical.includes('staxx-hub-dashboard')||!canonical.includes('staxx-hub-activity')||!canonical.includes('staxx-hub-usage-v1')||!canonical.includes('staxx-hub-source-status')||!canonical.includes('staxx-hub-daily')||!canonical.includes('staxx-hub-feedback-v1'))
       throw Error('Canonical hub must preserve dashboard, activity and local adaptive shortcuts');
@@ -72,4 +75,4 @@ for(const [repo,path,hasSnapshot] of targets){
   }catch(error){failures++;console.error('FAIL '+repo+'/'+path+': '+error.message);}
 }
 if(failures){console.error('Staxx suite drift detected. Sync canonical source to ALL active bundles.');exit(1);}
-console.log('All active Torn tools contain the current shared StaxxHub.');
+console.log('All four active Torn tools contain the current shared StaxxHub.');
