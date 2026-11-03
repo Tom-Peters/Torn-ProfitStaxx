@@ -1,5 +1,5 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.02.9** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.03.1** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
 
 **Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
 
@@ -173,3 +173,13 @@ Update this mapping if paths or release policy change; do not hardcode an obsole
 - Company Helper 1.9.0 extrapolates training stat shortfall only from dated working-stat observations; wage scenarios hold revenue/advertising constant and never claim that paying more earns stars. A next-star *historical pace* estimate may appear only with a meaningful record of Sunday star gains; never claim Torn exposes a reliable deterministic promotion formula.
 - Happy Jump 0.18.0 compares forecast gym gains per energy and incremental cash per 1,000 forecast stat gain, uses the actual planned refill event for timing, and distinguishes observed daily stat changes from straight-line 30/90-day scenarios. Suspend training recommendations on reported overdose; never override live user choices.
 - A suite update MUST preserve preview/snapshot body parity, pinned stable HJ installer, canonical shared Hub byte-for-byte parity, existing local data and read-only gameplay, then pass all affected regression suites and cross-repo sync checks.
+
+## WarStaxx 0.1 — fourth tool registration (2026-11-03)
+
+- Active fourth tool: **WarStaxx**, repository **Torn-WarStaxx**, entrypoint **WarStaxx.user.js**, registered tool ID **war**. Use the existing one-launcher StaxxHub; include the byte-identical canonical source and publish summary, actions, notices, panel, diagnostics and visit events. Add generic in-tool Find, Simple/Advanced tabs and local section routing. Preserve the original three tools and pinned Happy Jump stable installer unchanged.
+- Read-only official API access may collect both factions' public current and historical ranked-war information, rosters/statuses, war reports, and optional permitted faction attack data. Bound archival requests, enforce backoff and stop API work when Torn is hidden. Do not auto-attack, use consumables, trade, assign game positions or post in faction chat.
+- **Temporal provenance:** distinguish historic war results from player-online/travel behaviour observed *during a currently monitored war*. Completed report entries do not retrospectively reveal status or travel schedules. Every forecast must show its source, sample size, age and uncertainty.
+- **FF and battle statistics:** unknown stats remain unknown; accept verified/manual per-player spies, confirmed attack-log FF and clearly named external estimates. Actual FF from Torn attacks, manually supplied spy stats, and modelled FF must be visually separate. An FFScouter integration must be opt-in with the player's independently supplied registered key, third-party data-policy link, no silent key sharing, and no false per-hitter precision.
+- **Member planning:** show a distinct proposed task for each friendly member; never imply that an unverified matchup is safe. Local manual assignments take priority, and no local order is automatically distributed to other faction members. WarStaxx currently has no cross-device coordination backend.
+- **Cross-tool:** discovery in StaxxHub Today, Dashboard, Find, Tools and Alerts; explicit user-led navigation to Happy Jump, ProfitStaxx and Company Helper. Only share non-secret, read-only war context via events and never alter their unrelated core calculations or existing API key permissions.
+- Add WarStaxx to the canonical suite manifest and shared parity tests. Existing three tool entrypoints are not required to change if the canonical Hub implementation is unchanged. Treat CI and TornPDA live installation verification separately.
