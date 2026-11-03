@@ -112,8 +112,8 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,local,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v3.4 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v3\.4/);
+test('v3.5 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
+  assert.match(main,/StaxxHub v3\.5/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
@@ -135,7 +135,7 @@ test('launcher is hidden while sidebar or any tool panel is open',()=>{
 test('priority badges, dismiss, snooze, combined overview and dynamic discovery',()=>{
   const h=mounted(),toggle=h.q['#staxx-hub-toggle'];
   h.emit('staxx:register',{id:'custom',label:'Custom Staxx',desc:'Next script'});
-  assert.equal(h.q['#staxx-hub-tools'].children.length,4);
+  assert.equal(h.q['#staxx-hub-tools'].children.length,5);
   h.emit('staxx:notice',{id:'profit',count:2,level:'urgent',summary:'Urgent check',items:['Review now']});
   assert.equal(toggle.classList.contains('staxx-urgent'),true);
   assert.equal(h.q['#staxx-hub-count'].textContent,'2');
@@ -341,7 +341,7 @@ test('StaxxHub 3.1 shows source-labelled suite dashboard and a freshness-ranked 
   h.emit('staxx:summary',{id:'profit',headline:'Cash performance',updated:now,metrics:[{label:'Fresh deals',value:'3'},{label:'Modelled profit',value:'£5k'}]});
   h.emit('staxx:summary',{id:'company',headline:'Company rating 4 stars',updated:now,metrics:[{label:'Star rating',value:'4 / 10'}]});
   const cards=h.q['#staxx-hub-dashboard'].children.filter(x=>x.className==='staxx-overview-card');
-  assert.equal(cards.length,3);
+  assert.equal(cards.length,4);
   assert.ok(cards[0].children.some(x=>/Cash performance/.test(x.textContent)));
   assert.ok(cards[1].children.some(x=>/Company rating/.test(x.textContent)));
   h.emit('staxx:actions',{id:'profit',updated:now-86400000,items:[{id:'old-deal',title:'Old stock alert',status:'urgent',priority:100}]});
