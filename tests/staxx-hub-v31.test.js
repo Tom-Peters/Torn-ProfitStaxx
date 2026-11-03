@@ -61,7 +61,7 @@ test('suite dashboard renders all tools with labelled snapshot metrics',()=>{
  h.emit('staxx:register',{id:'company',label:'Company Helper',freshnessMs:86400000});
  h.emit('staxx:summary',{id:'company',headline:'Fitness Center · 3 stars',metrics:[{label:'Star rating',value:'3 / 10'},{label:'Daily P/L estimate',value:'-$10,000'}],updated:Date.now()});
  const cards=h.q['#staxx-hub-dashboard'].children.filter(x=>x.className==='staxx-overview-card');
- assert.equal(cards.length,3);
+ assert.equal(cards.length,4);
  const company=cards.find(x=>x.children.some(child=>child.textContent==='Company Helper'));
  assert.ok(company);
  assert.ok(company.children.some(child=>child.textContent==='Fitness Center · 3 stars'));
