@@ -1,3 +1,7 @@
+# Archived v3 integration reference
+
+**Current authoritative contract:** https://github.com/Tom-Peters/TornStaxx/blob/main/docs/INTEGRATION.md. Since 2026-11-04, TornStaxx alone provides the shared UI; the four modules no longer embed it. Preserve the domain safeguards below.
+
 # StaxxHub 3.4 integration
 
 ## Session budget and API-verified checklist (3.4)
