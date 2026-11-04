@@ -112,8 +112,9 @@ function mounted(){
   assert.ok(doc.mounted);
   return {document:doc,root:doc.mounted,q,local,emit:(name,detail)=>doc.dispatchEvent(new CE(name,{detail}))};
 }
-test('v3.5 hub is bundled in ProfitStaxx and has narrower side panel',()=>{
-  assert.match(main,/StaxxHub v3\.5/);
+test('legacy hub UI is extracted from Profit-TornStaxx into its own script',()=>{
+  assert.doesNotMatch(main,/\/\* StaxxHub v3/); 
+  assert.match(main,/TornStaxx 4\\.0 module fallback/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
