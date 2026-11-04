@@ -1,9 +1,17 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.04.1** · Maintainer: **IamEEKY**.
+Version: **2026.11.04.2** · Maintainer: **IamEEKY**.
 
 > **Current canonical implementation and shared rules:** https://github.com/Tom-Peters/TornStaxx and https://github.com/Tom-Peters/TornStaxx/blob/main/docs/INTEGRATION.md.
 >
 > The **v4.0 standalone hub** supersedes older instructions below requiring a byte-identical shared hub embedded in all four modules. TornStaxx is a fifth script and the sole owner of the shared launcher, navigation, summaries, alerts and diagnostics. Specialist modules now carry only domain logic and a minimal fallback. Preserve existing tool IDs and on-device storage, and keep the pinned Training stable installer untouched. Existing read-only gameplay, data provenance and domain-specific constraints below remain applicable.
+
+## Torn PDA smart-quote parser safety (2026-11-04.2)
+
+- Do not introduce smart single/double quotes (U+2018/U+2019/U+201C/U+201D) into **any** distributed userscript source, especially single-quoted JavaScript strings. Torn PDA or an intermediate install mechanism can convert typographic apostrophes to straight quotes and cause the **whole script** to fail parsing before a loader or diagnostic can run.
+- The concrete War-TornStaxx 0.2.4 failure was reproduced: changing just two U+2019 characters in single-quoted War text to ASCII apostrophes throws `SyntaxError: Unexpected identifier 'actual'`; the War module never registers. War 0.2.5 rewrites those sentences and encodes display glyphs with JS Unicode escapes to keep its entire source ASCII.
+- Each of the **five current entrypoints** must have a CI test that parses its exact current full source with `vm.Script`, then parses a copy after the four smart-quote characters have been normalized to straight quotes. Tests must reject typographic quotes even when the unmodified script parses.
+- Keep existing metadata, `@namespace`, update URLs, module IDs, saved settings, read-only constraints and the pinned Training stable installer unchanged. Use conservative visual glyph escapes instead of global quote replacement when normalizing.
+- A JavaScript syntax success in CI does not prove actual injection on Android; after deployment confirm Torn PDA's installed version and page state before drawing runtime conclusions.
 
 ## Installed-tool visibility and injection diagnostics (StaxxHub 3.5)
 
