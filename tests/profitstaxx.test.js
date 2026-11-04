@@ -8,7 +8,7 @@ const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'ut
 
 function harness(){
   const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
-  const modified=source.replace("  if(document.readyState==='loading')",replacement+"  if(document.readyState==='loading')");
+  const modified=source.replace("  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init",replacement+"  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
   const sandbox={window,document:{readyState:'loading',addEventListener:()=>{}},console,Math,Date,setTimeout,clearTimeout};
