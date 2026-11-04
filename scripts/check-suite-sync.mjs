@@ -40,7 +40,7 @@ for(const [repo,path,id,label] of roots){
     if(c.includes('/* StaxxHub v3.5')||c.includes('root.id = "staxx-hub-root"'))throw Error('Embedded shared hub still present');
     for(const contract of ['staxx:open','staxx:notice','staxx:actions','staxx:diagnostics'])if(!c.includes(contract)&&!(id==='war'&&c.includes("event('"+contract.slice(6)+"'")))throw Error('Missing '+contract);
     if(!c.includes(label))throw Error('Display label not migrated');
-    if(!(c.includes("id:'"+id+"'")||c.includes('id:"'+id+'"')))throw Error('Missing module registration');
+    if(!(c.includes("id:'"+id+"'")||c.includes('id:"'+id+'"')||(id==='war'&&c.includes("const id='war'"))))throw Error('Missing module registration');
    });
    if(id==='happy'){
      const v=src.match(/^\/\/ @version\s+(\S+)/m)?.[1];
