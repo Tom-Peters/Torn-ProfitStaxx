@@ -114,7 +114,7 @@ function mounted(){
 }
 test('legacy hub UI is extracted from Profit-TornStaxx into its own script',()=>{
   assert.doesNotMatch(main,/\/\* StaxxHub v3/); 
-  assert.match(main,/TornStaxx 4\\.0 module fallback/);
+  assert.match(main,/TornStaxx 4\.0 module fallback/);
   assert.match(source,/width:min\(302px,calc\(100vw - 36px\)\)/);
   assert.match(source,/staxx-hub-position-v2/);
 });
