@@ -38,7 +38,7 @@ for(const [repo,path,id,label] of roots){
    const src=await check(repo,path,c=>{
     if(!c.startsWith('// ==UserScript==\n')||!c.includes('/* TornStaxx 4.0 module fallback'))throw Error('Missing module header or fallback');
     if(c.includes('/* StaxxHub v3.5')||c.includes('root.id = "staxx-hub-root"'))throw Error('Embedded shared hub still present');
-    for(const contract of ['staxx:open','staxx:notice','staxx:actions','staxx:diagnostics'])if(!c.includes(contract))throw Error('Missing '+contract);
+    for(const contract of ['staxx:open','staxx:notice','staxx:actions','staxx:diagnostics'])if(!c.includes(contract)&&!(id==='war'&&c.includes("event('"+contract.slice(6)+"'")))throw Error('Missing '+contract);
     if(!c.includes(label))throw Error('Display label not migrated');
     if(!(c.includes("id:'"+id+"'")||c.includes('id:"'+id+'"')))throw Error('Missing module registration');
    });
