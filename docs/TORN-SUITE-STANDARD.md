@@ -1,9 +1,9 @@
 # Torn Staxx Suite — Development Standard
-Version: **2026.11.03.2** · Maintainer: **IamEEKY** · Applies to **every present and future Torn userscript/tool** in this suite.
+Version: **2026.11.04.1** · Maintainer: **IamEEKY**.
 
-**Canonical document:** https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/docs/TORN-SUITE-STANDARD.md
-
-This file is the single source of truth for *cross-script* behaviour, design and integration. Each repository keeps a small root-level `AGENTS.md` that links to this document and tells coding assistants to read the latest revision before changing Torn code. **Updating this file does not automatically change running userscripts**. Shared implementation changes must be synchronized, checked, committed and released in all affected repositories.
+> **Current canonical implementation and shared rules:** https://github.com/Tom-Peters/TornStaxx and https://github.com/Tom-Peters/TornStaxx/blob/main/docs/INTEGRATION.md.
+>
+> The **v4.0 standalone hub** supersedes older instructions below requiring a byte-identical shared hub embedded in all four modules. TornStaxx is a fifth script and the sole owner of the shared launcher, navigation, summaries, alerts and diagnostics. Specialist modules now carry only domain logic and a minimal fallback. Preserve existing tool IDs and on-device storage, and keep the pinned Training stable installer untouched. Existing read-only gameplay, data provenance and domain-specific constraints below remain applicable.
 
 ## Installed-tool visibility and injection diagnostics (StaxxHub 3.5)
 
