@@ -6,7 +6,7 @@ test('ProfitStaxx Find opens shared search and accepts only known sections',()=>
  assert.match(src,/new CustomEvent\('staxx:find'\)/);
  assert.match(src,/e\.detail\.section/);
  assert.match(src,/\['daily','alerts','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics'\]/);
- assert.match(src,/\/\/ @version\s+1\.25\.\d+/);
+ assert.match(src,/\/\/ @version\s+2\.0\.0/);
 });
 test('Find navigation is read-only and preserves current trading logic',()=>{
  assert.match(src,/staxx:actions/);

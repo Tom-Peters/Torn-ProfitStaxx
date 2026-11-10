@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.25.0
+// @version      2.0.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.25.0';
+  const VERSION = '2.0.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -926,6 +926,59 @@
     }
     return {day,budget,spendable,activeMinutes,committed,items,observedAt:state.lastScan};
   }
+  // Decision workspace: forecast opportunities and recorded outcomes stay separate.
+  function profitDeskModel(){
+    const money=portfolio(),plan=dailyPlanV111(),fresh=deals().filter(x=>now()-x.at>=0&&now()-x.at<8*60000);
+    const affordable=fresh.filter(x=>x.qty*x.buy<=plan.spendable&&dealRisk(x).level!=='High').sort((a,b)=>b.profit-a.profit);
+    const exits=exitSignals(),receipts=stockCashReceipts(30);
+    return {money,plan,fresh,affordable,exits,receipts,cash:liveWalletCashV113(),
+      lastQuote:Math.max(0,...Object.values(state.quotes).map(x=>Number(x.at)||0))};
+  }
+  function deskMetric(label,value,note){return '<div class="ps-desk-metric"><small>'+esc(label)+'</small><strong>'+esc(value)+'</strong><span>'+esc(note)+'</span></div>';}
+  function renderProfitHome(){
+    const d=profitDeskModel(),sell=d.exits[0],buy=d.affordable[0];
+    let title,reason,action;
+    if(!apiKey()){title='Connect your Torn data';reason='Add your key in Settings or enable Torn PDA key substitution to price opportunities.';action='<button class="btn" data-tab="settings">Open settings</button>';}
+    else if(sell){title='Review selling '+sell.name;reason=fmt(sell.upside)+' indicative after-fee upside on '+sell.qty+' recorded units. Check actual bids before selling.';action='<button class="btn" data-action="market-view" data-id="'+sell.itemId+'">Inspect live market</button>';}
+    else if(buy){title='Review '+buy.name;reason='Up to '+Math.floor(buy.qty)+' units / '+fmt(buy.qty*buy.buy)+' cash / '+fmt(buy.profit)+' estimated gain. Asking-price model, not guaranteed resale.';action='<button class="btn" data-action="market-buy" data-id="'+buy.id+'">Inspect opportunity</button>';}
+    else {title=d.fresh.length?'Keep your reserve intact':'No priced move to recommend';reason=d.fresh.length?'Current deals exceed the available budget or have high risk flags. You do not need to force a purchase.':'Refresh opportunities, then compare costs and evidence before committing cash.';action='<button class="btn" data-action="quickscan" '+(state.busy?'disabled':'')+'>Check opportunities</button>';}
+    return '<header class="ps-page-heading"><div><small>PROFIT WORKSPACE</small><h2>Your next money decision</h2></div><div class="toolbar"><button class="btn secondary" data-tab="capital">Budget & reserve</button><button class="btn" data-action="quickscan" '+(state.busy?'disabled':'')+'>Refresh opportunities</button></div></header>'+
+      (state.error?notice(state.error,true):'')+(state.busy?'<div class="notice" role="status">'+esc(state.status)+' <button class="btn secondary" data-action="stopscan">Stop scan</button></div>':'')+
+      '<section class="ps-desk-next"><small>NEXT REVIEW</small><h2>'+esc(title)+'</h2><p>'+esc(reason)+'</p>'+action+'</section>'+
+      '<div class="ps-desk-metrics">'+deskMetric('Spendable model',fmt(d.plan.spendable),'After reserve and recorded exposure')+
+        deskMetric('Recorded holdings',fmt(d.money.invested),d.money.positions.filter(x=>x.qty>0).length+' open positions')+
+        deskMetric('Torn cash',d.cash===null?'Unverified':fmt(d.cash),d.cash===null?'Saved budget limits still apply':'Last wallet check '+age(state.walletAt))+'</div>'+
+      '<div class="ps-desk-columns"><section><h3>Opportunities to inspect</h3>'+
+      (d.affordable.length?d.affordable.slice(0,3).map(x=>'<button class="ps-opportunity" data-action="market-buy" data-id="'+x.id+'"><span><b>'+esc(x.name)+'</b><small>'+fmt(x.qty*x.buy)+' cash / '+age(x.at)+'</small></span><span><b>~'+fmt(x.profit)+'</b><small>'+pct(x.roi)+' estimated ROI</small></span></button>').join(''):'<p class="muted">No fresh opportunity fits the current cash and risk limits.</p>')+
+      '<div class="toolbar"><button class="btn secondary" data-tab="scan">All item deals</button><button class="btn secondary" data-tab="travel">Travel</button><button class="btn secondary" data-tab="museum">Museum</button></div></section>'+
+      '<section><h3>Recorded results</h3>'+deskMetric('Trade ledger P/L',fmt(d.money.realised),'From recorded buy/sell transactions')+
+      deskMetric('Verified stock cash / 30 days',d.receipts.length?fmt(d.receipts.reduce((sum,x)=>sum+Number(x.amount),0)):'No matched receipts','Separate from trading P/L; no projected income added')+
+      '<button class="btn secondary" data-tab="portfolio">My money & records</button></section></div>'+
+      '<section class="ps-research-links"><button data-tab="stocks"><b>Stock benefits</b><small>Compare costs, ownership and cash yields</small></button><button data-tab="best"><b>Other income</b><small>Active and passive options, with their own time periods</small></button><button data-tab="history"><b>Price evidence</b><small>Observed asking-price history</small></button></section>'+
+      '<details data-view-key="daily-plan"><summary>Daily shortlist and time budget</summary>'+renderDailyPlanV111()+'</details>';
+  }
+  let stockViewFilter='all',stockViewQuery='';
+  function renderStockWorkspace(){
+    const all=stockRows(),budget=dailyPlanV111().spendable,fresh=stockState.at>0&&now()-stockState.at<10*60000;
+    const ownedFresh=stockState.ownedAt>0&&now()-stockState.ownedAt<30*60000;
+    const rows=all.filter(x=>(x.acronym+' '+x.name).toLowerCase().includes(stockViewQuery.toLowerCase())&&
+      (stockViewFilter==='owned'?ownedFresh&&x.shares>0:stockViewFilter==='cash'?x.annualYield!==null:stockViewFilter==='budget'?fresh&&ownedFresh&&x.block>0&&x.need>0&&x.need*x.p<=budget:true));
+    return '<header class="ps-page-heading"><div><small>LONGER-TERM MONEY</small><h2>Stock benefits</h2></div><button class="btn" data-action="stockrefresh" '+(stockState.loading?'disabled':'')+'>'+(stockState.loading?'Checking...':'Refresh stocks')+'</button></header>'+
+      '<p class="muted">'+(fresh?'Prices checked '+age(stockState.at):'Saved or missing prices; refresh before acting')+'. Fixed-cash yields are estimates; share-price changes and sale fees are excluded.</p>'+
+      '<div class="ps-filterbar"><label>Find stock<input id="ps-stock-query" type="search" maxlength="80" value="'+esc(stockViewQuery)+'" placeholder="Name or ticker"></label><label>Show<select id="ps-stock-filter">'+[['all','All stocks'],['owned','Owned / fresh holdings'],['cash','Cash dividends'],['budget','Next block within budget']].map(([v,l])=>'<option value="'+v+'"'+(stockViewFilter===v?' selected':'')+'>'+l+'</option>').join('')+'</select></label></div>'+
+      (stockState.error?notice(stockState.error,true):'')+
+      '<div class="ps-stock-head"><span>Stock</span><span>First block</span><span>Cash yield / yr</span></div>'+
+      (rows.length?rows.map(x=>'<details class="ps-stock-row" data-view-key="stock-'+x.id+'"><summary><span><b>'+esc(x.acronym)+'</b><small>'+esc(x.name)+'</small></span><span>'+(x.block>0?fmt(x.p*x.block):'Unknown')+'</span><span>'+(x.annualYield===null?'Unpriced perk':pct(x.annualYield))+'</span></summary><div class="ps-stock-detail"><p>'+esc(x.bonus?.description||'Benefit not supplied')+'</p><p>Share price '+fmt(x.p)+'. '+(ownedFresh?'Owned '+x.shares+' shares / next increment requires '+x.need+' more (~'+fmt(x.need*x.p)+').':'Fresh ownership unavailable; no affordability claim.')+'</p><button class="btn" data-action="stockpage">Inspect on Torn</button></div></details>').join(''):'<p class="empty">'+(all.length?'No stocks match this filter. Owned and budget filters require fresh ownership data.':'No stock prices loaded. Refresh stocks to compare.')+'</p>')+
+      '<details data-view-key="stock-tools"><summary>Targets, receipts and detailed stock analysis</summary>'+renderStockPanel()+'</details>';
+  }
+  function renderMoneyWorkspace(){
+    const p=portfolio(),holdings=p.positions.filter(x=>x.qty>0),exits=exitSignals();
+    return '<header class="ps-page-heading"><div><small>YOUR RECORDS</small><h2>My money</h2></div><button class="btn secondary" data-tab="capital">Capital plan</button></header>'+
+      '<div class="ps-desk-metrics">'+deskMetric('Recorded realised P/L',fmt(p.realised),'Only recorded transactions')+deskMetric('Open cost basis',fmt(p.invested),'Capital in recorded item holdings')+deskMetric('Open positions',String(holdings.length),'Not an automatic inventory ledger')+'</div>'+
+      '<h3>Holdings to review</h3>'+(holdings.length?holdings.map(x=>{const exit=exits.find(r=>r.itemId===x.itemId);return '<div class="ps-holding"><span><b>'+esc(x.name)+'</b><small>'+x.qty+' units / '+fmt(x.cost)+' cost basis</small></span><span>'+(exit?'~'+fmt(exit.upside)+' after-fee upside':'No fresh profitable exit flagged')+'</span><button class="btn secondary" data-action="market-view" data-id="'+x.itemId+'">Market</button></div>';}).join(''):'<p class="empty">No item positions recorded. Add a completed trade below to track its cost and eventual result.</p>')+
+      '<details data-view-key="money-entry"><summary>Record a completed trade / manage ledger</summary>'+renderPortfolio()+'</details>'+
+      '<details data-view-key="money-income"><summary>Income records and sources</summary>'+renderRevenuePanel()+'</details>';
+  }
   function renderDailyPlanV111(){
     const plan=dailyPlanV111(),done=plan.items.filter(x=>x.reviewed).length;
     let html='<div class="card" id="ps-alert-daily-plan"><h3>Today · five profit decisions</h3>'+
@@ -1099,6 +1152,7 @@
     return [
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
       '*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer}',
+      '.ps-page-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:4px 0 18px}.ps-page-heading h2{margin:5px 0;font-size:24px}.ps-page-heading small,.ps-desk-next>small{letter-spacing:.12em;font-size:10px;color:#8bdcff}.ps-desk-next{border-left:4px solid #49c9ff;padding:20px;background:linear-gradient(110deg,#123a59,#0b2136);border-radius:0 12px 12px 0;margin-bottom:18px}.ps-desk-next h2{font-size:24px;margin:8px 0}.ps-desk-next p{line-height:1.6;color:#bad3e5}.ps-desk-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.ps-desk-metric{padding:12px;border-bottom:1px solid #31516a;min-width:0}.ps-desk-metric small,.ps-desk-metric span{display:block;font-size:11px;color:#a6c2d8}.ps-desk-metric strong{display:block;font-size:22px;margin:7px 0;overflow-wrap:anywhere}.ps-desk-columns{display:grid;grid-template-columns:1.2fr 1fr;gap:24px}.ps-opportunity{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;background:transparent;border:0;border-bottom:1px solid #31516a;padding:14px 0;color:#eff8ff}.ps-opportunity small,.ps-holding small{display:block;margin-top:5px;color:#abc7da;font-size:11px}.ps-opportunity>span:last-child{text-align:right;color:#86dfcd}.ps-research-links{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:20px 0}.ps-research-links button{background:#102e46;border:1px solid #345971;color:#eef8ff;padding:12px;text-align:left;border-radius:8px}.ps-research-links small{display:block;color:#a6c4d8;margin-top:6px}.body>details>summary{padding:14px 4px;cursor:pointer;color:#94ddff;border-bottom:1px solid #31516a}.ps-filterbar{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:15px 0}.ps-filterbar label{font-size:12px;color:#a8c9de}.ps-filterbar input,.ps-filterbar select{display:block;width:100%;min-width:0;margin-top:6px;background:#0b2034;border:1px solid #3d617a;color:#fff;padding:10px;border-radius:6px}.ps-stock-head,.ps-stock-row>summary{display:grid;grid-template-columns:minmax(0,1.4fr) 1fr 1fr;gap:8px;align-items:center;padding:13px 7px}.ps-stock-head{color:#9cbdcf;font-size:11px}.ps-stock-row{border-top:1px solid #31516a}.ps-stock-row summary{cursor:pointer;font-size:13px}.ps-stock-row small{display:block;font-size:11px;color:#a4c1d3}.ps-stock-detail{padding:0 12px 15px;background:#0d2439}.ps-holding{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #31516a;font-size:12px}.btn,button{touch-action:manipulation}button:focus-visible,summary:focus-visible{outline:2px solid #71d9ff;outline-offset:2px}@media(max-width:600px){.ps-desk-columns{grid-template-columns:1fr;gap:12px}.ps-desk-metrics{grid-template-columns:1fr 1fr}.ps-desk-metrics>.ps-desk-metric:last-child{grid-column:1/-1}.ps-research-links{grid-template-columns:1fr}.ps-page-heading h2,.ps-desk-next h2{font-size:21px}.ps-holding{grid-template-columns:1fr auto}.ps-holding>span:nth-child(2){grid-row:2;grid-column:1/-1}.ps-stock-row summary{font-size:12px}}',
       '.ps-toolbox{padding:8px 14px;border-bottom:1px solid #31516a}.ps-toolbox summary,.ps-analysis summary{cursor:pointer;padding:8px;color:#a9dfff}.ps-tool-groups{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ps-tool-groups section>div{display:grid;gap:5px;margin-top:7px}.ps-tool-groups button{text-align:left;white-space:normal}.tabs>.tab{flex:1}.ps-deal-head,.ps-deal-row>summary{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;padding:12px 8px}.ps-deal-head{font-size:11px;color:#9fbed3}.ps-deal-row{border-top:1px solid #31516a}.ps-deal-row summary{cursor:pointer;font-size:13px;overflow-wrap:anywhere}.ps-deal-row small{display:block;font-size:11px;color:#b4cedf;margin-top:4px}.ps-deal-evidence{padding:0 10px 12px;background:#0a2035}.ps-analysis{border-bottom:1px solid #31516a;margin:12px 0}',
       '.fab{position:fixed;right:16px;bottom:86px;z-index:2147483645;border:1px solid #5de2fd80;',
       'background:linear-gradient(145deg,#0a84db,#073e7c);color:white;border-radius:18px;',
@@ -1107,7 +1161,7 @@
       'border-radius:12px;font-size:11px;padding:3px 5px;border:2px solid #06162a}',
       '.overlay{position:fixed;inset:0;z-index:2147483646;background:#0009;display:none;align-items:flex-end;',
       'justify-content:center}.overlay.active{display:flex}',
-      '.panel{width:min(630px,100vw);height:min(93dvh,900px);background:#08192d;',
+      '.panel{width:min(1040px,100vw);height:min(93dvh,900px);background:#08192d;',
       'border:1px solid #28506e;border-radius:19px 19px 0 0;box-shadow:0 0 45px #000b;',
       'display:flex;flex-direction:column;overflow:hidden;color:#dcefff}',
       '.heading{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:15px 17px;',
@@ -1317,19 +1371,22 @@
       '<p class="muted">'+esc(last)+' · '+esc(quick)+'. Automatic checks run only while Torn is foregrounded, with rate-limit backoff.</p>'+
       '<button class="btn secondary" data-action="quickscan" '+(state.busy?'disabled':'')+'>Check priority quotes now</button></div>';
   }
-  let dealQuery='',dealSort='profit';
+  let dealQuery='',dealSort='profit',dealFilter='all';
   function renderScan(){
-    const d=deals().filter(x=>now()-x.at<8*60000&&String(x.name||'').toLowerCase().includes(dealQuery.toLowerCase())),p=portfolio();
+    const spendable=dailyPlanV111().spendable;
+    const d=deals().filter(x=>now()-x.at>=0&&now()-x.at<8*60000&&String(x.name||'').toLowerCase().includes(dealQuery.toLowerCase())&&
+      (dealFilter==='budget'?x.qty*x.buy<=spendable:dealFilter==='risk'?dealRisk(x).level!=='High':true));
     d.sort((a,b)=>dealSort==='roi'?b.roi-a.roi:dealSort==='capital'?a.qty*a.buy-b.qty*b.buy:b.profit-a.profit);
-    const pick=d[0];
-    let html=pick?'<div class="card"><h3>Best opportunity to review</h3><p><b>'+esc(pick.name)+'</b> · up to '+Math.floor(pick.qty)+' units</p><p>Capital '+fmt(pick.qty*pick.buy)+' · modeled gain <span class="positive">'+fmt(pick.profit)+'</span> · '+pct(pick.roi)+' ROI</p><button class="btn" data-action="market-buy" data-id="'+Number(pick.id)+'">Review live listing and prepare quantity</button></div>':'';
+    const pick=d.find(x=>x.qty*x.buy<=spendable&&dealRisk(x).level!=='High');
+    let html='<header class="ps-page-heading"><div><small>ITEM MARKET</small><h2>Find a trade worth checking</h2></div><button class="btn secondary" data-tab="settings">Trade limits</button></header>';
+    html+=pick?'<div class="card"><h3>Best opportunity to review</h3><p><b>'+esc(pick.name)+'</b> · up to '+Math.floor(pick.qty)+' units</p><p>Capital '+fmt(pick.qty*pick.buy)+' · modeled gain <span class="positive">'+fmt(pick.profit)+'</span> · '+pct(pick.roi)+' ROI</p><button class="btn" data-action="market-buy" data-id="'+Number(pick.id)+'">Review live listing and prepare quantity</button></div>':'';
     html+='<details class="ps-analysis"><summary>Risk, allocation and market evidence</summary>';
     html+=renderTradeStressV115(pick);
     html+=renderMarketPulseV115();
     html+=autopilotPanelV117();
     html+=allocationPanel()+'</details>';
-    html+='<div class="statrow"><div class="stat"><small>Working capital</small><b>'+human(state.settings.capital)+'</b></div>'+
-      '<div class="stat"><small>Recorded invested</small><b>'+human(p.invested)+'</b></div></div>';
+    html+='<div class="statrow"><div class="stat"><small>Spendable model</small><b>'+human(spendable)+'</b></div>'+
+      '<div class="stat"><small>Matching fresh deals</small><b>'+d.length+'</b></div></div>';
     html+='<div class="toolbar"><button class="btn" data-action="scan" '+(state.busy?'disabled':'')+'>'+
       (state.busy?'Scanning '+state.scanDone+'/'+state.scanTotal:'Refresh opportunities')+'</button>'+
       '<button class="btn secondary" data-action="quickscan" '+(state.busy?'disabled':'')+'>Fast scan · 10</button>'+
@@ -1339,11 +1396,11 @@
     if(state.error)html+=notice(state.error,true);
     if(!apiKey())html+=notice('Torn API key not available. Open Settings to provide one or configure TornPDA.',true);
     if(!d.length)html+='<div class="empty">No qualifying fresh deals. That is a valid result: do not force a trade. Adjust thresholds in Settings if needed.</div>';
-    html+='<div class="duo"><label>Find item<input id="ps-deal-query" type="search" maxlength="80" value="'+esc(dealQuery)+'" placeholder="Item name"></label><label>Sort deals<select id="ps-deal-sort">'+[['profit','Estimated gain'],['roi','Return %'],['capital','Lowest cash needed']].map(([v,l])=>'<option value="'+v+'"'+(dealSort===v?' selected':'')+'>'+l+'</option>').join('')+'</select></label></div>';
-    html+='<div class="ps-deal-head"><span>Item / quantity</span><span>Buy cap</span><span>Est. gain</span></div>';
+    html+='<div class="ps-filterbar"><label>Find item<input id="ps-deal-query" type="search" maxlength="80" value="'+esc(dealQuery)+'" placeholder="Item name"></label><label>Sort deals<select id="ps-deal-sort">'+[['profit','Estimated gain'],['roi','Return %'],['capital','Lowest cash needed']].map(([v,l])=>'<option value="'+v+'"'+(dealSort===v?' selected':'')+'>'+l+'</option>').join('')+'</select></label><label>Filter<select id="ps-deal-filter">'+[['all','All qualifying deals'],['budget','Within spendable cash'],['risk','Exclude high risk flags']].map(([v,l])=>'<option value="'+v+'"'+(dealFilter===v?' selected':'')+'>'+l+'</option>').join('')+'</select></label></div>';
+    html+='<div class="ps-deal-head"><span>Item / quantity</span><span>Cash needed</span><span>Est. gain</span></div>';
     for(const x of d.slice(0,30)){
       const risk=dealRisk(x);
-      html+='<details class="ps-deal-row" data-deal="'+Number(x.id)+'"><summary><span><b>'+esc(x.name)+'</b><small>'+Math.floor(x.qty)+' units / '+age(x.at)+'</small></span><span>'+fmt(x.buy)+'</span><span class="positive">'+fmt(x.profit)+'<small>'+pct(x.roi)+' ROI</small></span></summary>'+
+      html+='<details class="ps-deal-row" data-deal="'+Number(x.id)+'"><summary><span><b>'+esc(x.name)+'</b><small>'+Math.floor(x.qty)+' units / '+age(x.at)+'</small></span><span>'+fmt(x.qty*x.buy)+'<small>'+fmt(x.buy)+'/unit cap</small></span><span class="positive">'+fmt(x.profit)+'<small>'+pct(x.roi)+' ROI</small></span></summary>'+
        '<div class="ps-deal-evidence"><p>'+(verifiedOwnedV114(x.name)===null?'Inventory quantity unverified':'Verified Torn inventory: '+verifiedOwnedV114(x.name)+' owned')+'</p><p>'+esc(risk.level)+' risk / '+esc(risk.confidence)+' evidence. '+esc(risk.flags.join(' / ')||'No additional historical flags')+'</p>'+
        '<p>Reference ask '+fmt(x.reference)+' / depth '+x.depth+' units. These are asking prices, not completed sales.</p>'+
        '<button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Inspect listing / prepare '+Math.floor(x.qty)+'</button></div></details>';
@@ -1469,7 +1526,7 @@
   let profitTabsExpanded=false;
   const simpleProfitTabs=new Set(['alerts','daily','best','scan','stocks','income']);
   function profitNavigation(active){
-    const primary=[['daily','Today'],['scan','Deals'],['stocks','Stocks'],['portfolio','Ledger']];
+    const primary=[['daily','Overview'],['scan','Deals'],['stocks','Stocks'],['portfolio','My money']];
     const groups=[['Explore',[['best','Compare opportunities'],['travel','Travel'],['income','Income'],['museum','Museum']]],
       ['Review',[['capital','Capital plan'],['history','Price history'],['alerts','Alerts'],['settings','Settings'],['diagnostics','Diagnostics']]]];
     const button=([id,label])=>'<button class="tab '+(active===id?'active':'')+'" data-tab="'+id+'">'+label+'</button>';
@@ -1502,7 +1559,7 @@
     const visibleProfitTabs=!simpleProfitMode||profitTabsExpanded?tabs:tabs.filter(name=>simpleProfitTabs.has(name)||name===state.tab);
     const active=state.tab;
     const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
-      active==='portfolio'?renderPortfolio():active==='daily'?renderDailyPlanV111():active==='stocks'?renderStockPanel():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():active==='diagnostics'?renderProfitDiagnosticsV111():renderSettings();
+      active==='portfolio'?renderMoneyWorkspace():active==='daily'?renderProfitHome():active==='stocks'?renderStockWorkspace():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():active==='diagnostics'?renderProfitDiagnosticsV111():renderSettings();
     // Preserve the actual inner scroll container across progressive scans and any other renders.
     // TornPDA WebView otherwise snaps to the beginning when shell.innerHTML is replaced.
     const previousBody=shell.querySelector('.body'),previousTabs=shell.querySelector('.tabs');
@@ -1519,6 +1576,7 @@
         formId:form?.id||'',checked:focused.type==='checkbox'?focused.checked:null,tab:lastRenderedTab};
     }
     const disclosed=[...shell.querySelectorAll('details[data-deal][open]')].map(x=>x.dataset.deal);
+    const openedViews=[...shell.querySelectorAll('details[data-view-key][open]')].map(x=>x.dataset.viewKey);
     const toolboxOpen=shell.querySelector('.ps-toolbox')?.open,analysisOpen=shell.querySelector('.ps-analysis')?.open;
     shell.innerHTML='<div class="panel" role="dialog" aria-modal="true" aria-label="ProfitStaxx">'+
       '<div class="heading"><div><div class="brand">Profit<span style="color:#54d7fa">Staxx</span></div><div class="sub">Profit intelligence · v'+VERSION+'</div></div>'+
@@ -1528,6 +1586,7 @@
       'Estimates only · API cached · Never auto-trades · '+esc(state.status)+'</div></div>';
     if(lastRenderedTab===active)for(const d of shell.querySelectorAll("details[data-deal]"))d.open=disclosed.includes(d.dataset.deal);
     if(lastRenderedTab===active){if(toolboxOpen!==undefined&&shell.querySelector(".ps-toolbox"))shell.querySelector(".ps-toolbox").open=toolboxOpen;if(analysisOpen!==undefined&&shell.querySelector(".ps-analysis"))shell.querySelector(".ps-analysis").open=analysisOpen;}
+    if(lastRenderedTab===active)for(const el of shell.querySelectorAll("details[data-view-key]"))el.open=openedViews.includes(el.dataset.viewKey);
     lastRenderedTab=active;
     const body=shell.querySelector('.body'),nav=shell.querySelector('.tabs');
     if(body)body.scrollTop=scrollPositions[active]||0;
@@ -1604,7 +1663,7 @@
     }
     switch(el.dataset.action){
       case 'market-buy':{
-        const id=Number(el.dataset.id),d=activeDealAlerts().find(x=>Number(x.id)===id);
+        const id=Number(el.dataset.id),d=deals().find(x=>Number(x.id)===id&&now()-x.at>=0&&now()-x.at<8*60000);
         if(!d||!Number.isInteger(Math.floor(d.qty))||d.qty<1){state.error='Opportunity expired; refresh the scan.';render();return;}
         try{sessionStorage.setItem('profitstaxx-market-intent-v1',JSON.stringify({id,qty:Math.floor(d.qty),maxPrice:Number(d.buy),name:String(d.name||'Item').slice(0,80),at:now()}));}
         catch(_){state.error='Cannot save the quantity for this navigation. Enter it manually.';render();return;}
@@ -1733,8 +1792,8 @@
     shell=document.createElement('div');shell.className='overlay';
     shell.addEventListener('click',e=>{if(e.target===shell){state.open=false;render();}else onClick(e);});
     shell.addEventListener('submit',onSubmit);
-    shell.addEventListener('input',event=>{if(event.target.id==='ps-deal-query'){dealQuery=event.target.value.slice(0,80);render();}});
-    shell.addEventListener('change',event=>{if(event.target.id==='ps-deal-sort'&&['profit','roi','capital'].includes(event.target.value)){dealSort=event.target.value;render();}});
+    shell.addEventListener('input',event=>{if(event.target.id==='ps-stock-query'){stockViewQuery=event.target.value.slice(0,80);render();return;}if(event.target.id==='ps-deal-query'){dealQuery=event.target.value.slice(0,80);render();}});
+    shell.addEventListener('change',event=>{if(event.target.id==='ps-deal-filter'&&['all','budget','risk'].includes(event.target.value)){dealFilter=event.target.value;render();return;}if(event.target.id==='ps-stock-filter'&&['all','owned','cash','budget'].includes(event.target.value)){stockViewFilter=event.target.value;render();return;}if(event.target.id==='ps-deal-sort'&&['profit','roi','capital'].includes(event.target.value)){dealSort=event.target.value;render();}});
     root.appendChild(shell);
     render();
   }

@@ -1,3 +1,16 @@
+## v2.0.0 — rebuilt profit workspace
+
+Four primary screens now follow the decisions you actually make:
+
+- **Overview:** one next review, spendable cash model, recorded holdings, verified wallet status and a small opportunity shortlist. Trading P/L and verified stock cash remain separate from forecasts.
+- **Deals:** scan controls, searchable compact rows, total cash required, per-unit caps and estimated gain. Filter by spendable budget or exclude high risk flags; expand only the evidence you need. A selected fresh deal opens even below the independent notification threshold.
+- **Stocks:** searchable benefit comparisons with owned, fixed-cash and next-block budget filters. Affordability requires fresh prices, fresh ownership and a real shortfall. Utility perks remain unpriced.
+- **My money:** recorded results and positions first, with ledger entry and other income records in expandable sections.
+
+Desktop uses the available width; mobile stacks the sections. Refreshes preserve search focus, caret, scroll position and expanded details. All existing research, travel, museum, allocation, stock-target, receipt and ledger tools remain available. The native Item Market helper stays beside the matching buy field; no site-wide profit banner is added. Purchases and ledger entries remain manual.
+
+Validation: full Node suite, suite integration checker and DOM fixtures for all 13 sections, filters and refresh-state preservation. These are local checks, not a live Torn PDA device test. Existing installer URL is unchanged.
+
 ## 1.25.0 - Native action details
 
 Previously scanned item evidence can appear beside a single matching market buy input even when browsing directly. Shows quote age, reference asking price, qualifying modelled cap and recorded holdings. It never changes quantity; existing explicit purchase preparation remains separate. Unknown item IDs and ambiguous controls receive no helper.
