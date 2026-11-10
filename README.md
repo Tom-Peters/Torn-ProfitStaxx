@@ -1,3 +1,7 @@
+## 1.25.0 - Native action details
+
+Previously scanned item evidence can appear beside a single matching market buy input even when browsing directly. Shows quote age, reference asking price, qualifying modelled cap and recorded holdings. It never changes quantity; existing explicit purchase preparation remains separate. Unknown item IDs and ambiguous controls receive no helper.
+
 ## 1.24.0 - Workspace and native-page separation
 
 Fixed Today / Deals / Stocks / Ledger navigation and grouped research/management tools. Deals use compact comparison rows with search, gain/ROI/capital sorting and expandable evidence. Analysis panels are secondary and disclosure state survives refresh. User-initiated quantity assistance mounts only beside one unambiguous matching buy field and disappears on item change; no floating overlay or automatic purchase.

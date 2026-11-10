@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.24.0
+// @version      1.25.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.24.0';
+  const VERSION = '1.25.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -1493,6 +1493,7 @@
       {label:'Recorded trade P/L',value:fmt(summaryPortfolio.realised)},
       {label:'30d verified stock cash',value:stockCashReceipts(30).length?fmt(stockCashReceipts(30).reduce((n,x)=>n+Number(x.amount),0)):'No matched receipts'}
     ],updated:state.lastScan||now()}}));
+    nativeMarketQuote();
     if(!state.open){shell.classList.remove('active');return;}
     shell.classList.add('active');
     const tabs=['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics'];
@@ -1751,6 +1752,37 @@
       storage:state.storage==='TornPDA'?'ready':'unknown',ui:root&&shell?'ready':'missing',
       detail:state.busy?'Market scan in progress':'Market quotes '+(state.lastScan?'last checked '+age(state.lastScan):'not yet fully scanned')}}));
   });
+  function nativeMarketQuote(){
+    let box=document.getElementById('ps-native-quote');
+    const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\d+)(?:&|$)/),id=match?Number(match[1]):0;
+    let enabled=true;try{enabled=JSON.parse(localStorage.getItem('staxx-hub-context-v1')||'true')!==false;}catch(_){}
+    const quote=state.quotes[id];
+    if(document.hidden)return;
+    if(!enabled||location.pathname!=='/page.php'||(new URLSearchParams(location.search).get('sid')||'').toLowerCase()!=='itemmarket'||!id||!quote||document.getElementById('ps-market-assist')){box?.remove();return;}
+    const fields=Array.from(document.querySelectorAll('input')).filter(el=>{
+      if(el.disabled||!el.getClientRects?.().length)return false;
+      const hint=[el.name,el.id,el.placeholder,el.getAttribute('aria-label')].join(' ');
+      const parent=el.closest('[role=dialog],[class*=buy],[class*=purchase]');
+      return /qty|quantity|amount/i.test(hint)&&(/buy|purchase/i.test(hint)||parent&&/buy|purchase/i.test(parent.textContent||''));
+    });
+    if(fields.length!==1){box?.remove();return;}
+    const fresh=Number(quote.at)>0&&now()-quote.at>=0&&now()-quote.at<8*60000;
+    const deal=fresh?deals().find(x=>Number(x.id)===id):null;
+    const held=positions().find(x=>x.itemId===id);
+    const message=(fresh?'Quote checked ':'Saved quote / ')+age(quote.at)+' / reference ask '+fmt(quote.reference)+
+      (deal?' / modelled buy cap '+fmt(deal.buy)+' / up to '+Math.floor(deal.qty):' / no current qualified buy recommendation')+
+      (held?' / ledger holdings '+held.qty:'');
+    const signature=JSON.stringify([id,message,quote.at]);
+    if(box?.dataset.signature===signature&&box.previousElementSibling===fields[0])return;
+    box?.remove();box=document.createElement('details');box.id='ps-native-quote';box.dataset.signature=signature;
+    box.style.cssText='display:block;clear:both;margin:8px 0;padding:8px;border:1px solid #355d7a;border-radius:6px;background:#10283f;color:#eaf6ff;font:12px/1.5 system-ui';
+    const title=document.createElement('summary');title.textContent='ProfitStaxx / '+String(quote.name||'Selected item');
+    const info=document.createElement('p');info.textContent=message;
+    const note=document.createElement('small');note.textContent='Reference asking prices are not completed sales. Verify the current listing; this helper does not change the quantity.';
+    const button=document.createElement('button');button.type='button';button.textContent='Inspect this item';
+    button.onclick=()=>{dealQuery=String(quote.name||'');state.tab='scan';state.open=true;render();};
+    box.append(title,info,note,button);fields[0].insertAdjacentElement('afterend',box);
+  }
   function marketAssist(){
     if(!/\/page\.php$/i.test(location.pathname)||!location.search.includes('sid=ItemMarket'))return;
     let p;try{p=JSON.parse(sessionStorage.getItem('profitstaxx-market-intent-v1')||'null');}catch(_){return;}
@@ -1839,6 +1871,8 @@
   async function init(){
     mount();
     marketAssist();
+    window.addEventListener("hashchange",nativeMarketQuote);
+    setInterval(nativeMarketQuote,2000);
     document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit',label:'Profit-TornStaxx',icon:'PS',desc:'Daily profit · Markets · Stocks',trendMetric:'Fresh deals',freshnessMs:600000}}));
     try{
       const loaded=await readStore();
