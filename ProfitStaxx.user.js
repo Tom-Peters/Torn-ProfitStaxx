@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      1.23.0
+// @version      1.24.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '1.23.0';
+  const VERSION = '1.24.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -85,11 +85,11 @@
   ];
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
-    key:'',alertThreshold:100000,tab:'scan',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},stockClaimReminders:false,stockLogSync:true,
+    key:'',alertThreshold:100000,tab:'daily',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},stockClaimReminders:false,stockLogSync:true,
     travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
-    tab:'scan',dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
+    tab:'daily',dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
   let lastRenderedTab=null;
@@ -1099,6 +1099,7 @@
     return [
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
       '*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer}',
+      '.ps-toolbox{padding:8px 14px;border-bottom:1px solid #31516a}.ps-toolbox summary,.ps-analysis summary{cursor:pointer;padding:8px;color:#a9dfff}.ps-tool-groups{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ps-tool-groups section>div{display:grid;gap:5px;margin-top:7px}.ps-tool-groups button{text-align:left;white-space:normal}.tabs>.tab{flex:1}.ps-deal-head,.ps-deal-row>summary{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;padding:12px 8px}.ps-deal-head{font-size:11px;color:#9fbed3}.ps-deal-row{border-top:1px solid #31516a}.ps-deal-row summary{cursor:pointer;font-size:13px;overflow-wrap:anywhere}.ps-deal-row small{display:block;font-size:11px;color:#b4cedf;margin-top:4px}.ps-deal-evidence{padding:0 10px 12px;background:#0a2035}.ps-analysis{border-bottom:1px solid #31516a;margin:12px 0}',
       '.fab{position:fixed;right:16px;bottom:86px;z-index:2147483645;border:1px solid #5de2fd80;',
       'background:linear-gradient(145deg,#0a84db,#073e7c);color:white;border-radius:18px;',
       'min-width:58px;height:55px;box-shadow:0 7px 28px #0009;font-weight:900;letter-spacing:.3px}',
@@ -1316,14 +1317,17 @@
       '<p class="muted">'+esc(last)+' · '+esc(quick)+'. Automatic checks run only while Torn is foregrounded, with rate-limit backoff.</p>'+
       '<button class="btn secondary" data-action="quickscan" '+(state.busy?'disabled':'')+'>Check priority quotes now</button></div>';
   }
+  let dealQuery='',dealSort='profit';
   function renderScan(){
-    const d=deals().filter(x=>now()-x.at<8*60000),p=portfolio();
+    const d=deals().filter(x=>now()-x.at<8*60000&&String(x.name||'').toLowerCase().includes(dealQuery.toLowerCase())),p=portfolio();
+    d.sort((a,b)=>dealSort==='roi'?b.roi-a.roi:dealSort==='capital'?a.qty*a.buy-b.qty*b.buy:b.profit-a.profit);
     const pick=d[0];
     let html=pick?'<div class="card"><h3>Best opportunity to review</h3><p><b>'+esc(pick.name)+'</b> · up to '+Math.floor(pick.qty)+' units</p><p>Capital '+fmt(pick.qty*pick.buy)+' · modeled gain <span class="positive">'+fmt(pick.profit)+'</span> · '+pct(pick.roi)+' ROI</p><button class="btn" data-action="market-buy" data-id="'+Number(pick.id)+'">Review live listing and prepare quantity</button></div>':'';
+    html+='<details class="ps-analysis"><summary>Risk, allocation and market evidence</summary>';
     html+=renderTradeStressV115(pick);
     html+=renderMarketPulseV115();
     html+=autopilotPanelV117();
-    html+=allocationPanel();
+    html+=allocationPanel()+'</details>';
     html+='<div class="statrow"><div class="stat"><small>Working capital</small><b>'+human(state.settings.capital)+'</b></div>'+
       '<div class="stat"><small>Recorded invested</small><b>'+human(p.invested)+'</b></div></div>';
     html+='<div class="toolbar"><button class="btn" data-action="scan" '+(state.busy?'disabled':'')+'>'+
@@ -1335,19 +1339,14 @@
     if(state.error)html+=notice(state.error,true);
     if(!apiKey())html+=notice('Torn API key not available. Open Settings to provide one or configure TornPDA.',true);
     if(!d.length)html+='<div class="empty">No qualifying fresh deals. That is a valid result: do not force a trade. Adjust thresholds in Settings if needed.</div>';
+    html+='<div class="duo"><label>Find item<input id="ps-deal-query" type="search" maxlength="80" value="'+esc(dealQuery)+'" placeholder="Item name"></label><label>Sort deals<select id="ps-deal-sort">'+[['profit','Estimated gain'],['roi','Return %'],['capital','Lowest cash needed']].map(([v,l])=>'<option value="'+v+'"'+(dealSort===v?' selected':'')+'>'+l+'</option>').join('')+'</select></label></div>';
+    html+='<div class="ps-deal-head"><span>Item / quantity</span><span>Buy cap</span><span>Est. gain</span></div>';
     for(const x of d.slice(0,30)){
       const risk=dealRisk(x);
-      html+='<div class="card"><div class="line"><h3>'+esc(x.name)+'</h3><span class="pill">Score '+x.score+'/100</span></div>'+
-        '<div class="line"><span class="muted">Buy '+x.qty+' × '+fmt(x.buy)+'</span><strong class="positive">+'+fmt(x.profit)+'</strong></div>'+
-        '<div class="line"><span class="muted">Reference ask '+fmt(x.reference)+'</span><span>'+pct(x.roi)+' estimated ROI</span></div>'+
-        '<div class="line"><span class="muted">Best modeled exit</span><span>'+esc(x.method==='bazaar'?'Bazaar (slower sale possible)':'Item Market')+'</span></div>'+
-        '<div class="line"><span class="muted">Market net / Bazaar net per unit</span><span>'+fmt(x.marketNet)+' / '+fmt(x.bazaarNet)+'</span></div>'+
-        '<p class="muted">'+(verifiedOwnedV114(x.name)===null?'Inventory quantity unverified':'Verified Torn inventory: '+verifiedOwnedV114(x.name)+' owned')+'</p>'+ 
-        '<p class="muted">Risk checks: <strong>'+esc(risk.level)+'</strong> · '+esc(risk.flags.join(' · ')||'No additional historical flags')+' · '+esc(risk.confidence)+' evidence</p>'+
-        '<p class="muted">'+esc(priceHistoryQuality(x.id).label)+' · '+esc(marketLiquiditySignal(x).label)+(priceHistoryQuality(x.id).trend===null?'':' · ask trend '+pct(priceHistoryQuality(x.id).trend))+'</p>'+ 
-        '<div class="line"><span class="muted">Competition depth: '+x.depth+' units · '+age(x.at)+'</span>'+
-        '<button class="btn secondary" data-action="market-buy" data-id="'+Number(x.id)+'">Market · '+Math.floor(x.qty)+' units</button></div>'+
-        '<div class="meter"><i style="width:'+x.score+'%"></i></div></div>';
+      html+='<details class="ps-deal-row" data-deal="'+Number(x.id)+'"><summary><span><b>'+esc(x.name)+'</b><small>'+Math.floor(x.qty)+' units / '+age(x.at)+'</small></span><span>'+fmt(x.buy)+'</span><span class="positive">'+fmt(x.profit)+'<small>'+pct(x.roi)+' ROI</small></span></summary>'+
+       '<div class="ps-deal-evidence"><p>'+(verifiedOwnedV114(x.name)===null?'Inventory quantity unverified':'Verified Torn inventory: '+verifiedOwnedV114(x.name)+' owned')+'</p><p>'+esc(risk.level)+' risk / '+esc(risk.confidence)+' evidence. '+esc(risk.flags.join(' / ')||'No additional historical flags')+'</p>'+
+       '<p>Reference ask '+fmt(x.reference)+' / depth '+x.depth+' units. These are asking prices, not completed sales.</p>'+
+       '<button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Inspect listing / prepare '+Math.floor(x.qty)+'</button></div></details>';
     }
     html+=notice('Expected resale is inferred from active asking prices, not confirmed completed sales. Listings may disappear before you buy.');
     return html;
@@ -1469,6 +1468,14 @@
   }
   let profitTabsExpanded=false;
   const simpleProfitTabs=new Set(['alerts','daily','best','scan','stocks','income']);
+  function profitNavigation(active){
+    const primary=[['daily','Today'],['scan','Deals'],['stocks','Stocks'],['portfolio','Ledger']];
+    const groups=[['Explore',[['best','Compare opportunities'],['travel','Travel'],['income','Income'],['museum','Museum']]],
+      ['Review',[['capital','Capital plan'],['history','Price history'],['alerts','Alerts'],['settings','Settings'],['diagnostics','Diagnostics']]]];
+    const button=([id,label])=>'<button class="tab '+(active===id?'active':'')+'" data-tab="'+id+'">'+label+'</button>';
+    return '<nav class="tabs" aria-label="Profit workspace">'+primary.map(button).join('')+'</nav>'+
+      '<details class="ps-toolbox"'+(!primary.some(([id])=>id===active)?' open':'')+'><summary>Profit tools</summary><div class="ps-tool-groups">'+groups.map(([name,items])=>'<section><b>'+name+'</b><div>'+items.map(button).join('')+'</div></section>').join('')+'</div></details>';
+  }
   function render(){
     if(!root)return;
     if(lastHubPanelState!==state.open){lastHubPanelState=state.open;
@@ -1510,14 +1517,16 @@
       edit={id:focused.id,name:focused.name,value:focused.value,start,end,fields,
         formId:form?.id||'',checked:focused.type==='checkbox'?focused.checked:null,tab:lastRenderedTab};
     }
+    const disclosed=[...shell.querySelectorAll('details[data-deal][open]')].map(x=>x.dataset.deal);
+    const toolboxOpen=shell.querySelector('.ps-toolbox')?.open,analysisOpen=shell.querySelector('.ps-analysis')?.open;
     shell.innerHTML='<div class="panel" role="dialog" aria-modal="true" aria-label="ProfitStaxx">'+
       '<div class="heading"><div><div class="brand">Profit<span style="color:#54d7fa">Staxx</span></div><div class="sub">Profit intelligence · v'+VERSION+'</div></div>'+
       '<div style="display:flex;gap:5px;align-items:center"><button class="close" data-action="staxx-find" aria-label="Find tools, sections and actions">⌕ Find</button><button class="close" data-action="close">Close ×</button></div></div>'+
-      '<nav class="tabs" aria-label="ProfitStaxx sections">'+visibleProfitTabs.map(name=>'<button class="tab '+(name===active?'active':'')+
-      '" data-tab="'+name+'">'+labels[tabs.indexOf(name)]+'</button>').join('')+
-      (simpleProfitMode?'<button class="tab" data-action="staxx-more-tabs" aria-expanded="'+profitTabsExpanded+'">'+(profitTabsExpanded?'Less':'More ▾')+'</button>':'')+'</nav>'+
+      profitNavigation(active)+
       '<main class="body">'+content+'</main><div class="footer">'+
       'Estimates only · API cached · Never auto-trades · '+esc(state.status)+'</div></div>';
+    if(lastRenderedTab===active)for(const d of shell.querySelectorAll("details[data-deal]"))d.open=disclosed.includes(d.dataset.deal);
+    if(lastRenderedTab===active){if(toolboxOpen!==undefined&&shell.querySelector(".ps-toolbox"))shell.querySelector(".ps-toolbox").open=toolboxOpen;if(analysisOpen!==undefined&&shell.querySelector(".ps-analysis"))shell.querySelector(".ps-analysis").open=analysisOpen;}
     lastRenderedTab=active;
     const body=shell.querySelector('.body'),nav=shell.querySelector('.tabs');
     if(body)body.scrollTop=scrollPositions[active]||0;
@@ -1723,6 +1732,8 @@
     shell=document.createElement('div');shell.className='overlay';
     shell.addEventListener('click',e=>{if(e.target===shell){state.open=false;render();}else onClick(e);});
     shell.addEventListener('submit',onSubmit);
+    shell.addEventListener('input',event=>{if(event.target.id==='ps-deal-query'){dealQuery=event.target.value.slice(0,80);render();}});
+    shell.addEventListener('change',event=>{if(event.target.id==='ps-deal-sort'&&['profit','roi','capital'].includes(event.target.value)){dealSort=event.target.value;render();}});
     root.appendChild(shell);
     render();
   }
@@ -1745,18 +1756,19 @@
     let p;try{p=JSON.parse(sessionStorage.getItem('profitstaxx-market-intent-v1')||'null');}catch(_){return;}
     const correctItem=()=>{const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\d+)(?:&|$)/);return match&&Number(match[1])===p.id;};
     if(!p||!Number.isInteger(p.id)||!Number.isInteger(p.qty)||p.qty<1||p.qty>1000000||now()-p.at>600000||!correctItem())return;
-    const box=document.createElement('div');box.id='ps-market-assist';box.style.cssText='position:fixed;z-index:2147483639;right:12px;bottom:12px;max-width:310px;background:#08192d;color:#e8f7ff;border:1px solid #54d7fa;border-radius:12px;padding:12px;font:13px system-ui;box-shadow:0 5px 28px #000a';
+    const box=document.createElement('div');box.id='ps-market-assist';box.style.cssText='position:static;max-width:100%;margin:8px 0;background:#08192d;color:#e8f7ff;border:1px solid #54d7fa;border-radius:12px;padding:12px;font:13px system-ui;box-shadow:0 5px 28px #000a';
     const title=document.createElement('b');title.textContent='ProfitStaxx · '+p.name+' × '+p.qty;
     const status=document.createElement('p');status.textContent='Check live listing price (modeled cap $'+Math.round(p.maxPrice).toLocaleString('en-US')+'/unit). Looking for Buy quantity field…';
     const copy=document.createElement('button');copy.textContent='Copy quantity';copy.onclick=()=>{const v=String(p.qty);if(navigator.clipboard?.writeText)navigator.clipboard.writeText(v).then(()=>status.textContent='Copied '+v).catch(()=>status.textContent='Quantity: '+v);else status.textContent='Quantity: '+v;};
     const close=document.createElement('button');close.textContent='Close ×';close.style.marginLeft='10px';
-    box.append(title,status,copy,close);document.body.appendChild(box);
+    box.append(title,status,copy,close); // Insert only beside an unambiguous buy field.
+    window.addEventListener("hashchange",()=>{if(!correctItem()){stop();box.remove();}},{once:true});
     let filled=false,count=0,observer,timer;
     const stop=()=>{observer?.disconnect();clearInterval(timer);sessionStorage.removeItem('profitstaxx-market-intent-v1');};
     close.onclick=()=>{stop();box.remove();};
     const attempt=()=>{
-      if(filled)return;
       if(!correctItem()){stop();box.remove();return;}
+      if(filled)return;
       if(++count>120){stop();status.textContent='Buy field not detected. Copy quantity and enter it manually.';return;}
       const found=[...document.querySelectorAll('input')].filter(el=>{
         if(box.contains(el)||el.disabled||!el.getClientRects?.().length)return false;
@@ -1765,6 +1777,7 @@
         return /qty|quantity|amount/.test(hint)&&(/buy|purchase/.test(parent)||/buy|purchase/.test(hint));
       });
       if(found.length!==1||found[0].value&&Number(found[0].value)!==1)return;
+      found[0].insertAdjacentElement('afterend',box);
       const el=found[0],set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;
       if(set)set.call(el,String(p.qty));else el.value=String(p.qty);
       el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));

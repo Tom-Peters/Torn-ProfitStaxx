@@ -1,3 +1,9 @@
+## 1.24.0 - Workspace and native-page separation
+
+Fixed Today / Deals / Stocks / Ledger navigation and grouped research/management tools. Deals use compact comparison rows with search, gain/ROI/capital sorting and expandable evidence. Analysis panels are secondary and disclosure state survives refresh. User-initiated quantity assistance mounts only beside one unambiguous matching buy field and disappears on item change; no floating overlay or automatic purchase.
+
+Validated with existing regression suites, parser checks and DOM integration scenarios. Live Torn PDA visual/device validation remains separate.
+
 > **Now part of TornStaxx 4.0:** This specialist module is displayed in Torn PDA as **Profit-TornStaxx** (v1.23.0). The shared command centre has moved to the standalone fifth userscript, [TornStaxx](https://github.com/Tom-Peters/TornStaxx). Install its [raw hub installer](https://raw.githubusercontent.com/Tom-Peters/TornStaxx/main/TornStaxx.user.js) once, then update this module from its **unchanged** [raw userscript URL](https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js). Existing domain functions, local data and API key settings remain in the specialist script. Repository rename will be handled separately.\n\n## v1.22.6 — stock income evidence, next benefit blocks and StaxxHub 3.4
 
 - **Actual dividend cash:** optional, read-only, rate-bounded reconciliation of matching cash stock events from Torn API `user/log?cat=134` using the player's existing key. Full or scoped log permission is needed; when absent, receipts remain unverified rather than assumed zero. Imported log IDs deduplicate, and cash entries are stored only on-device.
