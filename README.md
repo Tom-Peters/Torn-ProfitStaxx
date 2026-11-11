@@ -1,3 +1,11 @@
+## 2.2.0 — Money-making walkthroughs
+
+Open **Routes** from ProfitStaxx, or start a walkthrough from a specific deal, travel run or ranked opportunity. One active run is saved locally with its current step. Resume from Overview, the TornStaxx action list or a matching Item Market helper.
+
+Each route walks through checking the terms, taking the action in Torn, checking settlement and recording the result. An optional estimate compares expected net cash and active time. Energy and nerve routes also support an estimated return per resource. The route list shows the last 30 days of manually recorded results where available. Market trades still use the weighted-average trade ledger, and verified stock receipts stay in their existing view.
+
+Added city finds, spare inventory sales, blood bags, Forgery and Print Store, organised crime payouts, ranked war payouts, City shop resale and the Auction House. Route prerequisites were checked against the Torn Wiki, including [blood bags](https://wiki.torn.com/wiki/Empty_Blood_Bag), [Forgery](https://wiki.torn.com/wiki/Forgery), [organised crime payouts](https://wiki.torn.com/wiki/Organized_Crime_2.0), [ranked wars](https://wiki.torn.com/wiki/Ranked_War), [city finds](https://wiki.torn.com/wiki/Awareness), [shops](https://wiki.torn.com/wiki/City) and [auctions](https://wiki.torn.com/wiki/Auction_House).
+
 ## 2.1.0
 
 Capital allocations share a single wallet limit and pass the exact allocated quantity to the selected Torn market item.

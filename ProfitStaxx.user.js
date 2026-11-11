@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.1.0
+// @version      2.2.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.1.0';
+  const VERSION = '2.2.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -89,7 +89,8 @@
     travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
     trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
-    tab:'daily',dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
+    tab:'daily',walkthrough:null,dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
+  let routeStoreReady=false;
   let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
   let lastRenderedTab=null;
@@ -125,14 +126,14 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough']);
         state.storage='TornPDA';
         return data||{};
       }
     } catch(e){console.warn('[ProfitStaxx] Native storage unavailable; falling back');}
     state.storage='browser';
     const data={};
-    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt']){
+    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough']){
       try{data[key]=JSON.parse(localStorage.getItem(KEY_PREFIX+key)||'null');}catch(e){data[key]=null;}
     }
     return data;
@@ -141,7 +142,7 @@
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
       trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan,
       travelRows:travelState.rows,travelAt:travelState.at,
-      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt};
+      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt,walkthrough:state.walkthrough};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
         await PDA_storage.setMany(data);
@@ -433,9 +434,282 @@
   const dividendCash={CNC:[80000000,31],GRN:[4000000,31],IOU:[12000000,31],TMI:[25000000,31],TCT:[1000000,31],TSB:[50000000,31]};
   const incomeRoutes=[['market','Item Market / Bazaar','/page.php?sid=ItemMarket'],['stocks','Stock Market','/page.php?sid=stocks'],
     ['bank','Bank interest','/bank.php'],['rent','Property rental','/properties.php'],['company','Company income / wages','/companies.php'],
-    ['travel','Travel importing','/travelagency.php'],['crimes','Crimes / OC','/loader.php?sid=crimes'],
+    ['travel','Travel importing','/travelagency.php'],['crimes','Solo crimes','/loader.php?sid=crimes'],
     ['bounty','Bounty hunting','/bounties.php'],['revive','Reviving / services','/hospitalview.php'],
-    ['museum','Museum arbitrage','/museum.php'],['points','Points trading','/pmarket.php'],['other','Other earned income','/city.php']];
+    ['museum','Museum arbitrage','/museum.php'],['points','Points trading','/pmarket.php'],['city','City map finds','/city.php'],['inventory','Sell spare inventory','/item.php'],
+    ['blood','Fill and sell blood bags','/item.php'],['forgery','Forgery and Print Store','/loader.php?sid=crimes'],
+    ['oc','Organised crime payouts','/factions.php?step=your#/tab=crimes'],['war','Ranked war payouts','/factions.php?step=your'],
+    ['shop','City shop resale','/city.php'],['auction','Auction House','/city.php'],
+    ['other','Other earned income','/city.php']];
+  // Each route keeps its own instructions and destinations. Results are recorded
+  // only after the player confirms what happened in Torn.
+  const routeGuides={
+    market:{group:'Trading and travel',steps:[
+      ['Choose a listing','Compare cash needed, price cap and resale margin in Deals.','scan'],
+      ['Buy the selected lot','Check the current listing, total cost and quantity in Torn. Log the actual buy in My money.'],
+      ['Sell and settle','Compare competing listings, check the sale fee, and wait for the actual fill.'],
+      ['Record the sale','Enter the actual sell price and quantity in My money. Your trade ledger calculates realised profit.','portfolio']]},
+    travel:{group:'Trading and travel',steps:[
+      ['Choose an import run','Check recent shelf stock, round-trip time, carry capacity and cash in Travel.','travel'],
+      ['Fly and buy','Check the destination, actual stock and carry space in Torn before buying.'],
+      ['Return and sell','Check the local market and wait for proceeds to arrive.','@market'],
+      ['Record the trip','Enter the actual cash received, stock cost and any travel costs.']]},
+    museum:{group:'Trading and travel',steps:[
+      ['Check a complete set','Verify Museum access in Torn. Compare existing inventory, missing pieces and the live points price.','museum'],
+      ['Complete and exchange the set','Buy only the missing pieces you can afford. Confirm the conversion in the Museum.'],
+      ['Sell the points','Check the Points Market and wait for a completed sale.','@points'],
+      ['Record proceeds','Enter point sale proceeds and costs. Include the basis of any set pieces you already owned when measuring profit.']]},
+    points:{group:'Trading and travel',steps:[
+      ['Check both sides','Compare the available lot price with the resale price and any fees.'],
+      ['Buy within your cash limit','Check the full cost and quantity on the Points Market.'],
+      ['Wait for the sale','List at a price that covers your costs and verify the actual fill.'],
+      ['Record settled proceeds','Enter what you received and the full cost of the points sold.']]},
+    shop:{group:'Trading and travel',steps:[
+      ['Compare shop and market','Check the shop shelf price and buying limit. In Deals, compare the resale price after fees.','scan'],
+      ['Buy a small batch','Find the shop in the City and verify the current shelf price and available quantity.'],
+      ['Sell the batch','Check comparable listings and wait until the batch sells.','@market'],
+      ['Record the margin','Enter net sale proceeds and your total shop spend.']]},
+    auction:{group:'Trading and travel',steps:[
+      ['Choose an eligible item','Compare comparable listings or recent sales. Check whether the item qualifies for auction.'],
+      ['List or set a bid ceiling','Check the rules, fees and timing in the Auction House. Avoid exceeding your bid ceiling.'],
+      ['Settle the auction','Wait for the result and check for a cashier check or delivery.'],
+      ['Record the settled result','For a completed sale, enter money received and the original item cost plus any fees.']]},
+    city:{group:'Items you can turn into cash',steps:[
+      ['Look for city finds','Open the City map and check for visible item finds. Availability varies.'],
+      ['Collect visible finds','Collect the items you can actually see and check that they appear in Items.'],
+      ['Choose what to sell','Compare market prices and any available shop offer. Wait for the sale.','@market'],
+      ['Record sold finds','Enter only cash received, plus any direct costs.']]},
+    inventory:{group:'Items you can turn into cash',steps:[
+      ['Pick items you can spare','Open Items and choose a tradable item you own. Check that you do not need it for training, war or a set.'],
+      ['Compare sale options','Check market fees, similar listings and any shop offer.','@market'],
+      ['Sell and check proceeds','Confirm how many sold and the cash actually received.','@market'],
+      ['Record the sale','Use the trade ledger if the purchase is already recorded. Otherwise enter the original cost and net proceeds here.']]},
+    blood:{group:'Items you can turn into cash',steps:[
+      ['Check access and margin','Requires Intravenous Therapy. Check the cost of an empty bag and the after-fee sale price of your blood type.','@market'],
+      ['Fill bags when ready','In Items, check your life and medical cooldown before filling a bag. A normal withdrawal costs 30% of maximum life and adds an hour of medical cooldown.'],
+      ['Sell the filled bags','Check the correct blood type and wait for the sale.','@market'],
+      ['Record actual cash','Enter proceeds after fees and the cost of the empty bags used.']]},
+    forgery:{group:'Crimes and faction payouts',resource:'Nerve',steps:[
+      ['Pick a project you can finish','Check Forgery skill, required tools, consumables, nerve and steps. Compare the current Print Store payout with the material cost.'],
+      ['Complete the project','Follow the project in Crimes and count extra consumables or nerve from failed attempts.'],
+      ['Sell the finished item','Check the Print Store in the City and confirm the amount received.','@city'],
+      ['Record the project result','Enter the actual payout and cost of consumed supplies.']]},
+    crimes:{group:'Crimes and faction payouts',resource:'Nerve',steps:[
+      ['Choose a crime','Review your skill, nerve, consumables and the risk of failure.'],
+      ['Do the crime in Torn','Track nerve and any items or cash consumed on all attempts.'],
+      ['Settle the reward','Record cash received. Sell any items you want to count as cash and wait for settlement.','@market'],
+      ['Record the session','Enter the settled proceeds and actual direct costs.']]},
+    oc:{group:'Crimes and faction payouts',steps:[
+      ['Check the faction payout terms','Ask which scenarios are available and how your faction handles the split, wallet payment and faction balance.'],
+      ['Join a suitable scenario','Check the role, required items and your availability.'],
+      ['Check your personal payout','After completion, verify what was credited to you. Sell any item rewards separately if you count their cash proceeds.'],
+      ['Record your share','Enter the amount you actually received. Avoid entering a faction credit again when withdrawing it.']]},
+    war:{group:'Crimes and faction payouts',steps:[
+      ['Check the war pay agreement','Review faction rules, what hits count, and how personal payouts are determined. Faction cache values are separate.'],
+      ['Take part under faction orders','Track actual war costs such as consumables you used.'],
+      ['Verify your own payout','Check your wallet or faction balance after your faction settles rewards.'],
+      ['Record your share','Enter the actual payout and direct costs. Count a faction credit only once.']]},
+    bounty:{group:'Paid services',resource:'Energy',steps:[
+      ['Choose a bounty','Check the payout, target availability, location and matchup. WarStaxx can show any available strength estimates on Bounties.'],
+      ['Check the energy cost','Allow for failed attempts, supplies and energy you need for training or war.'],
+      ['Verify the bounty paid','A qualifying hospitalize can collect the bounty. Check the actual payout before recording it.'],
+      ['Record the result','Enter the payout, direct costs and active time, including failed attempts.']]},
+    revive:{group:'Paid services',resource:'Energy',steps:[
+      ['Check unlock and agree payment','Reviving requires the Brain Surgeon rank in the medical starter job. Agree payment and check the actual energy cost in Torn.'],
+      ['Check the patient and revive chance','Confirm the patient accepts revives and account for failed attempts.'],
+      ['Check payment received','Verify that the agreed payment arrived before logging it.'],
+      ['Record the service','Enter the actual payment, direct costs and active time.']]},
+    company:{group:'Recurring income',steps:[
+      ['Check the pay arrangement','Confirm wages or company income and distinguish personal cash from company revenue.'],
+      ['Review ongoing costs','If you own the company, account for wages, advertising and other operating costs.'],
+      ['Check what was paid','Verify the actual wage or personal withdrawal.'],
+      ['Record personal income','Enter the amount you actually received and the costs attributable to it.']]},
+    bank:{group:'Recurring income',steps:[
+      ['Read the current offer','Confirm the principal, maturity date, quoted payout and cash you can lock away.'],
+      ['Place the investment in Torn','Check the final amount and term before confirming.'],
+      ['Wait for maturity','Return to the bank when the investment ends and check the settled amount.'],
+      ['Record interest only','Subtract returned principal from the payout before entering interest as cash received.']]},
+    stocks:{group:'Recurring income',steps:[
+      ['Choose a benefit block','Check the current share shortfall, cost, holding period and payout terms.','stocks'],
+      ['Buy and check eligibility','Confirm the live share price and required shares before buying.'],
+      ['Verify the cash credit','Check Torn and compare against verified receipts in Income.','income'],
+      ['Review the receipt','Use synced stock cash receipts for verified dividends. If you enter one manually in Income, keep that record separate from the synced receipt.','income']]},
+    rent:{group:'Recurring income',steps:[
+      ['Check a rentable property','Compare expected rent with upkeep, vacancy and the value tied up in the property.'],
+      ['List or agree terms','Confirm the duration, rent and upkeep responsibility in Torn.'],
+      ['Verify receipt','Check what rent actually reached your wallet.'],
+      ['Record the rent','Enter rent received and any attributable costs for the period.']]},
+    other:{group:'Other',steps:[
+      ['Define the activity','Identify what will pay you and what it will cost.'],
+      ['Confirm the terms','Check the deal and what counts as completed.'],
+      ['Verify cash received','Check the result and actual direct costs.'],
+      ['Record it','Enter only the amount received and direct costs.']]}
+  };
+
+  function loadWalkthrough(value){
+    if(!value||typeof value!=='object'||!Object.hasOwn(routeGuides,value.route)||
+        !/^[a-z0-9-]{1,50}$/.test(value.id||'')||!Number.isInteger(value.step)||value.step<0||value.step>4)return null;
+    const plan=value.plan&&['gross','cost','minutes','resource'].every(key=>Number.isFinite(value.plan[key])&&value.plan[key]>=0&&value.plan[key]<=1e12)
+      ?{gross:value.plan.gross,cost:value.plan.cost,minutes:value.plan.minutes,resource:value.plan.resource}:null;
+    return {id:value.id,route:value.route,step:value.step,
+      target:typeof value.target==='string'?value.target.slice(0,160):'',
+      name:typeof value.name==='string'?value.name.slice(0,100):'',
+      itemId:Number.isSafeInteger(value.itemId)&&value.itemId>0?value.itemId:0,plan};
+  }
+
+  function startWalkthrough(route,target=null){
+    if(!Object.hasOwn(routeGuides,route)||!routeStoreReady)return;
+    const current=state.walkthrough,targetId=target?.id||'';
+    if(current&&current.step<4&&(current.route!==route||current.target!==targetId)&&
+        !confirm('Replace the current walkthrough? Your saved income and trades stay in the ledger.'))return;
+    if(!current||current.step>=4||current.route!==route||current.target!==targetId){
+      state.error='';
+      state.walkthrough=loadWalkthrough({id:now()+'-'+Math.random().toString(36).slice(2,10),route,step:0,
+        target:targetId,name:target?.label||'',itemId:target?.itemId||0});
+      persist();
+    }
+    state.tab='walkthrough';
+    render();
+  }
+
+  function walkthroughQuote(w){
+    if(!w.target)return null;
+    if(w.route==='market'){
+      const deal=deals().find(d=>Number(d.id)===w.itemId&&now()-d.at>=0&&now()-d.at<8*60000);
+      return deal?{cost:deal.buy*deal.qty,net:deal.profit,period:'one trade',deal}:null;
+    }
+    if(w.route==='travel'){
+      const row=travelRows().find(r=>'travel-'+r.country+'-'+r.id===w.target&&r.valid);
+      return row?{cost:row.spent,net:row.net,period:'one round trip',travel:row}:null;
+    }
+    return incomeCandidates().find(r=>r.id===w.target)||null;
+  }
+
+  async function openWalkthroughTorn(){
+    const w=state.walkthrough;
+    if(!w||w.step>=4)return;
+    const destination=routeGuides[w.route].steps[w.step][2];
+    if(destination&&!destination.startsWith('@'))return;
+    const source=destination?destination.slice(1):w.route;
+    const route=incomeRoutes.find(r=>r[0]===source);
+    if(!route)return;
+    let url='https://www.torn.com'+route[2];
+    if(source==='market'&&w.itemId){
+      url=linkToItem(w.itemId);
+      if(w.route==='market'&&w.step===1){
+        const deal=walkthroughQuote(w)?.deal;
+        if(deal)try{
+          sessionStorage.setItem('profitstaxx-market-intent-v1',JSON.stringify({
+            id:w.itemId,qty:Math.floor(deal.qty),maxPrice:Number(deal.buy),
+            name:String(deal.name).slice(0,80),at:now(),quoteAt:deal.at
+          }));
+        }catch(_){/* The market can still open without quantity assistance. */}
+      }
+    }
+    await saveChain;
+    if(state.walkthrough!==w)return;
+    state.open=false;render();
+    if(location.href===url){marketAssist();return;}
+    location.assign(url);
+  }
+
+  function saveWalkthroughForm(form){
+    const w=state.walkthrough,planning=form.id==='ps_route_plan';
+    if(!w||(planning?w.step!==0:w.step!==3||['market','stocks'].includes(w.route)))return;
+    const fields=new FormData(form);
+    const first=planning?'gross':'received',second=planning?'cost':'spent';
+    const gross=Number(fields.get(first)),cost=Number(fields.get(second));
+    const minutes=Number(fields.get('minutes')),resource=Number(fields.get('resource'));
+    if(!String(fields.get(first)??'').trim()||!String(fields.get(second)??'').trim()||
+       ![gross,cost,minutes,resource].every(v=>Number.isFinite(v)&&v>=0&&v<=1e12)){
+      alert('Enter non-negative cash amounts and optional time or energy. Enter 0 for no costs.');return;
+    }
+    if(planning){
+      state.walkthrough={...w,plan:{gross,cost,minutes,resource}};persist();
+    }else{
+      const id='route-'+w.id,records=moneyRecords();
+      state.walkthrough={...w,step:4};
+      const next=records.some(x=>x.id===id)?records:[...records,{id,at:now(),source:w.route,net:gross-cost,minutes,
+        note:String(fields.get('note')||w.name||'Walkthrough result').slice(0,100)}];
+      putMoney(next);
+    }
+    render();
+  }
+
+  function startRouteButton(route,label='Start walkthrough'){
+    return '<button class="btn secondary" data-action="route-start" data-source="'+esc(route)+'">'+esc(label)+'</button>';
+  }
+
+  function renderRouteDirectory(){
+    const groups=new Map(),recent=new Map(),cutoff=now()-30*86400000;
+    for(const record of moneyRecords()){
+      if(record.at<cutoff||record.at>now()||!Number.isFinite(record.at)||!Number.isFinite(record.net))continue;
+      const summary=recent.get(record.source)||{count:0,net:0,timedNet:0,minutes:0};
+      summary.count++;summary.net+=record.net;
+      if(record.minutes>0&&Number.isFinite(record.minutes)){summary.minutes+=record.minutes;summary.timedNet+=record.net;}
+      recent.set(record.source,summary);
+    }
+    for(const [id,label] of incomeRoutes){
+      const guide=routeGuides[id];
+      if(!groups.has(guide.group))groups.set(guide.group,[]);
+      groups.get(guide.group).push([id,label]);
+    }
+    return [...groups].map(([group,rows])=>'<section class="card"><h3>'+esc(group)+'</h3>'+
+      rows.map(([id,label])=>{
+        const result=recent.get(id);
+        const summary=result?'<p class="muted">Recorded in 30 days: '+fmt(result.net)+' net across '+result.count+' entries'+
+          (result.minutes?' · '+fmt(result.timedNet*60/result.minutes)+'/active hour on timed entries':'')+'</p>':'';
+        return '<div class="line"><div><strong>'+esc(label)+'</strong>'+summary+'</div>'+startRouteButton(id,'Choose')+'</div>';
+      }).join('')+'</section>').join('');
+  }
+
+  function renderWalkthrough(){
+    const w=state.walkthrough;
+    if(!w)return '<h2>Choose a money-making route</h2>'+(routeStoreReady?renderRouteDirectory():'<p>Restoring saved routes…</p>');
+    const guide=routeGuides[w.route],label=incomeRoutes.find(row=>row[0]===w.route)[1];
+    const top='<h2>'+esc(w.name||label)+'</h2>'+(w.name?'<p>'+esc(label)+'</p>':'');
+    const switcher='<details data-view-key="route-switch"><summary>Choose a different route</summary>'+renderRouteDirectory()+'</details>';
+    const result=w.step===4?moneyRecords().find(x=>x.id==='route-'+w.id):null;
+    if(w.step===4)return top+'<div class="card"><h3>Walkthrough complete</h3>'+
+      (result?'<p>Saved result · '+fmt(result.net)+' net'+(w.plan?' · '+fmt(w.plan.gross-w.plan.cost)+' estimated':'')+'</p>':'')+'<button class="btn" data-tab="portfolio">View my money</button> '+
+      '<button class="btn secondary" data-action="route-repeat">Start another run</button></div>'+switcher;
+
+    const [title,detail,destination]=guide.steps[w.step];
+    const quote=w.step<2?walkthroughQuote(w):null;
+    const cash=liveWalletCashV113();
+    let evidence='';
+    if(w.target&&w.step<2){
+      evidence=quote?'<p>Current estimate for '+esc(quote.period)+' · '+fmt(quote.cost)+' needed · '+fmt(quote.net)+' estimated net.</p>':
+        '<p class="muted">The saved opportunity has no current qualifying quote. Refresh its source and check the live terms in Torn.</p>';
+      if(quote?.travel)evidence+='<p>Check '+quote.travel.quantityBuy+' × '+esc(quote.travel.name)+' at '+fmt(quote.travel.cost)+' in '+esc(quote.travel.countryName)+'.</p>';
+      if(quote&&cash!==null&&quote.cost>cash)evidence+='<p class="negative">The estimated cost exceeds your last checked Torn cash balance.</p>';
+    }
+    const action=destination&&!destination.startsWith('@')?'<button class="btn" data-tab="'+destination+'">Open '+({scan:'Deals',portfolio:'My money',stocks:'Stocks',travel:'Travel',museum:'Museum planner',income:'Income'}[destination])+'</button>':
+      '<button class="btn" data-action="route-torn">Open '+esc(({market:'Item Market',points:'Points Market',city:'City map',inventory:'Items',
+        blood:'Items',travel:'Travel Agency',oc:'Faction crimes',war:'Faction',forgery:'Crimes',crimes:'Crimes',revive:'Hospital',
+        bounty:'Bounties',auction:'City',shop:'City',other:'City',stocks:'Stock Market',bank:'Bank',rent:'Properties',
+        company:'Company',museum:'Museum'})[destination?.slice(1)||w.route]||'Torn')+'</button>';
+    const showReceipt=w.step===3&&w.route!=='market'&&w.route!=='stocks';
+    const plan=w.plan,net=plan?plan.gross-plan.cost:null;
+    const estimate=plan?'<p>Saved estimate · '+fmt(net)+' net'+(plan.minutes?' · '+fmt(net*60/plan.minutes)+'/active hour':'')+
+      (plan.resource&&guide.resource?' · '+fmt(net/plan.resource)+'/'+esc(guide.resource):'')+'</p>':'';
+    const calculator=w.step===0?'<details data-view-key="route-estimate"><summary>Estimate this run</summary>'+
+      '<form id="ps_route_plan"><div class="duo">'+field('gross','Expected cash after fees ($)',plan?.gross??'')+
+      field('cost','Expected total costs ($)',plan?.cost??'')+'</div><div class="duo">'+
+      field('minutes','Active minutes (optional)',plan?.minutes??'')+(guide.resource?field('resource',guide.resource+' budget (optional)',plan?.resource??''):'')+
+      '</div><button class="btn secondary" type="submit">Save estimate</button></form></details>':'';
+    const receipt=showReceipt?'<form id="ps_route_receipt"><div class="duo">'+field('received','Cash actually received ($)','','number','required min="0" step="1"')+
+      field('spent','Actual costs ($)','','number','required min="0" step="1"')+'</div><div class="duo">'+field('minutes','Active minutes (optional)','')+
+      field('note','Note','','text','maxlength="100"')+'</div><button class="btn" type="submit">Save result and finish</button></form>':'';
+    return top+(state.error?notice(state.error,true):'')+'<div class="ps-desk-next"><small>STEP '+(w.step+1)+' OF 4</small><h2 class="ps-route-current" tabindex="-1">'+esc(title)+'</h2><p>'+esc(detail)+'</p>'+evidence+
+      estimate+calculator+'<div class="toolbar">'+(showReceipt?'':action)+
+      (w.step>0?'<button class="btn secondary" data-action="route-back">Back a step</button>':'')+
+      (w.step<3?'<button class="btn secondary" data-action="route-next">'+['Plan checked · continue','Action done · continue','Result checked · continue'][w.step]+'</button>':
+       '<button class="btn secondary" data-action="route-next">'+(showReceipt?'Finish without recording':'Mark complete')+'</button>')+'</div>'+receipt+'</div>'+
+      '<ol class="ps-route-steps">'+guide.steps.map(([name],i)=>'<li'+(i===w.step?' aria-current="step"':'')+'>'+esc(name)+(i<w.step?' · done':'')+'</li>').join('')+'</ol>'+
+      '<button class="btn secondary" data-action="route-cancel">Clear walkthrough</button>'+switcher;
+  }
+
   const stockState={all:[],owned:[],at:0,ownedAt:0,loading:false,error:''};
 
   const stockLogStatus={busy:false,error:'',partial:false,unparsed:0};
@@ -667,7 +941,7 @@
     const maxSpend=number(state.settings.capital)*number(state.settings.maxTradePct)/100;
     return travelState.rows.map(x=>{
       const observed=Number(x.observed)||0,ageMs=observed?now()-observed:Infinity;
-      const q=state.quotes[x.id],fresh=q&&now()-q.at<8*60000&&q.reference>0;
+      const q=state.quotes[x.id],fresh=q&&now()-q.at>=0&&now()-q.at<8*60000&&q.reference>0;
       const resale=fresh?Math.floor(q.reference*.95):null;
       const quantity=Math.max(0,Math.min(cap,x.quantity,Math.floor(maxSpend/x.cost)));
       const cost=quantity*x.cost,net=resale===null?null:quantity*(resale-x.cost);
@@ -771,7 +1045,7 @@
         '<div class="line"><span>Estimated net trip profit</span><b class="positive">'+fmt(x.net)+'</b></div>'+
         '<div class="line"><span>Purchase '+x.quantityBuy+' × '+fmt(x.cost)+'</span><span>'+fmt(x.spent)+' total</span></div>'+
         '<p class="muted">Observed '+age(x.observed)+' · shelf '+x.quantity+' units · '+x.reporters+' reporters · modeled resale '+fmt(x.saleReference)+'/item (ask-derived)</p>'+
-        '<button class="btn secondary" data-action="incomepage" data-source="travel">Open travel agency</button></div>';
+        '<button class="btn secondary" data-action="route-travel" data-target="'+esc('travel-'+x.country+'-'+x.id)+'">Start this trip</button></div>';
     }
     if(!fresh.length)h+='<div class="empty">No fresh, verified-margin travel route qualifies yet. Unknown or old resale prices are not treated as profit.</div>';
     return h;
@@ -829,8 +1103,7 @@
       '';
     h+=renderStockCashReceipts();
     h+=incomeComparisonPanel();
-    h+='<h3>Explore other Torn revenue sources</h3>';
-    for(const r of incomeRoutes)h+='<div class="card"><div class="line"><strong>'+esc(r[1])+'</strong><button class="btn secondary" data-action="incomepage" data-source="'+esc(r[0])+'">Open Torn</button></div></div>';
+    h+='<div class="card"><h3>Money-making routes</h3><button class="btn" data-tab="walkthrough">Open walkthroughs</button></div>';
     h+='<h3>Income history</h3>';
     for(const x of records.slice(-30).reverse())h+='<div class="card"><div class="line"><b>'+esc(incomeRoutes.find(r=>r[0]===x.source)?.[1]||'Other')+'</b><span>'+fmt(x.net)+'</span></div>'+
       '<div class="line"><span class="muted">'+esc(x.note||new Date(x.at).toLocaleDateString())+'</span><button class="btn red" data-income-id="'+esc(x.id)+'">Delete</button></div></div>';
@@ -859,7 +1132,7 @@
     for(const r of travelRows().filter(x=>x.valid).slice(0,40)){
       add({id:'travel-'+r.country+'-'+r.id,kind:'travel',label:r.countryName+' · '+r.name,category:'active',
         cost:r.spent,net:r.net,minutes:r.roundTripMinutes||0,confidence:Math.max(0,70-r.observationAge/60000),
-        period:'one round trip',route:'travel',summary:r.roundTripMinutes?'Round-trip minutes: '+r.roundTripMinutes:'Enter travel minutes for hourly comparison'});
+        period:'one round trip',route:'travel',itemId:Number(r.id),summary:r.roundTripMinutes?'Round-trip minutes: '+r.roundTripMinutes:'Enter travel minutes for hourly comparison'});
     }
     if(state.pointsPrice>0){
       for(const r of recipeResults())if(r.ready&&r.profit>0&&r.missingCost>0){
@@ -940,10 +1213,16 @@
     let title,reason,action;
     if(!apiKey()){title='Connect your Torn data';reason='Add your key in Settings or enable Torn PDA key substitution to price opportunities.';action='<button class="btn" data-tab="settings">Open settings</button>';}
     else if(sell){title='Review selling '+sell.name;reason=fmt(sell.upside)+' indicative after-fee upside on '+sell.qty+' recorded units. Check actual bids before selling.';action='<button class="btn" data-action="market-view" data-id="'+sell.itemId+'">Inspect live market</button>';}
-    else if(buy){title='Review '+buy.name;reason='Up to '+Math.floor(buy.qty)+' units / '+fmt(buy.qty*buy.buy)+' cash / '+fmt(buy.profit)+' estimated gain. Asking-price model, not guaranteed resale.';action='<button class="btn" data-action="market-buy" data-id="'+buy.id+'">Inspect opportunity</button>';}
+    else if(buy){title='Review '+buy.name;reason='Up to '+Math.floor(buy.qty)+' units / '+fmt(buy.qty*buy.buy)+' cash / '+fmt(buy.profit)+' estimated gain. Asking-price model, not guaranteed resale.';action='<button class="btn" data-action="route-market" data-id="'+buy.id+'">Start walkthrough</button>';}
     else {title=d.fresh.length?'Keep your reserve intact':'No priced move to recommend';reason=d.fresh.length?'Current deals exceed the available budget or have high risk flags. You do not need to force a purchase.':'Refresh opportunities, then compare costs and evidence before committing cash.';action='<button class="btn" data-action="quickscan" '+(state.busy?'disabled':'')+'>Check opportunities</button>';}
     return '<header class="ps-page-heading"><div><small>PROFIT WORKSPACE</small><h2>Your next money decision</h2></div><div class="toolbar"><button class="btn secondary" data-tab="capital">Budget & reserve</button><button class="btn" data-action="quickscan" '+(state.busy?'disabled':'')+'>Refresh opportunities</button></div></header>'+
       (state.error?notice(state.error,true):'')+(state.busy?'<div class="notice" role="status">'+esc(state.status)+' <button class="btn secondary" data-action="stopscan">Stop scan</button></div>':'')+
+      '<div class="card"><div class="line"><div><strong>'+esc(state.walkthrough&&state.walkthrough.step<4?
+        'Continue '+(state.walkthrough.name||incomeRoutes.find(r=>r[0]===state.walkthrough.route)[1]):'Choose a money-making route')+
+        '</strong><p class="muted">'+(state.walkthrough&&state.walkthrough.step<4?
+        'Step '+(state.walkthrough.step+1)+' of 4 · '+esc(routeGuides[state.walkthrough.route].steps[state.walkthrough.step][0]):
+        'Follow the steps and record the settled result.')+'</p></div><button class="btn" data-tab="walkthrough">'+
+        (state.walkthrough&&state.walkthrough.step<4?'Resume':'Browse routes')+'</button></div></div>'+
       '<section class="ps-desk-next"><small>NEXT REVIEW</small><h2>'+esc(title)+'</h2><p>'+esc(reason)+'</p>'+action+'</section>'+
       '<div class="ps-desk-metrics">'+deskMetric('Spendable model',fmt(d.plan.spendable),'After reserve and recorded exposure')+
         deskMetric('Recorded holdings',fmt(d.money.invested),d.money.positions.filter(x=>x.qty>0).length+' open positions')+
@@ -995,7 +1274,7 @@
         '<div class="line"><span>Cash exposure</span><b>'+fmt(x.cost)+'</b></div>'+
         '<div class="line"><span>Indicative net · '+esc(x.period)+'</span><b class="positive">'+fmt(x.net)+'</b></div>'+
         '<p class="muted">'+esc(x.summary)+' · '+(x.minutes?x.minutes+' active minutes estimated':'No active duration confirmed')+'</p>'+
-        '<div class="toolbar"><button class="btn" data-action="rank-open" data-rank-id="'+esc(x.id)+'">Review in Torn</button>'+
+        '<div class="toolbar"><button class="btn" data-action="rank-open" data-rank-id="'+esc(x.id)+'">Start walkthrough</button>'+
         '<button class="btn secondary" data-daily-review="'+esc(x.id)+'">'+mark+'</button></div></div>';
     }
     return html+notice('ProfitStaxx uses the Hub time budget when selected. Review markers never prove a trade was completed. Only an exact Torn stock cash log is labelled independently verified.');
@@ -1014,9 +1293,9 @@
         '<div class="line"><span>ROI / confidence heuristic</span><span>'+pct(x.roi)+' / '+Math.round(x.confidence)+'/100</span></div>'+
         (x.minutes?'<p class="muted">Estimated active time '+x.minutes+' min · '+fmt(x.net*60/x.minutes)+'/active hour if completed</p>':'')+
         '<p class="muted">'+esc(x.summary)+'</p>'+
-        '<button class="btn secondary" data-action="rank-open" data-rank-id="'+esc(x.id)+'">Review this opportunity</button></div>';
+        '<button class="btn secondary" data-action="rank-open" data-rank-id="'+esc(x.id)+'">Start walkthrough</button></div>';
     }
-    return h;
+    return h+'<div class="card"><button class="btn secondary" data-tab="walkthrough">Browse all income routes</button></div>';
   }
   // Buckets share only deployable cash; the unspent cash reserve and item cost basis are protected.
   function multiCapitalPlan(){
@@ -1150,6 +1429,7 @@
 
   function css(){
     return [
+      '.ps-route-steps{padding-left:26px;color:#a8c9de}.ps-route-steps li{padding:5px}.ps-route-steps [aria-current="step"]{font-weight:700;color:#86e1ff}.ps-desk-next .toolbar{flex-wrap:wrap;margin-top:12px}',
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
       '*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer}',
       '.ps-page-heading{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:4px 0 18px}.ps-page-heading h2{margin:5px 0;font-size:24px}.ps-page-heading small,.ps-desk-next>small{letter-spacing:.12em;font-size:10px;color:#8bdcff}.ps-desk-next{border-left:4px solid #49c9ff;padding:20px;background:linear-gradient(110deg,#123a59,#0b2136);border-radius:0 12px 12px 0;margin-bottom:18px}.ps-desk-next h2{font-size:24px;margin:8px 0}.ps-desk-next p{line-height:1.6;color:#bad3e5}.ps-desk-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.ps-desk-metric{padding:12px;border-bottom:1px solid #31516a;min-width:0}.ps-desk-metric small,.ps-desk-metric span{display:block;font-size:11px;color:#a6c2d8}.ps-desk-metric strong{display:block;font-size:22px;margin:7px 0;overflow-wrap:anywhere}.ps-desk-columns{display:grid;grid-template-columns:1.2fr 1fr;gap:24px}.ps-opportunity{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;background:transparent;border:0;border-bottom:1px solid #31516a;padding:14px 0;color:#eff8ff}.ps-opportunity small,.ps-holding small{display:block;margin-top:5px;color:#abc7da;font-size:11px}.ps-opportunity>span:last-child{text-align:right;color:#86dfcd}.ps-research-links{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:20px 0}.ps-research-links button{background:#102e46;border:1px solid #345971;color:#eef8ff;padding:12px;text-align:left;border-radius:8px}.ps-research-links small{display:block;color:#a6c4d8;margin-top:6px}.body>details>summary{padding:14px 4px;cursor:pointer;color:#94ddff;border-bottom:1px solid #31516a}.ps-filterbar{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:15px 0}.ps-filterbar label{font-size:12px;color:#a8c9de}.ps-filterbar input,.ps-filterbar select{display:block;width:100%;min-width:0;margin-top:6px;background:#0b2034;border:1px solid #3d617a;color:#fff;padding:10px;border-radius:6px}.ps-stock-head,.ps-stock-row>summary{display:grid;grid-template-columns:minmax(0,1.4fr) 1fr 1fr;gap:8px;align-items:center;padding:13px 7px}.ps-stock-head{color:#9cbdcf;font-size:11px}.ps-stock-row{border-top:1px solid #31516a}.ps-stock-row summary{cursor:pointer;font-size:13px}.ps-stock-row small{display:block;font-size:11px;color:#a4c1d3}.ps-stock-detail{padding:0 12px 15px;background:#0d2439}.ps-holding{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid #31516a;font-size:12px}.btn,button{touch-action:manipulation}button:focus-visible,summary:focus-visible{outline:2px solid #71d9ff;outline-offset:2px}@media(max-width:600px){.ps-desk-columns{grid-template-columns:1fr;gap:12px}.ps-desk-metrics{grid-template-columns:1fr 1fr}.ps-desk-metrics>.ps-desk-metric:last-child{grid-column:1/-1}.ps-research-links{grid-template-columns:1fr}.ps-page-heading h2,.ps-desk-next h2{font-size:21px}.ps-holding{grid-template-columns:1fr auto}.ps-holding>span:nth-child(2){grid-row:2;grid-column:1/-1}.ps-stock-row summary{font-size:12px}}',
@@ -1214,6 +1494,9 @@
   function profitNextActions(){
     const fresh=activeDealAlerts(),exits=exitSignals(),actions=[];
     const daily=dailyPlanV111();
+    const route=state.walkthrough;
+    if(route&&route.step<4)actions.push({id:'route-resume',title:'Continue your profit walkthrough',
+      detail:routeGuides[route.route].steps[route.step][0],status:'review',priority:82});
     const topStock=stockBlockOpportunities().find(x=>x.affordable&&x.annual!==null);
     if(topStock)actions.push({id:'stock-block-'+topStock.id,title:'Review '+topStock.acronym+' next benefit block',
       detail:topStock.need.toLocaleString('en-GB')+' more shares · '+fmt(topStock.cost)+' modeled cash · '+fmt(topStock.annual)+'/year expected cash before risks',
@@ -1407,14 +1690,14 @@
       html+='<details class="ps-deal-row" data-deal="'+Number(x.id)+'"><summary><span><b>'+esc(x.name)+'</b><small>'+Math.floor(x.qty)+' units / '+age(x.at)+'</small></span><span>'+fmt(x.qty*x.buy)+'<small>'+fmt(x.buy)+'/unit cap</small></span><span class="positive">'+fmt(x.profit)+'<small>'+pct(x.roi)+' ROI</small></span></summary>'+
        '<div class="ps-deal-evidence"><p>'+(verifiedOwnedV114(x.name)===null?'Inventory quantity unverified':'Verified Torn inventory: '+verifiedOwnedV114(x.name)+' owned')+'</p><p>'+esc(risk.level)+' risk / '+esc(risk.confidence)+' evidence. '+esc(risk.flags.join(' / ')||'No additional historical flags')+'</p>'+
        '<p>Reference ask '+fmt(x.reference)+' / depth '+x.depth+' units. These are asking prices, not completed sales.</p>'+
-       '<button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Inspect listing / prepare '+Math.floor(x.qty)+'</button></div></details>';
+       '<button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Inspect listing / prepare '+Math.floor(x.qty)+'</button> <button class="btn secondary" data-action="route-market" data-id="'+Number(x.id)+'">Walk through this trade</button></div></details>';
     }
     html+=notice('Expected resale is inferred from active asking prices, not confirmed completed sales. Listings may disappear before you buy.');
     return html;
   }
   function renderMuseum(){
     let html='<div class="statrow"><div class="stat"><small>Cheapest point ask</small><b>'+fmt(state.pointsPrice)+'</b></div>'+
-      '<div class="stat"><small>Museum unlocked</small><b>Yes</b></div></div>';
+      '<div class="stat"><small>Museum access</small><b>Check in Torn</b></div></div>';
     html+=notice('Each complete flower or plushie set = 10 points. Cash cost assumes Item Market purchases; points revenue uses the lowest ASK, not guaranteed proceeds.');
     html+='<div class="toolbar"><button class="btn secondary" data-action="inventoryscan" '+(state.inventoryBusy?'disabled':'')+'>'+
       (state.inventoryBusy?'Checking Torn inventory…':'Sync owned flowers & plushies')+'</button></div>';
@@ -1530,7 +1813,7 @@
   let profitTabsExpanded=false;
   const simpleProfitTabs=new Set(['alerts','daily','best','scan','stocks','income']);
   function profitNavigation(active){
-    const primary=[['daily','Overview'],['scan','Deals'],['stocks','Stocks'],['portfolio','My money']];
+    const primary=[['daily','Overview'],['scan','Deals'],['stocks','Stocks'],['portfolio','My money'],['walkthrough','Routes']];
     const groups=[['Explore',[['best','Compare opportunities'],['travel','Travel'],['income','Income'],['museum','Museum']]],
       ['Review',[['capital','Capital plan'],['history','Price history'],['alerts','Alerts'],['settings','Settings'],['diagnostics','Diagnostics']]]];
     const button=([id,label])=>'<button class="tab '+(active===id?'active':'')+'" data-tab="'+id+'">'+label+'</button>';
@@ -1562,7 +1845,7 @@
     const simpleProfitMode=(()=>{try{return JSON.parse(localStorage.getItem('staxx-hub-mode-v1')||'"simple"')!=='advanced';}catch(_){return true;}})();
     const visibleProfitTabs=!simpleProfitMode||profitTabsExpanded?tabs:tabs.filter(name=>simpleProfitTabs.has(name)||name===state.tab);
     const active=state.tab;
-    const content=active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
+    const content=active==='walkthrough'?renderWalkthrough():active==='alerts'?renderAlerts():active==='scan'?renderScan():active==='museum'?renderMuseum():
       active==='portfolio'?renderMoneyWorkspace():active==='daily'?renderProfitHome():active==='stocks'?renderStockWorkspace():active==='travel'?renderTravel():active==='best'?renderRankings():active==='capital'?renderCapital():active==='history'?renderHistory():active==='income'?renderRevenuePanel():active==='diagnostics'?renderProfitDiagnosticsV111():renderSettings();
     // Preserve the actual inner scroll container across progressive scans and any other renders.
     // TornPDA WebView otherwise snaps to the beginning when shell.innerHTML is replaced.
@@ -1651,7 +1934,7 @@
     if(el.dataset.action==='staxx-find'){state.open=false;render();document.dispatchEvent(new CustomEvent('staxx:find'));return;}
     if(el.dataset.action==='staxx-more-tabs'){profitTabsExpanded=!profitTabsExpanded;render();return;}
     if(el.dataset.tab){state.tab=el.dataset.tab;
-      if(['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics'].includes(state.tab))
+      if(['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics','walkthrough'].includes(state.tab))
         document.dispatchEvent?.(new CustomEvent('staxx:visit',{detail:{id:'profit',section:state.tab}}));
       render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
@@ -1701,17 +1984,41 @@
       case 'travelscan':scanTravel();break;
       case 'inventoryscan':refreshInventoryV112();break;
       case 'rank-open':{
-        const r=incomeCandidates().find(x=>x.id===el.dataset.rankId);if(!r)return;
-        if(r.kind==='market'){
-          const d=activeDealAlerts().find(x=>x.id===r.itemId);
-          if(!d){state.tab='scan';render();break;}
-          try{sessionStorage.setItem('profitstaxx-market-intent-v1',JSON.stringify({id:d.id,qty:Math.floor(d.qty),maxPrice:d.buy,name:d.name,at:now()}));}
-          catch(_){state.error='Could not prepare quantity; confirm it yourself.';}
-          location.assign(linkToItem(r.itemId));break;
-        }
-        if(r.route==='museum'){state.tab='museum';render();break;}
-        const src=incomeRoutes.find(x=>x[0]===r.route);if(src)location.assign('https://www.torn.com'+src[2]);break;
+        const row=incomeCandidates().find(x=>x.id===el.dataset.rankId);
+        if(row)startWalkthrough(row.route,row);
+        else{state.error='That opportunity has changed. Refresh the quote or choose the route without a quote.';render();}
+        break;
       }
+      case 'route-start':startWalkthrough(el.dataset.source);break;
+      case 'route-market':{
+        const deal=deals().find(d=>Number(d.id)===Number(el.dataset.id)&&now()-d.at>=0&&now()-d.at<8*60000);
+        if(deal)startWalkthrough('market',{id:'market-'+deal.id,label:deal.name,itemId:Number(deal.id)});
+        else{state.error='This listing has expired. Refresh Deals before choosing it.';render();}
+        break;
+      }
+      case 'route-travel':{
+        const row=travelRows().find(r=>'travel-'+r.country+'-'+r.id===el.dataset.target&&r.valid);
+        if(row)startWalkthrough('travel',{id:el.dataset.target,label:row.countryName+' · '+row.name,itemId:Number(row.id)});
+        else{state.error='This trip estimate has expired. Check current stock and resale prices.';render();}
+        break;
+      }
+      case 'route-next':
+      case 'route-back':{
+        const w=state.walkthrough;if(!w||w.step>=4)return;
+        const direction=el.dataset.action==='route-next'?1:-1;
+        state.walkthrough={...w,step:clamp(w.step+direction,0,4)};persist();render();
+        shell.querySelector('.ps-route-current')?.focus({preventScroll:true});
+        break;
+      }
+      case 'route-repeat':{
+        const w=state.walkthrough;
+        if(w?.step===4)startWalkthrough(w.route,w.target?{id:w.target,label:w.name,itemId:w.itemId}:null);
+        break;
+      }
+      case 'route-cancel':
+        if(confirm('Clear this walkthrough?')){state.walkthrough=null;persist();render();}
+        break;
+      case 'route-torn':void openWalkthroughTorn();break;
       case 'allocation-open':{const src=incomeRoutes.find(x=>x[0]===el.dataset.source);if(src)location.assign('https://www.torn.com'+src[2]);break;}
       case 'stockpage':location.assign('https://www.torn.com/page.php?sid=stocks');break;
       case 'incomepage':{const row=incomeRoutes.find(x=>x[0]===el.dataset.source);if(row)location.assign('https://www.torn.com'+row[2]);break;}
@@ -1728,7 +2035,10 @@
     }
   }
   function onSubmit(event){
-    if(event.target.id==='ps_trade'){
+    if(['ps_route_plan','ps_route_receipt'].includes(event.target.id)){
+      event.preventDefault();
+      saveWalkthroughForm(event.target);
+    }else if(event.target.id==='ps_trade'){
       event.preventDefault();
       const f=new FormData(event.target),side=f.get('side'),method=f.get('method');
       const item=getItem(f.get('item'));
@@ -1811,8 +2121,9 @@
   }
   document.addEventListener('staxx:open',e=>{if(e.detail?.id==='profit'){
     state.open=true;
-    if(e.detail.alertId){state.tab=e.detail.alertId==='stock-claim'?'stocks':e.detail.alertId==='daily-plan'?'daily':'alerts';state.alertFocus=['stock-claim','daily-plan'].includes(e.detail.alertId)?'':String(e.detail.alertId);}
-    else if(['daily','alerts','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics'].includes(e.detail.section)){state.tab=e.detail.section;state.alertFocus='';}
+    if(e.detail.alertId==='route-resume'){state.tab='walkthrough';state.alertFocus='';}
+    else if(e.detail.alertId){state.tab=e.detail.alertId==='stock-claim'?'stocks':e.detail.alertId==='daily-plan'?'daily':'alerts';state.alertFocus=['stock-claim','daily-plan'].includes(e.detail.alertId)?'':String(e.detail.alertId);}
+    else if(['daily','alerts','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics','walkthrough'].includes(e.detail.section)){state.tab=e.detail.section;state.alertFocus='';}
     render();
   }else if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:closeall',()=>{if(state.open){state.open=false;render();}});
@@ -1823,6 +2134,14 @@
       storage:state.storage==='TornPDA'?'ready':'unknown',ui:root&&shell?'ready':'missing',
       detail:state.busy?'Market scan in progress':'Market quotes '+(state.lastScan?'last checked '+age(state.lastScan):'not yet fully scanned')}}));
   });
+  function nativeWalkthroughButton(itemId){
+    const walk=state.walkthrough;
+    if(!walk||walk.step>=4||walk.itemId!==itemId||!['market','travel'].includes(walk.route))return null;
+    const button=document.createElement('button');
+    button.type='button';button.textContent='Resume ProfitStaxx walkthrough';
+    button.onclick=()=>{state.tab='walkthrough';state.open=true;render();};
+    return button;
+  }
   function nativeMarketQuote(){
     let box=document.getElementById('ps-native-quote');
     const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\d+)(?:&|$)/),id=match?Number(match[1]):0;
@@ -1843,7 +2162,7 @@
     const message=(fresh?'Quote checked ':'Saved quote / ')+age(quote.at)+' / reference ask '+fmt(quote.reference)+
       (deal?' / modelled buy cap '+fmt(deal.buy)+' / up to '+Math.floor(deal.qty):' / no current qualified buy recommendation')+
       (held?' / ledger holdings '+held.qty:'');
-    const signature=JSON.stringify([id,message,quote.at]);
+    const signature=JSON.stringify([id,message,quote.at,state.walkthrough?.id,state.walkthrough?.step]);
     if(box?.dataset.signature===signature&&box.previousElementSibling===fields[0])return;
     box?.remove();box=document.createElement('details');box.id='ps-native-quote';box.dataset.signature=signature;
     box.style.cssText='display:block;clear:both;margin:8px 0;padding:8px;border:1px solid #355d7a;border-radius:6px;background:#10283f;color:#eaf6ff;font:12px/1.5 system-ui';
@@ -1852,11 +2171,15 @@
     const note=document.createElement('small');note.textContent='Reference asking prices are not completed sales. Verify the current listing; this helper does not change the quantity.';
     const button=document.createElement('button');button.type='button';button.textContent='Inspect this item';
     button.onclick=()=>{dealQuery=String(quote.name||'');state.tab='scan';state.open=true;render();};
-    box.append(title,info,note,button);fields[0].insertAdjacentElement('afterend',box);
+    box.append(title,info,note,button);
+    const resume=nativeWalkthroughButton(id);if(resume)box.append(resume);
+    fields[0].insertAdjacentElement('afterend',box);
   }
+  let activeMarketAssist=null;
   function marketAssist(){
     if(!/\/page\.php$/i.test(location.pathname)||!location.search.includes('sid=ItemMarket'))return;
-    let p;try{p=JSON.parse(sessionStorage.getItem('profitstaxx-market-intent-v1')||'null');}catch(_){return;}
+    const intentKey='profitstaxx-market-intent-v1';
+    let p,raw;try{raw=sessionStorage.getItem(intentKey);p=JSON.parse(raw||'null');}catch(_){return;}
     const correctItem=()=>{
       if(location.pathname!=='/page.php'||new URLSearchParams(location.search).get('sid')!=='ItemMarket')return false;
       const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\d+)(?:&|$)/);
@@ -1865,22 +2188,30 @@
     const expired=()=>now()-p.at<0||now()-p.at>600000||
       (p.quoteAt!==undefined&&(!Number.isFinite(p.quoteAt)||now()-p.quoteAt<0||now()-p.quoteAt>=8*60000));
     if(!p||!Number.isInteger(p.id)||!Number.isInteger(p.qty)||p.qty<1||p.qty>1000000||!Number.isFinite(p.at)||expired()||!correctItem())return;
+    if(activeMarketAssist?.raw===raw)return;
+    activeMarketAssist?.cleanup();
     const box=document.createElement('div');box.id='ps-market-assist';box.style.cssText='position:static;max-width:100%;margin:8px 0;background:#08192d;color:#e8f7ff;border:1px solid #54d7fa;border-radius:12px;padding:12px;font:13px system-ui;box-shadow:0 5px 28px #000a';
     const title=document.createElement('b');title.textContent='ProfitStaxx · '+p.name+' × '+p.qty;
     const status=document.createElement('p');status.textContent='Check live listing price (modeled cap $'+Math.round(p.maxPrice).toLocaleString('en-US')+'/unit). Looking for Buy quantity field…';
     const copy=document.createElement('button');copy.textContent='Copy quantity';copy.onclick=()=>{const v=String(p.qty);if(navigator.clipboard?.writeText)navigator.clipboard.writeText(v).then(()=>status.textContent='Copied '+v).catch(()=>status.textContent='Quantity: '+v);else status.textContent='Quantity: '+v;};
     const close=document.createElement('button');close.textContent='Close ×';close.style.marginLeft='10px';
     box.append(title,status,copy,close); // Insert only beside an unambiguous buy field.
+    const resume=nativeWalkthroughButton(p.id);if(resume)box.append(resume);
     let filled=false,count=0,observer,timer;
-    const stop=()=>{observer?.disconnect();clearInterval(timer);sessionStorage.removeItem('profitstaxx-market-intent-v1');};
+    const stop=()=>{
+      observer?.disconnect();clearInterval(timer);
+      try{if(sessionStorage.getItem(intentKey)===raw)sessionStorage.removeItem(intentKey);}catch(_){}
+    };
     const cleanup=()=>{
       stop();box.remove();window.removeEventListener('hashchange',checkRoute);
       window.removeEventListener('popstate',checkRoute);
+      if(activeMarketAssist?.raw===raw)activeMarketAssist=null;
     };
     const checkRoute=()=>{if(!correctItem())cleanup();};
     window.addEventListener('hashchange',checkRoute);
     window.addEventListener('popstate',checkRoute);
     close.onclick=cleanup;
+    activeMarketAssist={raw,cleanup};
     const attempt=()=>{
       if(!correctItem()){cleanup();return;}
       if(filled)return;
@@ -1954,13 +2285,13 @@
   }
   async function init(){
     mount();
-    marketAssist();
-    window.addEventListener("hashchange",nativeMarketQuote);
+    window.addEventListener("hashchange",()=>{nativeMarketQuote();marketAssist();});
     setInterval(nativeMarketQuote,2000);
     document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit',label:'Profit-TornStaxx',icon:'PS',desc:'Daily profit · Markets · Stocks',trendMetric:'Fresh deals',freshnessMs:600000}}));
     try{
       const loaded=await readStore();
       state.settings=Object.assign({},DEFAULTS,loaded.settings||{});
+      state.walkthrough=loadWalkthrough(loaded.walkthrough);
       state.trades=Array.isArray(loaded.trades)?loaded.trades:[];
        state.income=Array.isArray(loaded.income)?loaded.income:[];
        travelState.rows=Array.isArray(loaded.travelRows)?loaded.travelRows:[];
@@ -1983,6 +2314,8 @@
       state.lastScan=number(loaded.lastScan);
       state.status='Ready · '+state.storage+' storage';
     }catch(e){state.error='Could not restore local data: '+e.message;}
+    routeStoreReady=true;
+    marketAssist();
     render();
     // Read-only autopilot: one bounded data task at a time, while Torn is foregrounded.
     // Prioritise missing/old full scans, then travel, stocks and short incremental quotes.
