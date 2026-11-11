@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.2.0
+// @version      2.3.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.2.0';
+  const VERSION = '2.3.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -88,10 +88,10 @@
     key:'',alertThreshold:100000,tab:'daily',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},stockClaimReminders:false,stockLogSync:true,
     travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
     tab:'daily',walkthrough:null,dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let routeStoreReady=false;
-  let root, fab, badge, shell, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
+  let root, fab, badge, shell, routeBar, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
   let lastRenderedTab=null;
   const fmt=n=>Number.isFinite(Number(n)) ? '$'+Math.round(Number(n)).toLocaleString('en-US') : '—';
@@ -126,21 +126,21 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough','pointsCheckedAt']);
         state.storage='TornPDA';
         return data||{};
       }
     } catch(e){console.warn('[ProfitStaxx] Native storage unavailable; falling back');}
     state.storage='browser';
     const data={};
-    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough']){
+    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough','pointsCheckedAt']){
       try{data[key]=JSON.parse(localStorage.getItem(KEY_PREFIX+key)||'null');}catch(e){data[key]=null;}
     }
     return data;
   }
   function persist() {
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
-      trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,lastScan:state.lastScan,
+      trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,pointsCheckedAt:state.pointsCheckedAt,lastScan:state.lastScan,
       travelRows:travelState.rows,travelAt:travelState.at,
       stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt,walkthrough:state.walkthrough};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
@@ -188,7 +188,13 @@
       if(!entry||!entry.name)continue;
       const id=Number(entry.id||entry.item_id||0);
       if(!id)continue;
-      output[String(entry.name).toLowerCase()]={id,name:entry.name,value:number(entry.market_value||entry.marketValue||0),type:entry.type||''};
+      const shops=Array.isArray(entry.value?.shops)?entry.value.shops.filter(shop=>shop?.country==='Torn'):[];
+      const buys=shops.map(shop=>Number(shop.buy_price)).filter(price=>Number.isFinite(price)&&price>0);
+      const sells=shops.map(shop=>Number(shop.sell_price)).filter(price=>Number.isFinite(price)&&price>0);
+      output[String(entry.name).toLowerCase()]={id,name:entry.name,
+        value:number(entry.value?.market_price||entry.market_value||entry.marketValue||0),type:entry.type||'',
+        tradable:entry.is_tradable!==false,shopBuy:buys.length?Math.min(...buys):null,
+        shopSell:sells.length?Math.max(...sells):null};
     }
     return output;
   }
@@ -309,6 +315,7 @@
       const p=await api('market/pointsmarket');
       const rows=parseOffers(p,'pointsmarket');
       state.pointsPrice=rows.length?rows[0].price:0;
+      state.pointsCheckedAt=now();
     }catch(e){state.error='Points pricing unavailable: '+e.message;}
   }
   async function scan({manual=false,quick=false}={}){
@@ -546,6 +553,179 @@
       ['Record it','Enter only the amount received and direct costs.']]}
   };
 
+  const bloodTypes=['A+','A-','B+','B-','AB+','AB-','O+','O-'];
+  const itemPriceRoutes=new Set(['city','inventory','blood','forgery','shop','auction']);
+  const routePricing={busy:false,key:'',attempt:0,error:'',retry:null};
+  const quoteWindow=8*60000;
+
+  function selectedRouteItem(w){
+    if(w.route==='blood'){
+      const type=state.settings.routeBloodType;
+      return Object.values(state.catalog).find(item=>bloodTypes.includes(type)&&
+        item.name.replace(/\s+/g,'').toUpperCase()==='BLOODBAG:'+type)||null;
+    }
+    return Object.values(state.catalog).find(item=>item.id===w.itemId)||null;
+  }
+
+  function freshRouteQuote(id){
+    const quote=state.quotes[id];
+    if(!quote)return null;
+    const cached=Number(quote.cacheTimestamp)||0;
+    const age=now()-(cached?(cached<1e12?cached*1000:cached):quote.at);
+    return age>=0&&age<quoteWindow?quote:null;
+  }
+
+  function routePricingKey(w){
+    return [w.id,w.itemId,state.settings.routeBloodType||''].join(':');
+  }
+
+  async function refreshRoutePrices(force=false){
+    const w=state.walkthrough;
+    if(!w||w.step>=3||document.hidden||!apiKey()||routePricing.busy)return;
+    if(state.busy||travelState.busy||stockState.loading||autoTickRunningV112){
+      if(!routePricing.retry)routePricing.retry=setTimeout(()=>{
+        routePricing.retry=null;
+        if(state.open&&state.tab==='walkthrough')void refreshRoutePrices(force);
+      },3000);
+      return;
+    }
+    const key=routePricingKey(w);
+    const relevant=itemPriceRoutes.has(w.route)||['points','travel','stocks','museum'].includes(w.route)||
+      w.route==='market'&&w.itemId;
+    if(!relevant||routePricing.key===key&&now()-routePricing.attempt<(force?15000:60000))return;
+    routePricing.busy=true;routePricing.key=key;routePricing.attempt=now();routePricing.error='';render();
+    const stillSelected=()=>state.walkthrough&&routePricingKey(state.walkthrough)===key&&state.walkthrough.step<3&&!document.hidden;
+    let lastRequest=0;
+    async function routeGet(path){
+      if(lastRequest)await sleep(Math.max(0,2500-(now()-lastRequest)));
+      if(!stillSelected())return null;
+      lastRequest=now();
+      return api(path);
+    }
+    async function quoteItem(id,name){
+      if(!id||(!force&&freshRouteQuote(id)))return;
+      const result=await routeGet('market/'+id+'/itemmarket');
+      if(result)state.quotes[id]=normalizeMarket(result,id,name);
+    }
+    try{
+      if(w.route==='stocks'){
+        if(force||now()-stockState.at>=quoteWindow||now()-stockState.ownedAt>=quoteWindow)await refreshStocks();
+      }else if(w.route==='travel'){
+        if(force||now()-travelState.at>=quoteWindow||w.target&&!walkthroughQuote(w))await scanTravel();
+      }else{
+        if(itemPriceRoutes.has(w.route)||w.route==='museum'){
+          // Older cached catalogues do not contain shop prices. Upgrade only
+          // when a route needs them, then reuse the on-device catalogue.
+          if(!state.settings.routeCatalogAt||now()-state.settings.routeCatalogAt>=86400000||
+              Object.keys(state.catalog).length<100){
+            const result=await routeGet('torn/items');
+            if(!result)return;
+            const catalog=normalizeItems(result);
+            if(!Object.keys(catalog).length)throw Error('Torn returned no item catalogue.');
+            state.catalog=catalog;state.settings.routeCatalogAt=now();
+          }
+        }
+        if(w.route==='blood')await quoteItem(731,'Empty Blood Bag');
+        const item=selectedRouteItem(w);
+        if(item&&item.tradable!==false)await quoteItem(item.id,item.name);
+        else if(w.route==='market'&&w.itemId)await quoteItem(w.itemId,w.name||'Selected item');
+        if(w.route==='points'||w.route==='museum'){
+          if(force||!state.pointsCheckedAt||now()-state.pointsCheckedAt>=quoteWindow){
+            const result=await routeGet('market/pointsmarket');
+            if(result){
+              state.pointsPrice=parseOffers(result,'pointsmarket')[0]?.price||0;
+              state.pointsCheckedAt=now();
+            }
+          }
+        }
+        if(w.route==='museum'){
+          const recipe=RECIPES.find(r=>'museum-'+r.name===w.target);
+          if(recipe)for(const name of recipe.items){
+            if(!stillSelected())break;
+            const component=getItem(name);
+            if(component)await quoteItem(component.id,component.name);
+          }
+        }
+      }
+      persist();
+    }catch(e){routePricing.error=String(e.message||e).slice(0,180);}
+    finally{
+      routePricing.busy=false;render();
+      if(state.walkthrough&&routePricingKey(state.walkthrough)!==key&&state.open)void refreshRoutePrices();
+    }
+  }
+
+  function routePricePanel(w){
+    if(w.step>=3)return '';
+    const itemRoute=itemPriceRoutes.has(w.route);
+    if(!itemRoute&&!['market','points','museum','travel','stocks'].includes(w.route))return '';
+    const item=itemRoute?selectedRouteItem(w):null;
+    const catalog=Object.values(state.catalog);
+    let picker='';
+    if(w.route==='blood'){
+      picker='<label>In-game blood type <select id="ps-route-blood"><option value="">Select once</option>'+
+        bloodTypes.map(type=>'<option value="'+type+'"'+(type===state.settings.routeBloodType?' selected':'')+'>'+type+'</option>').join('')+
+        '</select></label><p class="muted">Select the type shown in Torn so ProfitStaxx prices the correct filled bag.</p>';
+    }else if(itemRoute&&catalog.length){
+      picker='<form id="ps_route_item"><label>Item name <input name="routeItem" list="ps-route-items" value="'+esc(item?.name||'')+'" required autocomplete="off"></label> '+
+        '<button class="btn secondary" type="submit">Get price</button><datalist id="ps-route-items">'+
+        catalog.filter(x=>w.route==='shop'?x.shopBuy>0:w.route==='forgery'?x.shopSell>0||x.tradable!==false:x.tradable!==false||x.shopSell>0)
+          .map(x=>'<option value="'+esc(x.name)+'"></option>').join('')+'</datalist></form>';
+    }
+    const quote=item?freshRouteQuote(item.id):w.route==='market'?freshRouteQuote(w.itemId):null;
+    const ask=quote?.offers?.[0]?.price||0;
+    const afterFee=ask?Math.floor(ask*.95):null;
+    const empty=w.route==='blood'?freshRouteQuote(731):null;
+    const emptyItem=w.route==='blood'?getItem('Empty Blood Bag'):null;
+    const emptyAsk=empty?.offers?.[0]?.price||0;
+    const shopCost=w.route==='blood'?emptyItem?.shopBuy:w.route==='shop'?item?.shopBuy:0;
+    const shelf=shopCost>0?shopCost:null;
+    const costs=w.route==='blood'?[emptyAsk,shelf].filter(x=>x>0):w.route==='shop'&&shelf?[shelf]:[];
+    const unitCost=costs.length?Math.min(...costs):null;
+    const line=(label,value)=>'<div class="line"><span>'+esc(label)+'</span><b>'+fmt(value)+'</b></div>';
+    let prices='';
+    if(emptyAsk)prices+=line('Empty bag · lowest market ask',emptyAsk);
+    if(shelf)prices+=line('Listed shop buy price · check stock',shelf);
+    if(ask)prices+=line('Lowest resale ask · '+age(quote.at),ask)+line('Estimated proceeds after 5% standard market fee',afterFee);
+    if(item?.shopSell>0&&['city','inventory','forgery','auction'].includes(w.route))prices+=line('Listed City shop sale price',item.shopSell);
+    if(unitCost!==null&&afterFee!==null)prices+=line('Estimated margin per item at the cheapest shown cost',afterFee-unitCost);
+    if(['points','museum'].includes(w.route)&&now()-state.pointsCheckedAt<quoteWindow&&state.pointsCheckedAt>0&&state.pointsPrice>0)
+      prices+=line('Lowest Points Market ask · '+age(state.pointsCheckedAt),state.pointsPrice);
+    if(w.route==='museum'&&!w.target)prices+='<div class="toolbar">'+RECIPES.map(recipe=>
+      '<button class="btn secondary" data-action="route-museum" data-target="'+esc(recipe.name)+'">Price '+esc(recipe.name)+'</button>').join('')+'</div>';
+    if(w.route==='travel'&&!w.target){
+      const row=travelRows().find(x=>x.valid&&freshRouteQuote(x.id));
+      if(row)prices+='<p>Current trip estimate · '+esc(row.countryName+' / '+row.name)+' · '+fmt(row.net)+' net.</p>'+
+        '<button class="btn secondary" data-action="route-travel" data-target="'+esc('travel-'+row.country+'-'+row.id)+'">Choose this trip</button>';
+    }
+    if(w.route==='stocks'&&!w.target&&now()-stockState.at<quoteWindow&&now()-stockState.ownedAt<quoteWindow){
+      const block=stockBlockOpportunities().find(x=>x.affordable&&x.annual!==null);
+      if(block)prices+='<p>Available benefit block · '+esc(block.acronym)+' · '+fmt(block.cost)+' for '+block.need+' more shares.</p>';
+    }
+    if(w.route==='forgery'&&item)prices+='<p class="muted">Proceeds only. Subtract the consumables used for your project to estimate profit.</p>';
+    if(!prices&&!routePricing.busy&&apiKey()&&(item||w.itemId||w.route==='blood'))prices='<p class="muted">No current price available for this selection.</p>';
+    return '<section class="card ps-route-prices"><h3>Current prices</h3>'+picker+
+      (!apiKey()?'<p>Connect your Torn API key in Settings to fetch prices.</p>':'')+prices+
+      (ask?'<p class="muted">Asking prices show current listings. Actual sale proceeds may differ.</p>':'')+
+      (routePricing.busy?'<p role="status">Checking prices…</p>':'')+
+      (routePricing.key===routePricingKey(w)&&routePricing.error?notice(routePricing.error,true):'')+
+      '<button class="btn secondary" data-action="route-prices"'+(routePricing.busy||!apiKey()?' disabled':'')+'>Refresh prices</button></section>';
+  }
+
+  function syncRouteBar(){
+    if(!routeBar)return;
+    const w=state.walkthrough;
+    routeBar.hidden=!w||w.step>=4||w.barHidden||state.open;
+    if(routeBar.hidden)return;
+    const label=w.name||incomeRoutes.find(r=>r[0]===w.route)[1];
+    const step=routeGuides[w.route].steps[w.step][0];
+    const signature=w.id+':'+w.step;
+    if(routeBar.dataset.step===signature)return;
+    routeBar.dataset.step=signature;
+    routeBar.querySelector('.ps-route-bar-label').textContent=label;
+    routeBar.querySelector('.ps-route-bar-step').textContent='Step '+(w.step+1)+'/4 · '+step;
+  }
+
   function loadWalkthrough(value){
     if(!value||typeof value!=='object'||!Object.hasOwn(routeGuides,value.route)||
         !/^[a-z0-9-]{1,50}$/.test(value.id||'')||!Number.isInteger(value.step)||value.step<0||value.step>4)return null;
@@ -554,7 +734,7 @@
     return {id:value.id,route:value.route,step:value.step,
       target:typeof value.target==='string'?value.target.slice(0,160):'',
       name:typeof value.name==='string'?value.name.slice(0,100):'',
-      itemId:Number.isSafeInteger(value.itemId)&&value.itemId>0?value.itemId:0,plan};
+      itemId:Number.isSafeInteger(value.itemId)&&value.itemId>0?value.itemId:0,barHidden:value.barHidden===true,plan};
   }
 
   function startWalkthrough(route,target=null){
@@ -570,17 +750,24 @@
     }
     state.tab='walkthrough';
     render();
+    void refreshRoutePrices();
   }
 
   function walkthroughQuote(w){
     if(!w.target)return null;
     if(w.route==='market'){
-      const deal=deals().find(d=>Number(d.id)===w.itemId&&now()-d.at>=0&&now()-d.at<8*60000);
+      const deal=deals().find(d=>Number(d.id)===w.itemId&&freshRouteQuote(d.id));
       return deal?{cost:deal.buy*deal.qty,net:deal.profit,period:'one trade',deal}:null;
     }
     if(w.route==='travel'){
       const row=travelRows().find(r=>'travel-'+r.country+'-'+r.id===w.target&&r.valid);
-      return row?{cost:row.spent,net:row.net,period:'one round trip',travel:row}:null;
+      return row&&freshRouteQuote(row.id)?{cost:row.spent,net:row.net,period:'one round trip',travel:row}:null;
+    }
+    if(w.route==='museum'){
+      const set=recipeResults().find(r=>'museum-'+r.name===w.target);
+      return set?.ready&&set.profit!==null&&state.pointsCheckedAt>0&&now()-state.pointsCheckedAt>=0&&
+        now()-state.pointsCheckedAt<quoteWindow&&set.rows.every(r=>freshRouteQuote(r.id))?
+        {cost:set.missingCost,net:set.profit,period:'one conversion'}:null;
     }
     return incomeCandidates().find(r=>r.id===w.target)||null;
   }
@@ -705,8 +892,9 @@
       estimate+calculator+'<div class="toolbar">'+(showReceipt?'':action)+
       (w.step>0?'<button class="btn secondary" data-action="route-back">Back a step</button>':'')+
       (w.step<3?'<button class="btn secondary" data-action="route-next">'+['Plan checked · continue','Action done · continue','Result checked · continue'][w.step]+'</button>':
-       '<button class="btn secondary" data-action="route-next">'+(showReceipt?'Finish without recording':'Mark complete')+'</button>')+'</div>'+receipt+'</div>'+
+       '<button class="btn secondary" data-action="route-next">'+(showReceipt?'Finish without recording':'Mark complete')+'</button>')+'</div>'+receipt+'</div>'+routePricePanel(w)+
       '<ol class="ps-route-steps">'+guide.steps.map(([name],i)=>'<li'+(i===w.step?' aria-current="step"':'')+'>'+esc(name)+(i<w.step?' · done':'')+'</li>').join('')+'</ol>'+
+      '<button class="btn secondary" data-action="route-bar-toggle">'+(w.barHidden?'Show route bar':'Hide route bar')+'</button> '+
       '<button class="btn secondary" data-action="route-cancel">Clear walkthrough</button>'+switcher;
   }
 
@@ -1429,6 +1617,7 @@
 
   function css(){
     return [
+      '.ps-route-bar{position:fixed;z-index:2147483644;top:calc(env(safe-area-inset-top,0px) + 52px);left:50%;transform:translateX(-50%);width:min(calc(100vw - 24px),430px);display:flex;align-items:stretch;border:1px solid #559bbf;border-radius:10px;background:#102b41;color:#eef9ff;box-shadow:0 4px 18px #0006;overflow:hidden}.ps-route-bar[hidden]{display:none}.ps-route-bar button{color:inherit;background:transparent;border:0;padding:7px 12px;min-height:44px}.ps-route-bar-open{flex:1;min-width:0;text-align:left}.ps-route-bar-label,.ps-route-bar-step{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ps-route-bar-step{font-size:11px;color:#a6dbef}.ps-route-bar-hide{border-left:1px solid #559bbf!important}.ps-route-prices select,.ps-route-prices input{max-width:100%;background:#0b2034;color:#fff;border:1px solid #3d617a;border-radius:6px;padding:8px}',
       '.ps-route-steps{padding-left:26px;color:#a8c9de}.ps-route-steps li{padding:5px}.ps-route-steps [aria-current="step"]{font-weight:700;color:#86e1ff}.ps-desk-next .toolbar{flex-wrap:wrap;margin-top:12px}',
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
       '*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer}',
@@ -1718,7 +1907,7 @@
         ' · Owned '+item.owned+(liveMuseumOwnedV112()?' · Torn inventory':
         ' <button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="-1">−</button> '+
         '<button class="btn secondary" data-owned="'+esc(item.name)+'" data-delta="1">+</button>')+'</span></div>';
-      html+='</details></div>';
+      html+='</details><button class="btn secondary" data-action="route-museum" data-target="'+esc(r.name)+'">Walk through this set</button></div>';
     }
     html+=notice('This models full-set purchases only. On a complete inventory sync, counts update automatically; +/− remain available as the offline fallback. Cash needed reflects these holdings; profit includes their opportunity cost. Batch prices use available order-book quantities and are not guaranteed. Conversions stay manual.');
     return html;
@@ -1822,6 +2011,7 @@
   }
   function render(){
     if(!root)return;
+    syncRouteBar();
     if(lastHubPanelState!==state.open){lastHubPanelState=state.open;
       document.dispatchEvent?.(new CustomEvent('staxx:panel',{detail:{id:'profit',open:state.open}}));}
     const valid=activeDealAlerts(),claims=dueDividends(),stockNotices=stockSignals(),noticeCount=valid.length+claims.length+stockNotices.length;
@@ -1936,7 +2126,7 @@
     if(el.dataset.tab){state.tab=el.dataset.tab;
       if(['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics','walkthrough'].includes(state.tab))
         document.dispatchEvent?.(new CustomEvent('staxx:visit',{detail:{id:'profit',section:state.tab}}));
-      render();if(state.tab==='stocks'&&now()-stockState.at>300000)refreshStocks();return;}
+      render();if(state.tab==='walkthrough')void refreshRoutePrices();else if(state.tab==='stocks'&&!routePricing.busy&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
       owned[name]=Math.max(0,Math.floor(number(owned[name])+Number(el.dataset.delta||0)));
       state.settings.museumOwned=owned;persist();render();return;}
@@ -1990,6 +2180,15 @@
         break;
       }
       case 'route-start':startWalkthrough(el.dataset.source);break;
+      case 'route-prices':void refreshRoutePrices(true);break;
+      case 'route-bar-toggle':
+        if(state.walkthrough){state.walkthrough={...state.walkthrough,barHidden:!state.walkthrough.barHidden};persist();render();}
+        break;
+      case 'route-museum':{
+        const recipe=RECIPES.find(r=>r.name===el.dataset.target);
+        if(recipe)startWalkthrough('museum',{id:'museum-'+recipe.name,label:recipe.name});
+        break;
+      }
       case 'route-market':{
         const deal=deals().find(d=>Number(d.id)===Number(el.dataset.id)&&now()-d.at>=0&&now()-d.at<8*60000);
         if(deal)startWalkthrough('market',{id:'market-'+deal.id,label:deal.name,itemId:Number(deal.id)});
@@ -2035,7 +2234,16 @@
     }
   }
   function onSubmit(event){
-    if(['ps_route_plan','ps_route_receipt'].includes(event.target.id)){
+    if(event.target.id==='ps_route_item'){
+      event.preventDefault();
+      const w=state.walkthrough;
+      if(!w||!itemPriceRoutes.has(w.route)||w.route==='blood'||w.step>=3)return;
+      const name=String(new FormData(event.target).get('routeItem')||'').trim();
+      const item=getItem(name);
+      if(!item||w.route==='shop'&&!item.shopBuy){alert('Choose a matching item from the list.');return;}
+      state.walkthrough={...w,itemId:item.id};
+      persist();render();void refreshRoutePrices();
+    }else if(['ps_route_plan','ps_route_receipt'].includes(event.target.id)){
       event.preventDefault();
       saveWalkthroughForm(event.target);
     }else if(event.target.id==='ps_trade'){
@@ -2111,11 +2319,29 @@
     badge=document.createElement('span');badge.className='bubble';badge.style.display='none';fab.appendChild(badge);
     fab.addEventListener('click',()=>{state.open=!state.open;render();});
     root.appendChild(fab);
+    routeBar=document.createElement('aside');
+    routeBar.className='ps-route-bar';routeBar.hidden=true;
+    routeBar.setAttribute('aria-label','Active ProfitStaxx route');
+    routeBar.innerHTML='<button type="button" class="ps-route-bar-open"><b class="ps-route-bar-label"></b><span class="ps-route-bar-step"></span></button>'+
+      '<button type="button" class="ps-route-bar-hide" aria-label="Hide route bar">Hide</button>';
+    routeBar.querySelector('.ps-route-bar-open').onclick=()=>{
+      document.dispatchEvent(new CustomEvent('staxx:closeall'));
+      state.open=true;state.tab='walkthrough';render();void refreshRoutePrices();
+    };
+    routeBar.querySelector('.ps-route-bar-hide').onclick=()=>{
+      if(state.walkthrough){state.walkthrough={...state.walkthrough,barHidden:true};persist();render();}
+    };
+    root.appendChild(routeBar);
     shell=document.createElement('div');shell.className='overlay';
     shell.addEventListener('click',e=>{if(e.target===shell){state.open=false;render();}else onClick(e);});
     shell.addEventListener('submit',onSubmit);
     shell.addEventListener('input',event=>{if(event.target.id==='ps-stock-query'){stockViewQuery=event.target.value.slice(0,80);render();return;}if(event.target.id==='ps-deal-query'){dealQuery=event.target.value.slice(0,80);render();}});
-    shell.addEventListener('change',event=>{if(event.target.id==='ps-deal-filter'&&['all','budget','risk'].includes(event.target.value)){dealFilter=event.target.value;render();return;}if(event.target.id==='ps-stock-filter'&&['all','owned','cash','budget'].includes(event.target.value)){stockViewFilter=event.target.value;render();return;}if(event.target.id==='ps-deal-sort'&&['profit','roi','capital'].includes(event.target.value)){dealSort=event.target.value;render();}});
+    shell.addEventListener('change',event=>{
+      if(event.target.id==='ps-route-blood'){
+        state.settings.routeBloodType=bloodTypes.includes(event.target.value)?event.target.value:'';
+        persist();render();void refreshRoutePrices();return;
+      }
+      if(event.target.id==='ps-deal-filter'&&['all','budget','risk'].includes(event.target.value)){dealFilter=event.target.value;render();return;}if(event.target.id==='ps-stock-filter'&&['all','owned','cash','budget'].includes(event.target.value)){stockViewFilter=event.target.value;render();return;}if(event.target.id==='ps-deal-sort'&&['profit','roi','capital'].includes(event.target.value)){dealSort=event.target.value;render();}});
     root.appendChild(shell);
     render();
   }
@@ -2125,6 +2351,7 @@
     else if(e.detail.alertId){state.tab=e.detail.alertId==='stock-claim'?'stocks':e.detail.alertId==='daily-plan'?'daily':'alerts';state.alertFocus=['stock-claim','daily-plan'].includes(e.detail.alertId)?'':String(e.detail.alertId);}
     else if(['daily','alerts','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics','walkthrough'].includes(e.detail.section)){state.tab=e.detail.section;state.alertFocus='';}
     render();
+    if(state.tab==='walkthrough')void refreshRoutePrices();
   }else if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:closeall',()=>{if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:ping',()=>document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit',label:'Profit-TornStaxx',icon:'PS',desc:'Daily profit · Markets · Stocks',trendMetric:'Fresh deals',freshnessMs:600000}})));
@@ -2249,7 +2476,7 @@
   }
   let autoTickRunningV112=false;
   async function autoTickV112(){
-    if(autoTickRunningV112||document.hidden||!apiKey()||state.busy||travelState.busy||stockState.loading)return;
+    if(autoTickRunningV112||document.hidden||routePricing.busy||!apiKey()||state.busy||travelState.busy||stockState.loading)return;
     autoTickRunningV112=true;
     try{
       const time=now();
@@ -2311,6 +2538,7 @@
       state.quotes=loaded.quotes||{};
       state.snapshots=loaded.snapshots||{};
       state.pointsPrice=number(loaded.pointsPrice);
+      state.pointsCheckedAt=number(loaded.pointsCheckedAt);
       state.lastScan=number(loaded.lastScan);
       state.status='Ready · '+state.storage+' storage';
     }catch(e){state.error='Could not restore local data: '+e.message;}

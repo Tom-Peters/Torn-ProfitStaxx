@@ -1,3 +1,11 @@
+## 2.3.0 — Automatic route prices and progress bar
+
+ProfitStaxx checks route prices when you start or resume a walkthrough. Pick your Torn blood type once to price the filled bag against the lowest empty bag ask and the catalogue shop price. Item sale and resale routes accept an item name and pull its available market and Torn shop prices. Selected Museum sets refresh their components and points. Travel and stocks reuse their existing price sources.
+
+Prices are listings or catalogue prices. Stock on shop shelves, actual sale proceeds, and private payouts still need confirmation. Forgery shows available sale prices, with project material costs separate.
+
+While an active route is open in Torn, a compact bar shows the current step. Tap it to resume or hide it for that run. The walkthrough has a control to show it again.
+
 ## 2.2.0 — Money-making walkthroughs
 
 Open **Routes** from ProfitStaxx, or start a walkthrough from a specific deal, travel run or ranked opportunity. One active run is saved locally with its current step. Resume from Overview, the TornStaxx action list or a matching Item Market helper.
