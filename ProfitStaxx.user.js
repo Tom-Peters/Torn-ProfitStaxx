@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.0.0
+// @version      2.1.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.0.0';
+  const VERSION = '2.1.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -1271,9 +1271,12 @@
   }
 
   function allocationPlan(){
-    const available=Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost());
+    const available=Math.min(
+      Math.max(0,number(state.settings.capital)*(1-number(state.settings.reservePct)/100)-openCost()),
+      liveWalletCashV113()??Infinity
+    );
     let remaining=available;
-    const ranked=deals().filter(d=>now()-d.at<8*60000).map(d=>{
+    const ranked=deals().filter(d=>now()-d.at>=0&&now()-d.at<8*60000).map(d=>{
       const history=priceHistoryQuality(d.id),liquidity=marketLiquiditySignal(d);
       const confidence=history.n>=8?.85:history.n>=3?.65:.4;
       const efficiency=d.buy>0?d.unitProfit/d.buy:0;
@@ -1284,6 +1287,7 @@
       const qty=Math.max(0,Math.min(Math.floor(d.qty),Math.floor(remaining/d.buy)));
       if(!qty)continue;
       const cost=qty*d.buy,profit=qty*d.unitProfit;
+      if(profit<number(state.settings.minProfit))continue;
       // Three minutes per reviewed opportunity is a user-planning assumption, not observed execution time.
       const reviewMinutes=clamp(number(state.settings.reviewMinutes)||3,0.5,60);
       allocations.push({...d,allocQty:qty,allocCost:cost,allocProfit:profit,reviewMinutes});
@@ -1300,7 +1304,7 @@
     if(!rows.length)out+='<p>No fresh qualifying allocations. Refresh the scan or preserve cash.</p>';
     for(const d of rows.slice(0,6))out+='<div class="line"><strong>'+esc(d.name)+' × '+d.allocQty+'</strong><span>'+fmt(d.allocCost)+' / est. +'+fmt(d.allocProfit)+'</span></div>'+
       '<small class="muted">Modelled '+fmt(d.allocProfit/d.reviewMinutes)+'/review minute (assumes '+d.reviewMinutes+' min of active review; excludes unknown sale waiting time) · '+esc(d.history.label)+' · '+esc(d.liquidity.label)+'</small>'+
-      '<div><button class="btn secondary" data-action="market-buy" data-id="'+Number(d.id)+'">Inspect and prepare market</button></div>';
+      '<div><button class="btn secondary" data-action="market-buy" data-allocation="1" data-quantity="'+d.allocQty+'" data-id="'+Number(d.id)+'">Inspect and prepare '+d.allocQty+'</button></div>';
     return out+'</div>';
   }
   function sellTimingPanel(){
@@ -1665,7 +1669,15 @@
       case 'market-buy':{
         const id=Number(el.dataset.id),d=deals().find(x=>Number(x.id)===id&&now()-x.at>=0&&now()-x.at<8*60000);
         if(!d||!Number.isInteger(Math.floor(d.qty))||d.qty<1){state.error='Opportunity expired; refresh the scan.';render();return;}
-        try{sessionStorage.setItem('profitstaxx-market-intent-v1',JSON.stringify({id,qty:Math.floor(d.qty),maxPrice:Number(d.buy),name:String(d.name||'Item').slice(0,80),at:now()}));}
+        let qty=Math.floor(d.qty);
+        if(el.dataset.allocation==='1'){
+          const allocation=allocationPlan().allocations.find(row=>Number(row.id)===id);
+          if(!allocation||allocation.allocQty!==Number(el.dataset.quantity)){
+            state.error='Allocation changed. Review the updated quantity and cash limits.';render();return;
+          }
+          qty=allocation.allocQty;
+        }
+        try{sessionStorage.setItem('profitstaxx-market-intent-v1',JSON.stringify({id,qty,maxPrice:Number(d.buy),name:String(d.name||'Item').slice(0,80),at:now(),quoteAt:d.at}));}
         catch(_){state.error='Cannot save the quantity for this navigation. Enter it manually.';render();return;}
         location.assign(linkToItem(id));break;
       }
@@ -1845,21 +1857,34 @@
   function marketAssist(){
     if(!/\/page\.php$/i.test(location.pathname)||!location.search.includes('sid=ItemMarket'))return;
     let p;try{p=JSON.parse(sessionStorage.getItem('profitstaxx-market-intent-v1')||'null');}catch(_){return;}
-    const correctItem=()=>{const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\d+)(?:&|$)/);return match&&Number(match[1])===p.id;};
-    if(!p||!Number.isInteger(p.id)||!Number.isInteger(p.qty)||p.qty<1||p.qty>1000000||now()-p.at>600000||!correctItem())return;
+    const correctItem=()=>{
+      if(location.pathname!=='/page.php'||new URLSearchParams(location.search).get('sid')!=='ItemMarket')return false;
+      const match=String(location.hash||'').match(/(?:^|[&#])itemID=(\d+)(?:&|$)/);
+      return match&&Number(match[1])===p.id;
+    };
+    const expired=()=>now()-p.at<0||now()-p.at>600000||
+      (p.quoteAt!==undefined&&(!Number.isFinite(p.quoteAt)||now()-p.quoteAt<0||now()-p.quoteAt>=8*60000));
+    if(!p||!Number.isInteger(p.id)||!Number.isInteger(p.qty)||p.qty<1||p.qty>1000000||!Number.isFinite(p.at)||expired()||!correctItem())return;
     const box=document.createElement('div');box.id='ps-market-assist';box.style.cssText='position:static;max-width:100%;margin:8px 0;background:#08192d;color:#e8f7ff;border:1px solid #54d7fa;border-radius:12px;padding:12px;font:13px system-ui;box-shadow:0 5px 28px #000a';
     const title=document.createElement('b');title.textContent='ProfitStaxx · '+p.name+' × '+p.qty;
     const status=document.createElement('p');status.textContent='Check live listing price (modeled cap $'+Math.round(p.maxPrice).toLocaleString('en-US')+'/unit). Looking for Buy quantity field…';
     const copy=document.createElement('button');copy.textContent='Copy quantity';copy.onclick=()=>{const v=String(p.qty);if(navigator.clipboard?.writeText)navigator.clipboard.writeText(v).then(()=>status.textContent='Copied '+v).catch(()=>status.textContent='Quantity: '+v);else status.textContent='Quantity: '+v;};
     const close=document.createElement('button');close.textContent='Close ×';close.style.marginLeft='10px';
     box.append(title,status,copy,close); // Insert only beside an unambiguous buy field.
-    window.addEventListener("hashchange",()=>{if(!correctItem()){stop();box.remove();}},{once:true});
     let filled=false,count=0,observer,timer;
     const stop=()=>{observer?.disconnect();clearInterval(timer);sessionStorage.removeItem('profitstaxx-market-intent-v1');};
-    close.onclick=()=>{stop();box.remove();};
+    const cleanup=()=>{
+      stop();box.remove();window.removeEventListener('hashchange',checkRoute);
+      window.removeEventListener('popstate',checkRoute);
+    };
+    const checkRoute=()=>{if(!correctItem())cleanup();};
+    window.addEventListener('hashchange',checkRoute);
+    window.addEventListener('popstate',checkRoute);
+    close.onclick=cleanup;
     const attempt=()=>{
-      if(!correctItem()){stop();box.remove();return;}
+      if(!correctItem()){cleanup();return;}
       if(filled)return;
+      if(expired()){cleanup();return;}
       if(++count>120){stop();status.textContent='Buy field not detected. Copy quantity and enter it manually.';return;}
       const found=[...document.querySelectorAll('input')].filter(el=>{
         if(box.contains(el)||el.disabled||!el.getClientRects?.().length)return false;

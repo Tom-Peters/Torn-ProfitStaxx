@@ -1,3 +1,7 @@
+## 2.1.0
+
+Capital allocations share a single wallet limit and pass the exact allocated quantity to the selected Torn market item.
+
 ## v2.0.0 — rebuilt profit workspace
 
 Four primary screens now follow the decisions you actually make:
