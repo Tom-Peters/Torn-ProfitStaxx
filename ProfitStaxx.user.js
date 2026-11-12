@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.5.0
+// @version      2.6.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.5.0';
+  const VERSION = '2.6.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -918,7 +918,8 @@
     for(const [route] of incomeRoutes){
       const plan=state.settings.routePlans?.[route];
       if(!plan||![plan.gross,plan.cost].every(x=>Number.isFinite(x)&&x>=0))continue;
-      models.set(route,{net:plan.gross-plan.cost,cost:plan.cost,minutes:Number(plan.minutes)||0,period:recurringRoutes.has(route)?'30 days':'one run',
+      if(models.has(route)){models.get(route).savedNet=plan.gross-plan.cost;continue;} // Keep both bases visible.
+      models.set(route,{manual:true,net:plan.gross-plan.cost,cost:plan.cost,minutes:Number(plan.minutes)||0,period:recurringRoutes.has(route)?'30 days':'one run',
         basis:'Your saved estimate, including the costs you entered',label:typeof plan.label==='string'?plan.label:''});
     }
     return models;
@@ -927,6 +928,7 @@
   function routeRankingSummary(model){
     const money='<strong class="'+(model.net<0?'negative':'positive')+'">'+fmt(model.net)+'</strong>';
     const costs=[
+      model.savedNet!==undefined?'Separate saved estimate '+fmt(model.savedNet)+' (may include extra costs)':'',
       model.cost!==undefined?'Costs '+fmt(model.cost):'',
       model.fee!==undefined?'Sale fee '+fmt(model.fee):'',
       model.capital!==undefined?'Cash required '+fmt(model.capital):'',
@@ -934,7 +936,7 @@
       model.elapsed>0?model.elapsed+' min elapsed':'',
       profitPerActiveMinute(model)!==null?fmt(profitPerActiveMinute(model))+'/active min (estimated)':''
     ].filter(Boolean).join(' · ');
-    return money+' <small>/ '+esc(model.period)+'</small>'+
+    return '<small>'+ (model.manual?'YOUR ESTIMATE':'CALCULATED ESTIMATE')+'</small><br>'+money+' <small>/ '+esc(model.period)+'</small>'+
       '<p class="muted">'+esc([model.label,costs,model.basis].filter(Boolean).join(' · '))+'</p>';
   }
 
@@ -1161,6 +1163,22 @@
       (routePricing.error&&state.walkthrough&&routePricing.key===routePricingKey(state.walkthrough)?notice(routePricing.error,true):'')+'</section>';
   }
 
+  let routeView='all';
+  const routeViews={all:'All routes',active:'Active runs',passive:'Recurring income',priced:'Priced routes'};
+  function routeDecisionCards(){
+    const models=routeProfitModels();
+    // Random loot and speculative/manual payouts are comparisons, not recommendations.
+    const candidates=incomeRoutes.map(([id,label])=>({id,label,model:models.get(id)}))
+      .filter(x=>x.model&&!x.model.manual&&x.model.net>0&&!recurringRoutes.has(x.id)&&
+        ['market','travel','museum','blood','shop','inventory'].includes(x.id))
+      .sort((a,b)=>compareRouteModels(a.model,b.model,state.settings.routeSort==='minute')).slice(0,3);
+    return '<section class="card"><h3>Compare your next run</h3><p class="muted">Current calculated returns. Check the run size, requirements and costs before choosing. Availability and eligibility are not verified.</p>'+
+      (candidates.length?candidates.map(({id,label,model})=>'<div class="ps-rank-row"><div><strong>'+esc(label)+'</strong>'+routeRankingSummary(model)+
+        '</div><button class="btn" data-action="route-ranked" data-source="'+id+'">Plan this run</button></div>').join(''):
+        '<p>No current calculated run to compare. Check item deals or travel prices, or choose a route to load its prices.</p>')+
+      '<div class="toolbar"><button class="btn secondary" data-action="quickscan"'+(state.busy?' disabled':'')+'>Price item deals</button><button class="btn secondary" data-tab="travel">Compare travel runs</button><button class="btn secondary" data-tab="walkthrough">All routes & setup</button></div></section>';
+  }
+
   function renderRouteDirectory(){
     const byMinute=state.settings.routeSort==='minute';
     const models=routeProfitModels(),recent=new Map(),runs=new Map(),cutoff=now()-30*86400000;
@@ -1172,7 +1190,8 @@
         sample.push(record.net);runs.set(record.source,sample);
       }
     }
-    const rows=incomeRoutes.map(([id,label])=>({id,label,model:models.get(id)}));
+    const allRows=incomeRoutes.map(([id,label])=>({id,label,model:models.get(id)}));
+    const rows=allRows.filter(row=>routeView==='active'?!recurringRoutes.has(row.id):routeView==='passive'?recurringRoutes.has(row.id):routeView==='priced'?Boolean(row.model):true);
     const renderRow=(row,index)=>{
       const {id,label,model}=row;
       const button=model?.target?
@@ -1183,9 +1202,9 @@
         ' average per logged run · '+samples.length+' run(s)</small>':'';
       return '<div class="ps-rank-row"><div><strong>'+(index===null?'':(index+1)+'. ')+esc(label)+'</strong>'+
         (model?'<div>'+routeRankingSummary(model)+'</div>':'<p class="muted">'+esc(routeCostNeeds[id])+'</p>')+
-        '<p class="muted">Run: '+esc(routeRuns[id])+'</p>'+
+        '<details data-view-key="route-info-'+id+'"><summary>Requirements, evidence & results</summary><p>Run: '+esc(routeRuns[id])+'</p><p>'+esc(routeCostNeeds[id])+'</p>'+
         (evidence?'<p class="muted">'+esc(evidence)+'</p>':'')+observed+
-        (recent.has(id)?'<small>Recorded in 30 days: '+fmt(recent.get(id))+' net</small>':'')+'</div>'+button+'</div>';
+        (recent.has(id)?'<small>Recorded in 30 days: '+fmt(recent.get(id))+' net</small>':'')+'</details></div>'+button+'</div>';
     };
     const ranked=(label,filter,byTime=false)=>{
       const priced=rows.filter(row=>row.model&&filter(row.id))
@@ -1193,14 +1212,14 @@
       return '<section class="card"><h3>'+label+'</h3>'+
         (priced.length?priced.map(renderRow).join(''):'<p class="muted">No complete estimates yet.</p>')+'</section>';
     };
-    return '<div class="toolbar">'+
+    return '<div class="toolbar" aria-label="Filter routes">'+Object.entries(routeViews).map(([id,label])=>'<button class="btn '+(routeView===id?'':'secondary')+'" data-action="route-view" data-value="'+id+'" aria-pressed="'+(routeView===id)+'">'+label+'</button>').join('')+'</div><p>'+allRows.filter(x=>x.model).length+' of '+allRows.length+' routes have a net estimate. Missing figures are not zero profit.</p><div class="toolbar">'+
       '<button class="btn '+(byMinute?'secondary':'')+'" data-action="route-sort" data-value="net" aria-pressed="'+!byMinute+'">Profit per run</button>'+
       '<button class="btn '+(byMinute?'':'secondary')+'" data-action="route-sort" data-value="minute" aria-pressed="'+byMinute+'">Profit per active minute</button>'+
       '<button class="btn secondary" data-action="route-directory-refresh"'+(!apiKey()||routePricing.busy?' disabled':'')+'>Check bank and bounties</button></div>'+
       (routePricing.directoryError?notice(routePricing.directoryError,true):'')+
       '<p class="muted">'+(byMinute?'Runs without an active-time estimate appear last. Flight and waiting time are elapsed time.':'Ranked by estimated net profit. Run sizes are shown on each row.')+'</p>'+
       ranked(byMinute?'Profit per active minute':'Profit per run',id=>!recurringRoutes.has(id),byMinute)+ranked('Recurring profit per 30 days',id=>recurringRoutes.has(id))+
-      '<section class="card"><h3>More figures needed</h3>'+rows.filter(row=>!row.model).map(row=>renderRow(row,null)).join('')+'</section>';
+      '<details class="card" data-view-key="route-setup"><summary>Set up more routes ('+rows.filter(row=>!row.model).length+')</summary><p>Choose a route to load available prices and see the specific missing inputs. Private payments and random rewards cannot be priced reliably in advance.</p>'+rows.filter(row=>!row.model).map(row=>renderRow(row,null)).join('')+'</details>';
   }
 
   function renderWalkthrough(){
@@ -1765,7 +1784,7 @@
         'Follow the steps and record the settled result.')+'</p></div><button class="btn" data-tab="walkthrough">'+
         (state.walkthrough&&state.walkthrough.step<4?'Resume':'Browse routes')+'</button></div></div>'+
       '<section class="ps-desk-next"><small>NEXT REVIEW</small><h2>'+esc(title)+'</h2><p>'+esc(reason)+'</p>'+action+'</section>'+
-      '<div class="ps-desk-metrics">'+deskMetric('Spendable model',fmt(d.plan.spendable),'After reserve and recorded exposure')+
+      routeDecisionCards()+'<div class="ps-desk-metrics">'+deskMetric('Spendable model',fmt(d.plan.spendable),'After reserve and recorded exposure')+
         deskMetric('Recorded holdings',fmt(d.money.invested),d.money.positions.filter(x=>x.qty>0).length+' open positions')+
         deskMetric('Torn cash',d.cash===null?'Unverified':fmt(d.cash),d.cash===null?'Saved budget limits still apply':'Last wallet check '+age(state.walletAt))+'</div>'+
       '<div class="ps-desk-columns"><section><h3>Opportunities to inspect</h3>'+
@@ -2539,6 +2558,8 @@
       }
       case 'route-prices':void refreshRoutePrices(true);break;
       case 'route-directory-refresh':void refreshRouteDirectoryFigures();break;
+      case 'route-view':
+        routeView=Object.prototype.hasOwnProperty.call(routeViews,el.dataset.value)?el.dataset.value:'all';render();break;
       case 'route-sort':
         state.settings.routeSort=el.dataset.value==='minute'?'minute':'net';
         persist();render();

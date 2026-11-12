@@ -1,3 +1,11 @@
+## 2.6.0 — Clearer route decisions
+
+Overview now compares up to three positive calculated runs across trading, travel, museum, blood bags, shop resale and inventory. Random rewards and manual forecasts do not enter this shortlist. These are comparisons, not verified eligibility or guaranteed sales; cash, time, fees and omitted costs remain visible.
+
+Routes has All, Active, Recurring and Priced filters. Unpriced routes are folded into setup, with evidence and requirements expandable per route. All 30 routes remain available, including losses. Calculated estimates and personal estimates are labelled separately. A saved estimate no longer silently replaces a current calculation; it remains visible alongside it because it may include extra costs.
+
+Validation: existing unit suite, suite integration check and synthetic DOM route flows. Live Torn PDA rendering still needs a device check.
+
 ## 2.5.0 — Profit per run and active minute
 
 Routes now defines the unit for all 30 money-making routes and sorts estimates by profit per run or profit per active minute. Losses stay visible. Missing active times sort below timed estimates, and flight time is shown as elapsed time. Recurring income is compared on a 30-day basis, with the actual locked City Bank term or estimated stock payment cycle shown separately.
