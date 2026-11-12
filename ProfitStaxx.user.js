@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.4.0
+// @version      2.5.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.4.0';
+  const VERSION = '2.5.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -102,7 +102,7 @@
   const now=()=>Date.now();
   // Wallet is an optional read-only safety limit. Never assume the API returned a zero balance.
   function parseMoneyV113(payload){
-    const value=payload?.money?.money_onhand??payload?.money_onhand;
+    const value=payload?.money?.wallet??payload?.money?.money_onhand??payload?.money_onhand;
     const amount=Number(value);
     return value!==undefined&&value!==null&&value!==''&&Number.isFinite(amount)&&amount>=0?amount:null;
   }
@@ -113,7 +113,9 @@
     if(state.walletBusy||!apiKey()||document.hidden)return;
     state.walletBusy=true;
     try{
-      const cash=parseMoneyV113(await api('user/money'));
+      const result=await api('user/money');
+      if(result?.money)runFigures.money={at:now(),data:result.money};
+      const cash=parseMoneyV113(result);
       if(cash===null)throw Error('Torn returned no verified cash-on-hand field.');
       state.walletCash=cash;state.walletAt=now();state.walletError='';
     }catch(e){state.walletError='Live wallet unavailable: '+String(e.message||e).slice(0,110);}
@@ -439,6 +441,109 @@
 
   // Live Torn Stock Market and local revenue ledger. No transactions are submitted.
   const dividendCash={CNC:[80000000,31],GRN:[4000000,31],IOU:[12000000,31],TMI:[25000000,31],TCT:[1000000,31],TSB:[50000000,31]};
+  const additionalRoutes=[
+    ['hunting','South Africa hunting','/travelagency.php','Choose one hunt or a batch','Check your hunting skill, available energy and any fare. One standard hunt costs $500 and 10 Energy before applicable perks.','Track cash from every hunt, including low payouts.'],
+    ['cayman','Cayman bank interest','/travelagency.php','Check your full-month balance','Interest is based on the lowest balance for the month. Account for fares and any interest perks.','Record interest credited, excluding your deposit.'],
+    ['missions','Mission cash and rewards','/loader.php?sid=missions','Check one mission','Compare its displayed cash reward with supplies, energy and time. Mission credits need a separately priced reward.','Record cash and any reward you actually sell.'],
+    ['mug','Mugging','/city.php','Evaluate one attempt','The reward depends on cash carried, your perks and the outcome. Budget energy, supplies and failed attempts.','Record money actually taken and costs.'],
+    ['jobpoints','Job point rewards','/companies.php','Choose one available job special','Check the points cost, items or cash granted, and company requirements.','Record cash paid or the settled resale of the rewards.'],
+    ['npc','NPC loot sales','/city.php','Check one loot attempt','Check energy, consumables, eligibility and loot distribution.','Count the item only after it is sold or the payout settles.'],
+    ['events','Seasonal events and loot','/calendar.php','Choose one event session','Check event dates, entry requirements and the cost of attacks, travel or supplies.','Record settled rewards and actual costs after the event.'],
+    ['propertytrade','Property resale','/properties.php','Check one property flip','Compare asking prices for comparable upgrades and happiness. Include modifications and carrying costs.','Record the actual sale price and complete cost basis.'],
+    ['dump','Dump finds','/dump.php','Set a search budget','Choose how much energy to spend. Item finds and their value vary.','Record the cash from items sold and any direct cash costs.'],
+    ['casino','Casino and betting results','/casino.php','Choose one completed session','Check the stake and published odds where available. Winnings vary and the stake can be lost.','Record total payouts and stakes, including losses.']
+  ];
+  const routeRuns={
+    market:'One quoted lot bought and resold',travel:'One return trip and resale',museum:'One batch of complete sets',
+    points:'One points lot resold',city:'One found item sold',inventory:'One owned item sold',blood:'One filled bag sold',
+    forgery:'One completed project',shop:'One shop purchase resold',auction:'One settled auction',crimes:'One attempt or a defined nerve session',
+    oc:'Your share of one completed scenario',war:'Your personal payout for one war',bounty:'One successful collection',
+    revive:'One agreed service',company:'30 days of personal income',bank:'One deposit term',stocks:'One cash benefit cycle',
+    rent:'One rental contract',other:'One completed activity',
+    hunting:'One hunt or a recorded batch',cayman:'One full calendar month',missions:'One mission',
+    mug:'One attempt',jobpoints:'One redemption',npc:'One loot session',events:'One event session',
+    propertytrade:'One settled property sale',dump:'One search session',casino:'One completed session'
+  };
+
+  // Observations are kept apart from forecasts and never posted as income.
+  const runFigures={money:null,bounties:null,crimeTypes:null,crimes:new Map()};
+  const runFigureRoutes=new Set(['bank','cayman','bounty','crimes']);
+  const freshRunFigure=(entry,minutes=15)=>entry&&now()-entry.at>=0&&now()-entry.at<minutes*60000;
+
+  async function readRunFigures(route,read,force){
+    if(route==='bank'||route==='cayman'){
+      if(force||!freshRunFigure(runFigures.money)){
+        const result=await read('user/money');
+        if(result?.money)runFigures.money={at:now(),data:result.money};
+      }
+      return;
+    }
+    if(route==='bounty'){
+      if(force||!freshRunFigure(runFigures.bounties,5)){
+        const result=await read('torn/bounties?limit=100');
+        if(Array.isArray(result?.bounties))runFigures.bounties={at:now(),rows:result.bounties,
+          sourceAt:Number(result.bounties_timestamp)*1000};
+      }
+      return;
+    }
+    if(route==='crimes'){
+      if(!runFigures.crimeTypes){
+        const result=await read('torn/crimes');
+        if(Array.isArray(result?.crimes))runFigures.crimeTypes=result.crimes.filter(x=>Number.isSafeInteger(x.id)&&x.id>0&&typeof x.name==='string');
+      }
+      const id=state.settings.runCrimeId;
+      if(runFigures.crimeTypes?.some(x=>x.id===id)&&(force||!freshRunFigure(runFigures.crimes.get(id)))){
+        const result=await read('user/'+id+'/crimes');
+        if(result?.crimes)runFigures.crimes.set(id,{at:now(),data:result.crimes});
+      }
+    }
+  }
+
+  function currentBankTerm(){
+    if(!freshRunFigure(runFigures.money))return null;
+    const bank=runFigures.money.data.city_bank;
+    if(!bank||!Number.isFinite(bank.amount)||bank.amount<=0||!Number.isFinite(bank.profit)||
+        !Number.isFinite(bank.duration)||bank.duration<=0)return null;
+    return bank;
+  }
+
+  function runFigureText(route){
+    if(route==='bank'){
+      const bank=currentBankTerm();
+      return bank?fmt(bank.profit)+' interest on your '+bank.duration+'-day deposit of '+fmt(bank.amount)+'.':
+        'Check your active deposit for its locked interest. Future offers depend on term and perks.';
+    }
+    if(route==='cayman'){
+      const balance=freshRunFigure(runFigures.money)?runFigures.money.data.cayman_bank:null;
+      return Number.isFinite(balance)&&balance>=0?fmt(Math.round(balance*.005))+
+        ' at the base rate if your current '+fmt(balance)+' balance holds for the full month. Fares and perks are separate.':
+        'Base interest is 0.5% of the lowest balance held during the month. Fares and perks are separate.';
+    }
+    if(route==='bounty'){
+      const data=runFigures.bounties;
+      const age=now()-data?.sourceAt;
+      if(!freshRunFigure(data,5)||!Number.isFinite(age)||age<0||age>=300000)return 'Refresh to check the listed reward range.';
+      const rewards=data.rows.filter(x=>x?.quantity>0&&x.valid_until*1000>now()&&Number.isFinite(x.reward)&&x.reward>0).map(x=>x.reward);
+      return rewards.length?fmt(Math.min(...rewards))+' to '+fmt(Math.max(...rewards))+
+        ' gross per successful collection across '+rewards.length+' listings checked. Your matchup, costs and success are separate.':
+        'No current unexpired bounties in the checked listings.';
+    }
+    if(route==='crimes'){
+      const entry=runFigures.crimes.get(state.settings.runCrimeId),crime=entry?.data;
+      if(freshRunFigure(entry)&&Number.isSafeInteger(crime?.attempts?.total)&&crime.attempts.total>0&&Number.isFinite(crime.rewards?.money)&&crime.rewards.money>=0){
+        const attempts=crime.attempts.total,money=crime.rewards.money;
+        return fmt(money/attempts)+' gross cash per attempt across your '+attempts+' attempts'+
+          (crime.nerve_spent>0?' · '+fmt(25*money/crime.nerve_spent)+' per 25 Nerve':'')+'. Items and costs are separate.';
+      }
+      return 'Select a crime to pull your gross cash per attempt from Torn. For example, the Torn Wiki reports $1,000 to $3,000 gross on a successful General Waste disposal. Supplies and failed attempts can reduce net profit.';
+    }
+    if(route==='hunting')return '$500 and 10 Energy per hunt before perks. Cash varies with hunting skill and session type.';
+    if(route==='revive')return 'Agreed cash per successful revive. Base cost 75 Energy, or as low as 25 with faction perks before event effects.';
+    if(route==='city'||route==='dump'||route==='npc'||route==='events')return 'A run can yield no saleable items. Price the loot you actually receive.';
+    if(route==='casino')return 'Use settled results, including all stakes and losses.';
+    return '';
+  }
+
   const incomeRoutes=[['market','Item Market / Bazaar','/page.php?sid=ItemMarket'],['stocks','Stock Market','/page.php?sid=stocks'],
     ['bank','Bank interest','/bank.php'],['rent','Property rental','/properties.php'],['company','Company income / wages','/companies.php'],
     ['travel','Travel importing','/travelagency.php'],['crimes','Solo crimes','/loader.php?sid=crimes'],
@@ -447,7 +552,7 @@
     ['blood','Fill and sell blood bags','/item.php'],['forgery','Forgery and Print Store','/loader.php?sid=crimes'],
     ['oc','Organised crime payouts','/factions.php?step=your#/tab=crimes'],['war','Ranked war payouts','/factions.php?step=your'],
     ['shop','City shop resale','/city.php'],['auction','Auction House','/city.php'],
-    ['other','Other earned income','/city.php']];
+    ['other','Other earned income','/city.php'],...additionalRoutes.map(row=>row.slice(0,3))];
   // Each route keeps its own instructions and destinations. Results are recorded
   // only after the player confirms what happened in Torn.
   const routeGuides={
@@ -546,6 +651,11 @@
       ['List or agree terms','Confirm the duration, rent and upkeep responsibility in Torn.'],
       ['Verify receipt','Check what rent actually reached your wallet.'],
       ['Record the rent','Enter rent received and any attributable costs for the period.']]},
+    ...Object.fromEntries(additionalRoutes.map(([id,, ,title,check,record])=>[id,{group:'Additional income',steps:[
+      [title,check],['Do the run in Torn','Confirm the costs and track what you spend.'],
+      ['Check settlement','Wait for a completed payout or sale.'],
+      ['Record the result',record]
+    ]}])),
     other:{group:'Other',steps:[
       ['Define the activity','Identify what will pay you and what it will cost.'],
       ['Confirm the terms','Check the deal and what counts as completed.'],
@@ -555,7 +665,7 @@
 
   const bloodTypes=['A+','A-','B+','B-','AB+','AB-','O+','O-'];
   const itemPriceRoutes=new Set(['city','inventory','blood','forgery','shop','auction']);
-  const routePricing={busy:false,key:'',attempt:0,error:'',retry:null};
+  const routePricing={busy:false,key:'',attempt:0,error:'',retry:null,directoryAttempt:0,directoryError:''};
   const quoteWindow=8*60000;
 
   function selectedRouteItem(w){
@@ -576,7 +686,7 @@
   }
 
   function routePricingKey(w){
-    return JSON.stringify([w.id,w.itemId,state.settings.routeBloodType||'',state.settings.forgeryMaterials?.[w.itemId]||null]);
+    return JSON.stringify([w.id,w.itemId,state.settings.routeBloodType||'',state.settings.forgeryMaterials?.[w.itemId]||null,w.route==='crimes'?state.settings.runCrimeId:null]);
   }
 
   async function refreshRoutePrices(force=false){
@@ -590,7 +700,7 @@
       return;
     }
     const key=routePricingKey(w);
-    const relevant=itemPriceRoutes.has(w.route)||['points','travel','stocks','museum'].includes(w.route)||
+    const relevant=runFigureRoutes.has(w.route)||itemPriceRoutes.has(w.route)||['points','travel','stocks','museum'].includes(w.route)||
       w.route==='market'&&w.itemId;
     if(!relevant||routePricing.key===key&&now()-routePricing.attempt<(force?15000:60000))return;
     routePricing.busy=true;routePricing.key=key;routePricing.attempt=now();routePricing.error='';render();
@@ -608,7 +718,9 @@
       if(result)state.quotes[id]=normalizeMarket(result,id,name);
     }
     try{
-      if(w.route==='stocks'){
+      if(runFigureRoutes.has(w.route)){
+        await readRunFigures(w.route,routeGet,force);
+      }else if(w.route==='stocks'){
         if(force||now()-stockState.at>=quoteWindow||now()-stockState.ownedAt>=quoteWindow)await refreshStocks();
       }else if(w.route==='travel'){
         if(force||now()-travelState.at>=quoteWindow||w.target&&!walkthroughQuote(w))await scanTravel();
@@ -663,7 +775,7 @@
     }
   }
 
-  const recurringRoutes=new Set(['bank','rent','stocks','company']);
+  const recurringRoutes=new Set(['bank','rent','stocks','company','cayman']);
   const routeCostNeeds={
     market:'A fresh qualifying listing and resale quote',
     travel:'Fresh shelf stock and a resale quote',
@@ -684,7 +796,12 @@
     bank:'Your actual investment terms',
     stocks:'A fresh priced benefit block and ownership',
     rent:'Your net weekly rental income and property value',
-    other:'Expected cash proceeds and direct costs'
+    other:'Expected cash proceeds and direct costs',
+    hunting:'Observed hunting payouts and your travel cost',cayman:'Full-month minimum balance and any fare',
+    missions:'The selected mission reward and supplies',mug:'Observed cash collected and direct costs',
+    jobpoints:'Your available job special, points and cash or sale value',npc:'Expected loot share and supplies',
+    events:'Event rewards and direct costs',propertytrade:'Purchase, upgrades, carrying costs and sale proceeds',
+    dump:'Value of actual saleable finds',casino:'Settled stakes and winnings'
   };
 
   function routeItemCosts(w){
@@ -720,22 +837,35 @@
       Number.isFinite(trip.net)&&Boolean(freshRouteQuote(trip.id));
   }
 
+  function profitPerActiveMinute(model){
+    return Number.isFinite(model?.minutes)&&model.minutes>0?model.net/model.minutes:null;
+  }
+
+  function compareRouteModels(a,b,byMinute){
+    if(byMinute){
+      const aRate=profitPerActiveMinute(a),bRate=profitPerActiveMinute(b);
+      if(aRate!==null&&bRate!==null&&aRate!==bRate)return bRate-aRate;
+      if((aRate===null)!==(bRate===null))return aRate===null?1:-1;
+    }
+    return (b.monthly??b.net)-(a.monthly??a.net);
+  }
+
   function routeProfitModels(){
     const models=new Map();
     const add=(id,model)=>{
       if(!Number.isFinite(model.net))return;
       const previous=models.get(id);
-      if(!previous||model.net>previous.net)models.set(id,model);
+      if(!previous||compareRouteModels(model,previous,state.settings.routeSort==='minute'&&!recurringRoutes.has(id))<0)models.set(id,model);
     };
     for(const deal of deals()){
       if(!freshRouteQuote(deal.id))continue;
       add('market',{net:deal.profit,cost:deal.buy*deal.qty,label:deal.name,
-        period:deal.qty+' units',target:{id:'market-'+deal.id,label:deal.name,itemId:deal.id},
+        period:deal.qty+' units',minutes:Number(state.settings.reviewMinutes)||0,target:{id:'market-'+deal.id,label:deal.name,itemId:deal.id},
         basis:'Trade cost and modeled resale fees included'});
     }
     for(const trip of travelRows()){
       if(!hasTripPricing(trip))continue;
-      add('travel',{net:trip.net,cost:trip.spent,label:trip.countryName+' / '+trip.name,period:'one trip',
+      add('travel',{net:trip.net,cost:trip.spent,label:trip.countryName+' / '+trip.name,period:'one trip',elapsed:trip.roundTripMinutes,
         basis:'Stock and sale fee included. Add any fare or other trip costs in your estimate.',
         target:{id:'travel-'+trip.country+'-'+trip.id,label:trip.countryName+' / '+trip.name,itemId:trip.id}});
     }
@@ -748,9 +878,13 @@
     for(const row of incomeCandidates()){
       if(!['stocks','rent','bank'].includes(row.route))continue;
       if(row.route==='stocks'&&(!stockState.ownedAt||now()-stockState.at>=quoteWindow||now()-stockState.ownedAt>=quoteWindow))continue;
-      add(row.route,{net:row.net,capital:row.cost,label:row.label,period:'30-day equivalent',
-        target:row,basis:row.summary});
+      const dividend=row.route==='stocks'?dividendCash[row.label.split(' ')[0]]:null;
+      add(row.route,{net:dividend?dividend[0]:row.net,monthly:row.net,capital:row.cost,label:row.label,
+        period:dividend?dividend[1]+'-day cash benefit cycle':'30-day equivalent',target:row,basis:row.summary});
     }
+    const bank=currentBankTerm();
+    if(bank)models.set('bank',{net:bank.profit,monthly:bank.profit*30/bank.duration,capital:bank.amount,
+      label:'Current deposit',period:bank.duration+'-day term',basis:'Locked interest reported by Torn'});
     for(const route of itemPriceRoutes){
       const savedId=Number(state.settings.routeItems?.[route])||0;
       const current=state.walkthrough?.route===route?state.walkthrough:null;
@@ -784,7 +918,7 @@
     for(const [route] of incomeRoutes){
       const plan=state.settings.routePlans?.[route];
       if(!plan||![plan.gross,plan.cost].every(x=>Number.isFinite(x)&&x>=0))continue;
-      models.set(route,{net:plan.gross-plan.cost,cost:plan.cost,period:recurringRoutes.has(route)?'30 days':'one run',
+      models.set(route,{net:plan.gross-plan.cost,cost:plan.cost,minutes:Number(plan.minutes)||0,period:recurringRoutes.has(route)?'30 days':'one run',
         basis:'Your saved estimate, including the costs you entered',label:typeof plan.label==='string'?plan.label:''});
     }
     return models;
@@ -795,7 +929,10 @@
     const costs=[
       model.cost!==undefined?'Costs '+fmt(model.cost):'',
       model.fee!==undefined?'Sale fee '+fmt(model.fee):'',
-      model.capital!==undefined?'Cash required '+fmt(model.capital):''
+      model.capital!==undefined?'Cash required '+fmt(model.capital):'',
+      model.monthly!==undefined&&model.monthly!==model.net?fmt(model.monthly)+' / 30 days equivalent':'',
+      model.elapsed>0?model.elapsed+' min elapsed':'',
+      profitPerActiveMinute(model)!==null?fmt(profitPerActiveMinute(model))+'/active min (estimated)':''
     ].filter(Boolean).join(' · ');
     return money+' <small>/ '+esc(model.period)+'</small>'+
       '<p class="muted">'+esc([model.label,costs,model.basis].filter(Boolean).join(' · '))+'</p>';
@@ -992,11 +1129,48 @@
     return '<button class="btn secondary" data-action="route-start" data-source="'+esc(route)+'">'+esc(label)+'</button>';
   }
 
+  async function refreshRouteDirectoryFigures(){
+    if(!apiKey()||document.hidden||routePricing.busy||state.busy||autoTickRunningV112||
+        travelState.busy||stockState.loading||now()-routePricing.directoryAttempt<60000)return;
+    routePricing.directoryAttempt=now();
+    routePricing.busy=true;
+    routePricing.directoryError='';render();
+    try{
+      for(const route of ['bank','bounty']){
+        if(document.hidden)break;
+        try{await readRunFigures(route,api,false);}
+        catch(e){routePricing.directoryError=String(e.message||e).slice(0,160);if(/limit|429|incorrect key|invalid key/i.test(routePricing.directoryError))break;}
+        if(route==='bank'&&!freshRunFigure(runFigures.bounties,5))await sleep(2500);
+      }
+    }finally{
+      routePricing.busy=false;render();
+      if(state.open&&state.tab==='walkthrough'&&state.walkthrough)void refreshRoutePrices();
+    }
+  }
+
+  function routeEvidencePanel(route){
+    const text=runFigureText(route);
+    if(!text&&!runFigureRoutes.has(route))return '';
+    const crimePicker=route==='crimes'&&runFigures.crimeTypes?
+      '<label>Crime <select id="ps-run-crime"><option value="">Choose a crime</option>'+runFigures.crimeTypes.map(x=>
+        '<option value="'+x.id+'"'+(state.settings.runCrimeId===x.id?' selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select></label>':'';
+    return '<section class="card"><h3>Return per run</h3><p>'+esc(text)+'</p>'+crimePicker+
+      (runFigureRoutes.has(route)?'<button class="btn secondary" data-action="route-prices"'+(routePricing.busy||!apiKey()?' disabled':'')+'>Check Torn data</button>':'')+
+      (runFigureRoutes.has(route)&&!apiKey()?'<p class="muted">Connect a Torn API key in Settings.</p>':'')+
+      (routePricing.busy&&runFigureRoutes.has(route)?'<p role="status">Checking Torn data…</p>':'')+
+      (routePricing.error&&state.walkthrough&&routePricing.key===routePricingKey(state.walkthrough)?notice(routePricing.error,true):'')+'</section>';
+  }
+
   function renderRouteDirectory(){
-    const models=routeProfitModels(),recent=new Map(),cutoff=now()-30*86400000;
+    const byMinute=state.settings.routeSort==='minute';
+    const models=routeProfitModels(),recent=new Map(),runs=new Map(),cutoff=now()-30*86400000;
     for(const record of moneyRecords()){
       if(record.at<cutoff||record.at>now()||!Number.isFinite(record.at)||!Number.isFinite(record.net))continue;
       recent.set(record.source,(recent.get(record.source)||0)+record.net);
+      if(String(record.id).startsWith('route-')){
+        const sample=runs.get(record.source)||[];
+        sample.push(record.net);runs.set(record.source,sample);
+      }
     }
     const rows=incomeRoutes.map(([id,label])=>({id,label,model:models.get(id)}));
     const renderRow=(row,index)=>{
@@ -1004,17 +1178,28 @@
       const button=model?.target?
         '<button class="btn secondary" data-action="route-ranked" data-source="'+esc(id)+'">Choose</button>':
         startRouteButton(id,'Choose');
+      const samples=runs.get(id)||[],evidence=runFigureText(id);
+      const observed=samples.length?'<small>Recorded '+fmt(samples.reduce((sum,x)=>sum+x,0)/samples.length)+
+        ' average per logged run · '+samples.length+' run(s)</small>':'';
       return '<div class="ps-rank-row"><div><strong>'+(index===null?'':(index+1)+'. ')+esc(label)+'</strong>'+
         (model?'<div>'+routeRankingSummary(model)+'</div>':'<p class="muted">'+esc(routeCostNeeds[id])+'</p>')+
+        '<p class="muted">Run: '+esc(routeRuns[id])+'</p>'+
+        (evidence?'<p class="muted">'+esc(evidence)+'</p>':'')+observed+
         (recent.has(id)?'<small>Recorded in 30 days: '+fmt(recent.get(id))+' net</small>':'')+'</div>'+button+'</div>';
     };
-    const ranked=(label,filter)=>{
-      const priced=rows.filter(row=>row.model&&filter(row.id)).sort((a,b)=>b.model.net-a.model.net||a.label.localeCompare(b.label));
+    const ranked=(label,filter,byTime=false)=>{
+      const priced=rows.filter(row=>row.model&&filter(row.id))
+        .sort((a,b)=>compareRouteModels(a.model,b.model,byTime)||a.label.localeCompare(b.label));
       return '<section class="card"><h3>'+label+'</h3>'+
         (priced.length?priced.map(renderRow).join(''):'<p class="muted">No complete estimates yet.</p>')+'</section>';
     };
-    return '<p class="muted">Ranked by estimated net profit. Run sizes are shown on each row.</p>'+
-      ranked('Profit per run',id=>!recurringRoutes.has(id))+ranked('Recurring profit per 30 days',id=>recurringRoutes.has(id))+
+    return '<div class="toolbar">'+
+      '<button class="btn '+(byMinute?'secondary':'')+'" data-action="route-sort" data-value="net" aria-pressed="'+!byMinute+'">Profit per run</button>'+
+      '<button class="btn '+(byMinute?'':'secondary')+'" data-action="route-sort" data-value="minute" aria-pressed="'+byMinute+'">Profit per active minute</button>'+
+      '<button class="btn secondary" data-action="route-directory-refresh"'+(!apiKey()||routePricing.busy?' disabled':'')+'>Check bank and bounties</button></div>'+
+      (routePricing.directoryError?notice(routePricing.directoryError,true):'')+
+      '<p class="muted">'+(byMinute?'Runs without an active-time estimate appear last. Flight and waiting time are elapsed time.':'Ranked by estimated net profit. Run sizes are shown on each row.')+'</p>'+
+      ranked(byMinute?'Profit per active minute':'Profit per run',id=>!recurringRoutes.has(id),byMinute)+ranked('Recurring profit per 30 days',id=>recurringRoutes.has(id))+
       '<section class="card"><h3>More figures needed</h3>'+rows.filter(row=>!row.model).map(row=>renderRow(row,null)).join('')+'</section>';
   }
 
@@ -1060,7 +1245,7 @@
       estimate+calculator+'<div class="toolbar">'+(showReceipt?'':action)+
       (w.step>0?'<button class="btn secondary" data-action="route-back">Back a step</button>':'')+
       (w.step<3?'<button class="btn secondary" data-action="route-next">'+['Plan checked · continue','Action done · continue','Result checked · continue'][w.step]+'</button>':
-       '<button class="btn secondary" data-action="route-next">'+(showReceipt?'Finish without recording':'Mark complete')+'</button>')+'</div>'+receipt+'</div>'+routePricePanel(w)+
+       '<button class="btn secondary" data-action="route-next">'+(showReceipt?'Finish without recording':'Mark complete')+'</button>')+'</div>'+receipt+'</div>'+routePricePanel(w)+routeEvidencePanel(w.route)+
       '<ol class="ps-route-steps">'+guide.steps.map(([name],i)=>'<li'+(i===w.step?' aria-current="step"':'')+'>'+esc(name)+(i<w.step?' · done':'')+'</li>').join('')+'</ol>'+
       '<button class="btn secondary" data-action="route-bar-toggle">'+(w.barHidden?'Show route bar':'Hide route bar')+'</button> '+
       '<button class="btn secondary" data-action="route-cancel">Clear walkthrough</button>'+switcher;
@@ -2294,7 +2479,7 @@
     if(el.dataset.tab){state.tab=el.dataset.tab;
       if(['alerts','daily','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics','walkthrough'].includes(state.tab))
         document.dispatchEvent?.(new CustomEvent('staxx:visit',{detail:{id:'profit',section:state.tab}}));
-      render();if(state.tab==='walkthrough')void refreshRoutePrices();else if(state.tab==='stocks'&&!routePricing.busy&&now()-stockState.at>300000)refreshStocks();return;}
+      render();if(state.tab==='walkthrough'){if(state.walkthrough)void refreshRoutePrices();else void refreshRouteDirectoryFigures();}else if(state.tab==='stocks'&&!routePricing.busy&&now()-stockState.at>300000)refreshStocks();return;}
     if(el.dataset.owned){const name=el.dataset.owned;const owned=state.settings.museumOwned||{};
       owned[name]=Math.max(0,Math.floor(number(owned[name])+Number(el.dataset.delta||0)));
       state.settings.museumOwned=owned;persist();render();return;}
@@ -2353,6 +2538,12 @@
         startWalkthrough(el.dataset.source,model?.target||null);break;
       }
       case 'route-prices':void refreshRoutePrices(true);break;
+      case 'route-directory-refresh':void refreshRouteDirectoryFigures();break;
+      case 'route-sort':
+        state.settings.routeSort=el.dataset.value==='minute'?'minute':'net';
+        persist();render();
+        shell.querySelector('[data-action="route-sort"][aria-pressed="true"]')?.focus({preventScroll:true});
+        break;
       case 'route-bar-toggle':
         if(state.walkthrough){state.walkthrough={...state.walkthrough,barHidden:!state.walkthrough.barHidden};persist();render();}
         break;
@@ -2531,6 +2722,11 @@
     shell.addEventListener('submit',onSubmit);
     shell.addEventListener('input',event=>{if(event.target.id==='ps-stock-query'){stockViewQuery=event.target.value.slice(0,80);render();return;}if(event.target.id==='ps-deal-query'){dealQuery=event.target.value.slice(0,80);render();}});
     shell.addEventListener('change',event=>{
+      if(event.target.id==='ps-run-crime'){
+        const id=Number(event.target.value);
+        state.settings.runCrimeId=runFigures.crimeTypes?.some(x=>x.id===id)?id:null;
+        persist();render();void refreshRoutePrices();return;
+      }
       if(event.target.id==='ps-route-blood'){
         state.settings.routeBloodType=bloodTypes.includes(event.target.value)?event.target.value:'';
         persist();render();void refreshRoutePrices();return;
@@ -2545,7 +2741,7 @@
     else if(e.detail.alertId){state.tab=e.detail.alertId==='stock-claim'?'stocks':e.detail.alertId==='daily-plan'?'daily':'alerts';state.alertFocus=['stock-claim','daily-plan'].includes(e.detail.alertId)?'':String(e.detail.alertId);}
     else if(['daily','alerts','best','scan','travel','stocks','capital','history','income','museum','portfolio','settings','diagnostics','walkthrough'].includes(e.detail.section)){state.tab=e.detail.section;state.alertFocus='';}
     render();
-    if(state.tab==='walkthrough')void refreshRoutePrices();
+    if(state.tab==='walkthrough'){if(state.walkthrough)void refreshRoutePrices();else void refreshRouteDirectoryFigures();}
   }else if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:closeall',()=>{if(state.open){state.open=false;render();}});
   document.addEventListener('staxx:ping',()=>document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit',label:'Profit-TornStaxx',icon:'PS',desc:'Daily profit · Markets · Stocks',trendMetric:'Fresh deals',freshnessMs:600000}})));

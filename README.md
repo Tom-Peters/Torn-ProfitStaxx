@@ -1,3 +1,11 @@
+## 2.5.0 — Profit per run and active minute
+
+Routes now defines the unit for all 30 money-making routes and sorts estimates by profit per run or profit per active minute. Losses stay visible. Missing active times sort below timed estimates, and flight time is shown as elapsed time. Recurring income is compared on a 30-day basis, with the actual locked City Bank term or estimated stock payment cycle shown separately.
+
+Torn API reads provide the current deposit's locked interest, the current Cayman balance, a range from up to 100 listed bounties, and personal lifetime cash and nerve totals for a selected crime. Bounty rewards and crime cash are gross evidence, while saved net estimates and recorded runs appear separately. A logged walkthrough result contributes to its route's recorded per-run average.
+
+Added South Africa hunting, Cayman interest, missions, mugging, job point rewards, NPC loot, seasonal events, property resale, dump finds and casino records. Variable rewards use an entered estimate or recorded runs until a reliable quote is available. Benchmarks use the Torn Wiki pages for [Hunting](https://wiki.torn.com/wiki/Hunting), [Cayman Islands](https://wiki.torn.com/wiki/Cayman_Islands), [Disposal](https://wiki.torn.com/wiki/Disposal), and [Bank](https://wiki.torn.com/wiki/Bank). The City Bank amount and term, current bounty rewards, and personal crime totals use the official [Torn API schema](https://www.torn.com/swagger/openapi.json).
+
 ## 2.4.0 — Route profit rankings and a static progress bar
 
 Routes ranks estimates by net profit per run or by 30-day recurring income. Cost, sale fees and tied-up capital are shown separately where known. Saved estimates stay available per route, and routes with missing figures say what they need. Recorded income stays separate from forecasts.
