@@ -1,3 +1,11 @@
+## 2.4.0 — Route profit rankings and a static progress bar
+
+Routes ranks estimates by net profit per run or by 30-day recurring income. Cost, sale fees and tied-up capital are shown separately where known. Saved estimates stay available per route, and routes with missing figures say what they need. Recorded income stays separate from forecasts.
+
+Forgery can price the consumed items and quantities you enter, using available market depth and listed Torn shop prices. Reusable tools, additional travel costs, private payouts and other figures outside the available pricing data can be included in a saved estimate.
+
+The progress bar sits at the top of the Torn page in normal document flow and scrolls away with the page. Tap it to resume or hide it for the current run.
+
 ## 2.3.0 — Automatic route prices and progress bar
 
 ProfitStaxx checks route prices when you start or resume a walkthrough. Pick your Torn blood type once to price the filled bag against the lowest empty bag ask and the catalogue shop price. Item sale and resale routes accept an item name and pull its available market and Torn shop prices. Selected Museum sets refresh their components and points. Travel and stocks reuse their existing price sources.

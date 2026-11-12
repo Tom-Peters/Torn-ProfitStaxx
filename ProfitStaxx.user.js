@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.3.0
+// @version      2.4.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.3.0';
+  const VERSION = '2.4.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -91,7 +91,7 @@
     trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
     tab:'daily',walkthrough:null,dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let routeStoreReady=false;
-  let root, fab, badge, shell, routeBar, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
+  let root, fab, badge, shell, routeBar, routeBarHost, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
   const scrollPositions=Object.create(null);
   let lastRenderedTab=null;
   const fmt=n=>Number.isFinite(Number(n)) ? '$'+Math.round(Number(n)).toLocaleString('en-US') : '—';
@@ -576,7 +576,7 @@
   }
 
   function routePricingKey(w){
-    return [w.id,w.itemId,state.settings.routeBloodType||''].join(':');
+    return JSON.stringify([w.id,w.itemId,state.settings.routeBloodType||'',state.settings.forgeryMaterials?.[w.itemId]||null]);
   }
 
   async function refreshRoutePrices(force=false){
@@ -629,6 +629,14 @@
         const item=selectedRouteItem(w);
         if(item&&item.tradable!==false)await quoteItem(item.id,item.name);
         else if(w.route==='market'&&w.itemId)await quoteItem(w.itemId,w.name||'Selected item');
+        if(w.route==='forgery'&&item){
+          const materials=state.settings.forgeryMaterials?.[item.id];
+          if(Array.isArray(materials))for(const material of materials.slice(0,6)){
+            if(!stillSelected())break;
+            const component=Object.values(state.catalog).find(x=>x.id===material?.id);
+            if(component?.tradable)await quoteItem(component.id,component.name);
+          }
+        }
         if(w.route==='points'||w.route==='museum'){
           if(force||!state.pointsCheckedAt||now()-state.pointsCheckedAt>=quoteWindow){
             const result=await routeGet('market/pointsmarket');
@@ -655,6 +663,144 @@
     }
   }
 
+  const recurringRoutes=new Set(['bank','rent','stocks','company']);
+  const routeCostNeeds={
+    market:'A fresh qualifying listing and resale quote',
+    travel:'Fresh shelf stock and a resale quote',
+    museum:'A set with all components and points priced',
+    points:'A buy lot, expected resale proceeds and fees',
+    city:'A priced find you plan to sell',
+    inventory:'An item price and original purchase cost',
+    blood:'Your Torn blood type and current bag prices',
+    forgery:'The project payout and prices for its consumed materials',
+    shop:'A selected item with shop cost and resale price',
+    auction:'The item cost, expected winning bid and fees',
+    crimes:'Cash payout and consumed supplies for your session',
+    oc:'Your expected share and consumed supplies',
+    war:'Your expected share and direct war costs',
+    bounty:'Expected bounty payout and supplies for the attempt',
+    revive:'Agreed payment and direct costs',
+    company:'Your personal receipts and costs over 30 days',
+    bank:'Your actual investment terms',
+    stocks:'A fresh priced benefit block and ownership',
+    rent:'Your net weekly rental income and property value',
+    other:'Expected cash proceeds and direct costs'
+  };
+
+  function routeItemCosts(w){
+    const item=selectedRouteItem(w);
+    const quote=item?freshRouteQuote(item.id):null;
+    const ask=quote?.offers?.[0]?.price||0;
+    const sale=ask?Math.floor(ask*.95):null;
+    const emptyAsk=w.route==='blood'?freshRouteQuote(731)?.offers?.[0]?.price||0:0;
+    const shopPrice=w.route==='blood'?getItem('Empty Blood Bag')?.shopBuy:w.route==='shop'?item?.shopBuy:null;
+    const shelf=shopPrice>0?shopPrice:null;
+    const costs=w.route==='blood'?[emptyAsk,shelf].filter(x=>x>0):w.route==='shop'&&shelf?[shelf]:[];
+    return {item,quote,ask,sale,emptyAsk,shelf,cost:costs.length?Math.min(...costs):null};
+  }
+
+  function forgeryCosts(w){
+    const recipe=state.settings.forgeryMaterials?.[w.itemId];
+    if(!Array.isArray(recipe)||!recipe.length||recipe.length>6||recipe.some(row=>
+      !row||!Number.isSafeInteger(row.id)||row.id<=0||!Number.isSafeInteger(row.qty)||row.qty<1||row.qty>6000))return null;
+    const lines=recipe.map(({id,qty})=>{
+      const item=Object.values(state.catalog).find(x=>x.id===id);
+      const quote=freshRouteQuote(id);
+      const market=quote?bookCost(quote.offers,qty):null;
+      const shelf=item?.shopBuy>0?item.shopBuy*qty:null;
+      const prices=[market,shelf].filter(Number.isFinite);
+      return {label:qty+' × '+(item?.name||'Item '+id),amount:prices.length?Math.min(...prices):null};
+    });
+    const complete=lines.every(x=>x.amount!==null);
+    return {lines,cost:complete?lines.reduce((sum,x)=>sum+x.amount,0):null};
+  }
+
+  function hasTripPricing(trip){
+    return trip.observationAge>=-5*60000&&trip.observationAge<=30*60000&&trip.quantityBuy>0&&
+      Number.isFinite(trip.net)&&Boolean(freshRouteQuote(trip.id));
+  }
+
+  function routeProfitModels(){
+    const models=new Map();
+    const add=(id,model)=>{
+      if(!Number.isFinite(model.net))return;
+      const previous=models.get(id);
+      if(!previous||model.net>previous.net)models.set(id,model);
+    };
+    for(const deal of deals()){
+      if(!freshRouteQuote(deal.id))continue;
+      add('market',{net:deal.profit,cost:deal.buy*deal.qty,label:deal.name,
+        period:deal.qty+' units',target:{id:'market-'+deal.id,label:deal.name,itemId:deal.id},
+        basis:'Trade cost and modeled resale fees included'});
+    }
+    for(const trip of travelRows()){
+      if(!hasTripPricing(trip))continue;
+      add('travel',{net:trip.net,cost:trip.spent,label:trip.countryName+' / '+trip.name,period:'one trip',
+        basis:'Stock and sale fee included. Add any fare or other trip costs in your estimate.',
+        target:{id:'travel-'+trip.country+'-'+trip.id,label:trip.countryName+' / '+trip.name,itemId:trip.id}});
+    }
+    for(const r of recipeResults()){
+      const target={id:'museum-'+r.name,label:r.name};
+      const q=walkthroughQuote({route:'museum',target:target.id});
+      if(q)add('museum',{net:q.net,cost:r.cost,capital:q.cost,label:r.name,period:r.batch+' set(s)',target,
+        basis:'Full component cost, including owned pieces, and configured points fees'});
+    }
+    for(const row of incomeCandidates()){
+      if(!['stocks','rent','bank'].includes(row.route))continue;
+      if(row.route==='stocks'&&(!stockState.ownedAt||now()-stockState.at>=quoteWindow||now()-stockState.ownedAt>=quoteWindow))continue;
+      add(row.route,{net:row.net,capital:row.cost,label:row.label,period:'30-day equivalent',
+        target:row,basis:row.summary});
+    }
+    for(const route of itemPriceRoutes){
+      const savedId=Number(state.settings.routeItems?.[route])||0;
+      const current=state.walkthrough?.route===route?state.walkthrough:null;
+      const w=current||{route,itemId:savedId};
+      const prices=routeItemCosts(w);
+      const {item,ask,sale,cost}=prices;
+      if((route==='blood'||route==='shop')&&cost!==null&&sale!==null){
+        add(route,{net:sale-cost,cost,fee:ask-sale,label:item.name,period:'one item',
+          basis:'Lowest shown purchase cost and standard market sale fee. Shop availability can vary.'});
+      }else if(route==='city'){
+        const proceeds=Math.max(sale||0,item?.shopSell||0);
+        if(proceeds>0)add(route,{net:proceeds,cost:0,fee:proceeds===sale?ask-sale:0,label:item.name,period:'one found item',
+          basis:'Assumes the item was collected at no cash cost'});
+      }else if(route==='inventory'&&item){
+        const holding=positions().find(x=>x.itemId===item.id&&x.qty>0);
+        const proceeds=Math.max(sale||0,item.shopSell||0);
+        if(holding&&proceeds>0){
+          const unit=holding.cost/holding.qty;
+          add(route,{net:proceeds-unit,cost:unit,fee:proceeds===sale?ask-sale:0,
+            label:item.name,period:'one item',basis:'Original unit cost from the trade ledger'});
+        }
+      }else if(route==='forgery'&&item){
+        const materials=forgeryCosts(w);
+        const proceeds=Math.max(sale||0,item.shopSell||0);
+        if(proceeds>0&&materials?.cost!==null&&materials?.cost!==undefined){
+          add(route,{net:proceeds-materials.cost,cost:materials.cost,fee:proceeds===sale?ask-sale:0,
+            label:item.name,period:'one successful project',basis:'Saved recipe quantities. Reusable tools and failed attempts are excluded.'});
+        }
+      }
+    }
+    for(const [route] of incomeRoutes){
+      const plan=state.settings.routePlans?.[route];
+      if(!plan||![plan.gross,plan.cost].every(x=>Number.isFinite(x)&&x>=0))continue;
+      models.set(route,{net:plan.gross-plan.cost,cost:plan.cost,period:recurringRoutes.has(route)?'30 days':'one run',
+        basis:'Your saved estimate, including the costs you entered',label:typeof plan.label==='string'?plan.label:''});
+    }
+    return models;
+  }
+
+  function routeRankingSummary(model){
+    const money='<strong class="'+(model.net<0?'negative':'positive')+'">'+fmt(model.net)+'</strong>';
+    const costs=[
+      model.cost!==undefined?'Costs '+fmt(model.cost):'',
+      model.fee!==undefined?'Sale fee '+fmt(model.fee):'',
+      model.capital!==undefined?'Cash required '+fmt(model.capital):''
+    ].filter(Boolean).join(' · ');
+    return money+' <small>/ '+esc(model.period)+'</small>'+
+      '<p class="muted">'+esc([model.label,costs,model.basis].filter(Boolean).join(' · '))+'</p>';
+  }
+
   function routePricePanel(w){
     if(w.step>=3)return '';
     const itemRoute=itemPriceRoutes.has(w.route);
@@ -672,21 +818,17 @@
         catalog.filter(x=>w.route==='shop'?x.shopBuy>0:w.route==='forgery'?x.shopSell>0||x.tradable!==false:x.tradable!==false||x.shopSell>0)
           .map(x=>'<option value="'+esc(x.name)+'"></option>').join('')+'</datalist></form>';
     }
-    const quote=item?freshRouteQuote(item.id):w.route==='market'?freshRouteQuote(w.itemId):null;
+    const costs=routeItemCosts(w);
+    const quote=w.route==='market'?freshRouteQuote(w.itemId):costs.quote;
     const ask=quote?.offers?.[0]?.price||0;
     const afterFee=ask?Math.floor(ask*.95):null;
-    const empty=w.route==='blood'?freshRouteQuote(731):null;
-    const emptyItem=w.route==='blood'?getItem('Empty Blood Bag'):null;
-    const emptyAsk=empty?.offers?.[0]?.price||0;
-    const shopCost=w.route==='blood'?emptyItem?.shopBuy:w.route==='shop'?item?.shopBuy:0;
-    const shelf=shopCost>0?shopCost:null;
-    const costs=w.route==='blood'?[emptyAsk,shelf].filter(x=>x>0):w.route==='shop'&&shelf?[shelf]:[];
-    const unitCost=costs.length?Math.min(...costs):null;
+    const {emptyAsk,shelf,cost:unitCost}=costs;
     const line=(label,value)=>'<div class="line"><span>'+esc(label)+'</span><b>'+fmt(value)+'</b></div>';
     let prices='';
     if(emptyAsk)prices+=line('Empty bag · lowest market ask',emptyAsk);
     if(shelf)prices+=line('Listed shop buy price · check stock',shelf);
-    if(ask)prices+=line('Lowest resale ask · '+age(quote.at),ask)+line('Estimated proceeds after 5% standard market fee',afterFee);
+    if(ask)prices+=line('Lowest resale ask · '+age(quote.at),ask)+line('Standard market sale fee',ask-afterFee)+
+      line('Estimated proceeds after sale fee',afterFee);
     if(item?.shopSell>0&&['city','inventory','forgery','auction'].includes(w.route))prices+=line('Listed City shop sale price',item.shopSell);
     if(unitCost!==null&&afterFee!==null)prices+=line('Estimated margin per item at the cheapest shown cost',afterFee-unitCost);
     if(['points','museum'].includes(w.route)&&now()-state.pointsCheckedAt<quoteWindow&&state.pointsCheckedAt>0&&state.pointsPrice>0)
@@ -702,7 +844,23 @@
       const block=stockBlockOpportunities().find(x=>x.affordable&&x.annual!==null);
       if(block)prices+='<p>Available benefit block · '+esc(block.acronym)+' · '+fmt(block.cost)+' for '+block.need+' more shares.</p>';
     }
-    if(w.route==='forgery'&&item)prices+='<p class="muted">Proceeds only. Subtract the consumables used for your project to estimate profit.</p>';
+    if(w.route==='forgery'&&item){
+      const materialCosts=forgeryCosts(w);
+      const recipe=state.settings.forgeryMaterials?.[w.itemId];
+      const values=Array.isArray(recipe)?recipe.filter(m=>m&&m.id&&m.qty).map(m=>m.qty+' x '+(catalog.find(x=>x.id===m.id)?.name||'')).join('\n'):'';
+      prices+='<form id="ps_forgery_materials"><label>Consumed materials for one project'+
+        '<textarea name="materials" rows="3" maxlength="400" placeholder="26 x Bond Paper">'+esc(values)+'</textarea></label>'+
+        '<p class="muted">Enter one quantity and item name per line, up to six materials. Include every consumed item.</p>'+
+        '<button class="btn secondary" type="submit">Price these materials</button></form>';
+      if(materialCosts){
+        prices+=materialCosts.lines.map(x=>x.amount===null?'<p>'+esc(x.label)+' · Price unavailable</p>':line(x.label,x.amount)).join('');
+        if(materialCosts.cost!==null){
+          prices+=line('Total consumable cost',materialCosts.cost);
+          const proceeds=Math.max(afterFee||0,item.shopSell||0);
+          if(proceeds>0)prices+=line('Estimated project profit',proceeds-materialCosts.cost);
+        }
+      }
+    }
     if(!prices&&!routePricing.busy&&apiKey()&&(item||w.itemId||w.route==='blood'))prices='<p class="muted">No current price available for this selection.</p>';
     return '<section class="card ps-route-prices"><h3>Current prices</h3>'+picker+
       (!apiKey()?'<p>Connect your Torn API key in Settings to fetch prices.</p>':'')+prices+
@@ -713,10 +871,14 @@
   }
 
   function syncRouteBar(){
-    if(!routeBar)return;
+    if(!routeBar||!routeBarHost)return;
     const w=state.walkthrough;
-    routeBar.hidden=!w||w.step>=4||w.barHidden||state.open;
-    if(routeBar.hidden)return;
+    routeBarHost.hidden=!w||w.step>=4||w.barHidden||state.open;
+    if(routeBarHost.hidden)return;
+    const page=document.querySelector('#mainContainer .content-wrapper')||
+      document.querySelector('main[role="main"], #mainContainer, main')||document.body;
+    if(page&&routeBarHost.parentElement!==page)page.prepend(routeBarHost);
+
     const label=w.name||incomeRoutes.find(r=>r[0]===w.route)[1];
     const step=routeGuides[w.route].steps[w.step][0];
     const signature=w.id+':'+w.step;
@@ -745,7 +907,7 @@
     if(!current||current.step>=4||current.route!==route||current.target!==targetId){
       state.error='';
       state.walkthrough=loadWalkthrough({id:now()+'-'+Math.random().toString(36).slice(2,10),route,step:0,
-        target:targetId,name:target?.label||'',itemId:target?.itemId||0});
+        target:targetId,name:target?.label||'',itemId:target?.itemId||Number(state.settings.routeItems?.[route])||0,plan:target?null:state.settings.routePlans?.[route]});
       persist();
     }
     state.tab='walkthrough';
@@ -760,8 +922,8 @@
       return deal?{cost:deal.buy*deal.qty,net:deal.profit,period:'one trade',deal}:null;
     }
     if(w.route==='travel'){
-      const row=travelRows().find(r=>'travel-'+r.country+'-'+r.id===w.target&&r.valid);
-      return row&&freshRouteQuote(row.id)?{cost:row.spent,net:row.net,period:'one round trip',travel:row}:null;
+      const row=travelRows().find(r=>'travel-'+r.country+'-'+r.id===w.target&&hasTripPricing(r));
+      return row?{cost:row.spent,net:row.net,period:'one round trip',travel:row}:null;
     }
     if(w.route==='museum'){
       const set=recipeResults().find(r=>'museum-'+r.name===w.target);
@@ -812,7 +974,10 @@
       alert('Enter non-negative cash amounts and optional time or energy. Enter 0 for no costs.');return;
     }
     if(planning){
-      state.walkthrough={...w,plan:{gross,cost,minutes,resource}};persist();
+      const plan={gross,cost,minutes,resource};
+      state.walkthrough={...w,plan};
+      state.settings.routePlans={...state.settings.routePlans,[w.route]:{...plan,label:w.name||selectedRouteItem(w)?.name||''}};
+      persist();
     }else{
       const id='route-'+w.id,records=moneyRecords();
       state.walkthrough={...w,step:4};
@@ -828,26 +993,29 @@
   }
 
   function renderRouteDirectory(){
-    const groups=new Map(),recent=new Map(),cutoff=now()-30*86400000;
+    const models=routeProfitModels(),recent=new Map(),cutoff=now()-30*86400000;
     for(const record of moneyRecords()){
       if(record.at<cutoff||record.at>now()||!Number.isFinite(record.at)||!Number.isFinite(record.net))continue;
-      const summary=recent.get(record.source)||{count:0,net:0,timedNet:0,minutes:0};
-      summary.count++;summary.net+=record.net;
-      if(record.minutes>0&&Number.isFinite(record.minutes)){summary.minutes+=record.minutes;summary.timedNet+=record.net;}
-      recent.set(record.source,summary);
+      recent.set(record.source,(recent.get(record.source)||0)+record.net);
     }
-    for(const [id,label] of incomeRoutes){
-      const guide=routeGuides[id];
-      if(!groups.has(guide.group))groups.set(guide.group,[]);
-      groups.get(guide.group).push([id,label]);
-    }
-    return [...groups].map(([group,rows])=>'<section class="card"><h3>'+esc(group)+'</h3>'+
-      rows.map(([id,label])=>{
-        const result=recent.get(id);
-        const summary=result?'<p class="muted">Recorded in 30 days: '+fmt(result.net)+' net across '+result.count+' entries'+
-          (result.minutes?' · '+fmt(result.timedNet*60/result.minutes)+'/active hour on timed entries':'')+'</p>':'';
-        return '<div class="line"><div><strong>'+esc(label)+'</strong>'+summary+'</div>'+startRouteButton(id,'Choose')+'</div>';
-      }).join('')+'</section>').join('');
+    const rows=incomeRoutes.map(([id,label])=>({id,label,model:models.get(id)}));
+    const renderRow=(row,index)=>{
+      const {id,label,model}=row;
+      const button=model?.target?
+        '<button class="btn secondary" data-action="route-ranked" data-source="'+esc(id)+'">Choose</button>':
+        startRouteButton(id,'Choose');
+      return '<div class="ps-rank-row"><div><strong>'+(index===null?'':(index+1)+'. ')+esc(label)+'</strong>'+
+        (model?'<div>'+routeRankingSummary(model)+'</div>':'<p class="muted">'+esc(routeCostNeeds[id])+'</p>')+
+        (recent.has(id)?'<small>Recorded in 30 days: '+fmt(recent.get(id))+' net</small>':'')+'</div>'+button+'</div>';
+    };
+    const ranked=(label,filter)=>{
+      const priced=rows.filter(row=>row.model&&filter(row.id)).sort((a,b)=>b.model.net-a.model.net||a.label.localeCompare(b.label));
+      return '<section class="card"><h3>'+label+'</h3>'+
+        (priced.length?priced.map(renderRow).join(''):'<p class="muted">No complete estimates yet.</p>')+'</section>';
+    };
+    return '<p class="muted">Ranked by estimated net profit. Run sizes are shown on each row.</p>'+
+      ranked('Profit per run',id=>!recurringRoutes.has(id))+ranked('Recurring profit per 30 days',id=>recurringRoutes.has(id))+
+      '<section class="card"><h3>More figures needed</h3>'+rows.filter(row=>!row.model).map(row=>renderRow(row,null)).join('')+'</section>';
   }
 
   function renderWalkthrough(){
@@ -880,7 +1048,7 @@
     const plan=w.plan,net=plan?plan.gross-plan.cost:null;
     const estimate=plan?'<p>Saved estimate · '+fmt(net)+' net'+(plan.minutes?' · '+fmt(net*60/plan.minutes)+'/active hour':'')+
       (plan.resource&&guide.resource?' · '+fmt(net/plan.resource)+'/'+esc(guide.resource):'')+'</p>':'';
-    const calculator=w.step===0?'<details data-view-key="route-estimate"><summary>Estimate this run</summary>'+
+    const calculator=w.step===0?'<details data-view-key="route-estimate"><summary>Estimate '+(recurringRoutes.has(w.route)?'30 days':'this run')+'</summary>'+
       '<form id="ps_route_plan"><div class="duo">'+field('gross','Expected cash after fees ($)',plan?.gross??'')+
       field('cost','Expected total costs ($)',plan?.cost??'')+'</div><div class="duo">'+
       field('minutes','Active minutes (optional)',plan?.minutes??'')+(guide.resource?field('resource',guide.resource+' budget (optional)',plan?.resource??''):'')+
@@ -1617,7 +1785,7 @@
 
   function css(){
     return [
-      '.ps-route-bar{position:fixed;z-index:2147483644;top:calc(env(safe-area-inset-top,0px) + 52px);left:50%;transform:translateX(-50%);width:min(calc(100vw - 24px),430px);display:flex;align-items:stretch;border:1px solid #559bbf;border-radius:10px;background:#102b41;color:#eef9ff;box-shadow:0 4px 18px #0006;overflow:hidden}.ps-route-bar[hidden]{display:none}.ps-route-bar button{color:inherit;background:transparent;border:0;padding:7px 12px;min-height:44px}.ps-route-bar-open{flex:1;min-width:0;text-align:left}.ps-route-bar-label,.ps-route-bar-step{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ps-route-bar-step{font-size:11px;color:#a6dbef}.ps-route-bar-hide{border-left:1px solid #559bbf!important}.ps-route-prices select,.ps-route-prices input{max-width:100%;background:#0b2034;color:#fff;border:1px solid #3d617a;border-radius:6px;padding:8px}',
+      '.ps-rank-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #294e67}.ps-rank-row p{margin:4px 0}.ps-route-prices select,.ps-route-prices input,.ps-route-prices textarea{max-width:100%;background:#0b2034;color:#fff;border:1px solid #3d617a;border-radius:6px;padding:8px}.ps-route-prices textarea{display:block;width:100%}',
       '.ps-route-steps{padding-left:26px;color:#a8c9de}.ps-route-steps li{padding:5px}.ps-route-steps [aria-current="step"]{font-weight:700;color:#86e1ff}.ps-desk-next .toolbar{flex-wrap:wrap;margin-top:12px}',
       ':host{all:initial;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#e7f2ff}',
       '*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer}',
@@ -2180,6 +2348,10 @@
         break;
       }
       case 'route-start':startWalkthrough(el.dataset.source);break;
+      case 'route-ranked':{
+        const model=routeProfitModels().get(el.dataset.source);
+        startWalkthrough(el.dataset.source,model?.target||null);break;
+      }
       case 'route-prices':void refreshRoutePrices(true);break;
       case 'route-bar-toggle':
         if(state.walkthrough){state.walkthrough={...state.walkthrough,barHidden:!state.walkthrough.barHidden};persist();render();}
@@ -2234,7 +2406,24 @@
     }
   }
   function onSubmit(event){
-    if(event.target.id==='ps_route_item'){
+    if(event.target.id==='ps_forgery_materials'){
+      event.preventDefault();
+      const w=state.walkthrough;if(w?.route!=='forgery'||!w.itemId||w.step>=3)return;
+      const input=String(new FormData(event.target).get('materials')||'').trim();
+      const rows=input?input.split(/\r?\n/).filter(line=>line.trim()):[];
+      const recipe=new Map();
+      for(const row of rows){
+        const match=row.match(/^\s*(\d+)\s*[x×]\s+(.+?)\s*$/i);
+        const item=match?getItem(match[2]):null;
+        const quantity=match?Number(match[1]):0;
+        if(!item||!Number.isSafeInteger(quantity)||quantity<1||quantity>1000||rows.length>6){
+          alert('Enter up to six lines in the form 2 x Item Name.');return;
+        }
+        recipe.set(item.id,(recipe.get(item.id)||0)+quantity);
+      }
+      state.settings.forgeryMaterials={...state.settings.forgeryMaterials,[w.itemId]:[...recipe].map(([id,qty])=>({id,qty}))};
+      persist();render();void refreshRoutePrices();
+    }else if(event.target.id==='ps_route_item'){
       event.preventDefault();
       const w=state.walkthrough;
       if(!w||!itemPriceRoutes.has(w.route)||w.route==='blood'||w.step>=3)return;
@@ -2242,6 +2431,7 @@
       const item=getItem(name);
       if(!item||w.route==='shop'&&!item.shopBuy){alert('Choose a matching item from the list.');return;}
       state.walkthrough={...w,itemId:item.id};
+      state.settings.routeItems={...state.settings.routeItems,[w.route]:item.id};
       persist();render();void refreshRoutePrices();
     }else if(['ps_route_plan','ps_route_receipt'].includes(event.target.id)){
       event.preventDefault();
@@ -2320,7 +2510,7 @@
     fab.addEventListener('click',()=>{state.open=!state.open;render();});
     root.appendChild(fab);
     routeBar=document.createElement('aside');
-    routeBar.className='ps-route-bar';routeBar.hidden=true;
+    routeBar.className='ps-route-bar';
     routeBar.setAttribute('aria-label','Active ProfitStaxx route');
     routeBar.innerHTML='<button type="button" class="ps-route-bar-open"><b class="ps-route-bar-label"></b><span class="ps-route-bar-step"></span></button>'+
       '<button type="button" class="ps-route-bar-hide" aria-label="Hide route bar">Hide</button>';
@@ -2331,7 +2521,11 @@
     routeBar.querySelector('.ps-route-bar-hide').onclick=()=>{
       if(state.walkthrough){state.walkthrough={...state.walkthrough,barHidden:true};persist();render();}
     };
-    root.appendChild(routeBar);
+    routeBarHost=document.createElement('div');routeBarHost.id='profitstaxx-route-top';routeBarHost.hidden=true;
+    const routeRoot=routeBarHost.attachShadow({mode:'open'});
+    const routeStyle=document.createElement('style');
+    routeStyle.textContent='.ps-route-bar{box-sizing:border-box;display:flex;align-items:stretch;width:min(100%,620px);margin:6px auto 10px;border:1px solid #559bbf;border-radius:8px;background:#102b41;color:#eef9ff;overflow:hidden;font:13px system-ui,sans-serif}.ps-route-bar button{color:inherit;background:transparent;border:0;padding:7px 12px;min-height:44px;font:inherit;cursor:pointer}.ps-route-bar-open{flex:1;min-width:0;text-align:left}.ps-route-bar-label,.ps-route-bar-step{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ps-route-bar-step{font-size:11px;color:#a6dbef}.ps-route-bar .ps-route-bar-hide{border-left:1px solid #559bbf}';
+    routeRoot.append(routeStyle,routeBar);
     shell=document.createElement('div');shell.className='overlay';
     shell.addEventListener('click',e=>{if(e.target===shell){state.open=false;render();}else onClick(e);});
     shell.addEventListener('submit',onSubmit);
@@ -2513,7 +2707,7 @@
   async function init(){
     mount();
     window.addEventListener("hashchange",()=>{nativeMarketQuote();marketAssist();});
-    setInterval(nativeMarketQuote,2000);
+    setInterval(()=>{nativeMarketQuote();syncRouteBar();},2000);
     document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit',label:'Profit-TornStaxx',icon:'PS',desc:'Daily profit · Markets · Stocks',trendMetric:'Fresh deals',freshnessMs:600000}}));
     try{
       const loaded=await readStore();
