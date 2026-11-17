@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.6.0
+// @version      2.7.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.6.0';
+  const VERSION = '2.7.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -1222,6 +1222,11 @@
       '<details class="card" data-view-key="route-setup"><summary>Set up more routes ('+rows.filter(row=>!row.model).length+')</summary><p>Choose a route to load available prices and see the specific missing inputs. Private payments and random rewards cannot be priced reliably in advance.</p>'+rows.filter(row=>!row.model).map(row=>renderRow(row,null)).join('')+'</details>';
   }
 
+  function profitScouterPanel(route){
+    if(!['bounty','mug','war','npc'].includes(route))return '';
+    return '<section class="card"><h3>Check the player before spending Energy</h3><p>Requires WarStaxx 2.7.0 or later, using your registered FFScouter Premium key. On Torn player lists, tap the BSE / FFS badge for stat distribution and Premium details, including flight and activity checks.</p><p class="muted">Strength estimates do not predict a payout or guarantee a win. Flight observations can age; scanner activity is not time online.</p><button class="btn secondary" data-action="scouter-intelligence">Open FFScouter intelligence</button></section>';
+  }
+
   function renderWalkthrough(){
     const w=state.walkthrough;
     if(!w)return '<h2>Choose a money-making route</h2>'+(routeStoreReady?renderRouteDirectory():'<p>Restoring saved routes…</p>');
@@ -1264,7 +1269,7 @@
       estimate+calculator+'<div class="toolbar">'+(showReceipt?'':action)+
       (w.step>0?'<button class="btn secondary" data-action="route-back">Back a step</button>':'')+
       (w.step<3?'<button class="btn secondary" data-action="route-next">'+['Plan checked · continue','Action done · continue','Result checked · continue'][w.step]+'</button>':
-       '<button class="btn secondary" data-action="route-next">'+(showReceipt?'Finish without recording':'Mark complete')+'</button>')+'</div>'+receipt+'</div>'+routePricePanel(w)+routeEvidencePanel(w.route)+
+       '<button class="btn secondary" data-action="route-next">'+(showReceipt?'Finish without recording':'Mark complete')+'</button>')+'</div>'+receipt+'</div>'+routePricePanel(w)+routeEvidencePanel(w.route)+profitScouterPanel(w.route)+
       '<ol class="ps-route-steps">'+guide.steps.map(([name],i)=>'<li'+(i===w.step?' aria-current="step"':'')+'>'+esc(name)+(i<w.step?' · done':'')+'</li>').join('')+'</ol>'+
       '<button class="btn secondary" data-action="route-bar-toggle">'+(w.barHidden?'Show route bar':'Hide route bar')+'</button> '+
       '<button class="btn secondary" data-action="route-cancel">Clear walkthrough</button>'+switcher;
@@ -2557,6 +2562,7 @@
         startWalkthrough(el.dataset.source,model?.target||null);break;
       }
       case 'route-prices':void refreshRoutePrices(true);break;
+      case 'scouter-intelligence':state.open=false;render();document.dispatchEvent(new CustomEvent('staxx:open',{detail:{id:'war',section:'scouter'}}));break;
       case 'route-directory-refresh':void refreshRouteDirectoryFigures();break;
       case 'route-view':
         routeView=Object.prototype.hasOwnProperty.call(routeViews,el.dataset.value)?el.dataset.value:'all';render();break;

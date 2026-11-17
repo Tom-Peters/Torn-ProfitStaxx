@@ -1,3 +1,7 @@
+## 2.7.0 - FFScouter Premium route support
+
+Bounty, mugging, war and NPC walkthroughs now link to WarStaxx’s FFScouter intelligence screen. Requires WarStaxx 2.7.0 and your registered Premium key configured there. Player badges on supported Torn lists lead to distributions, dated spy snapshots, flight windows and activity checks. ProfitStaxx does not copy the key or treat strength estimates as guaranteed earnings. NPC availability is subject to provider coverage.
+
 ## 2.6.0 — Clearer route decisions
 
 Overview now compares up to three positive calculated runs across trading, travel, museum, blood bags, shop resale and inventory. Random rewards and manual forecasts do not enter this shortlist. These are comparisons, not verified eligibility or guaranteed sales; cash, time, fees and omitted costs remain visible.
