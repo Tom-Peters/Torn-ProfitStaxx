@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.9.1
+// @version      2.9.2
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.9.1';
+  const VERSION = '2.9.2';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -1627,7 +1627,7 @@
     }catch(e){travelState.error=String(e.message||e);}
     finally{travelState.busy=false;travelState.progress='';render();}
   }
-  const museumTrip={key:'',checked:0,busy:false,travel:null,bag:null,used:null,failed:false};
+  const museumTrip={key:'',checked:0,busy:false,travel:null,bag:null,used:null,luggage:null,failed:false};
   let museumHost=null,museumPreview='',museumContextKey='',museumMarkup='';
 
   function museumCountry(value){
@@ -1651,34 +1651,57 @@
     return {anchor,phase,country,key:phase+(phase==='agency'?'':'/'+country)};
   }
 
+  function parseTravelLuggage(data){
+    const slots=data?.inventory,base=data?.capacity?.base,special=data?.capacity?.special;
+    if(!Number.isSafeInteger(base)||base<0||base>200||!Number.isSafeInteger(special)||special<0||special>200||!Array.isArray(slots)||slots.length>500)return null;
+    const ids=new Set(),groups={weapons:0,armour:0,medical:0,other:0},items={};
+    let used=0,packed=0,acquired=0,empty=0;
+    for(const slot of slots){
+      if(!slot||!Number.isSafeInteger(slot.id)||ids.has(slot.id)||!Object.hasOwn(slot,'item'))return null;
+      ids.add(slot.id);
+      const item=slot.item;
+      if(item===null){empty++;continue;}
+      if(!item||typeof item.name!=='string'||typeof item.type!=='string'||typeof item.is_permanent!=='boolean'||typeof item.is_faction_owned!=='boolean')return null;
+      used++;if(item.is_permanent)packed++;else acquired++;
+      const type=item.type.toLowerCase();
+      const group=/primary|secondary|melee|weapon|temporary/.test(type)?'weapons':/defensive|armor|armour/.test(type)?'armour':/medical/.test(type)?'medical':'other';
+      groups[group]++;
+      const k=item.name;items[k]=(items[k]||0)+1;
+    }
+    // Special slots may be restricted to flowers or plushies; do not spend them
+    // on generic items unless the applicable perk is established.
+    return {base,special,used,packed,acquired,empty,groups,items,free:Math.max(0,base-used),over:Math.max(0,used-base-special)};
+  }
   async function refreshMuseumTrip(ctx,force=false){
-    if(!apiKey()||document.hidden||ctx.phase==='agency')return;
+    if(!apiKey()||document.hidden)return;
     const key=ctx.key;
     if(museumTrip.busy||now()-museumTrip.checked<(force?30000:museumTrip.failed?300000:60000))return;
     museumTrip.busy=true;museumTrip.checked=now();
     const attempt=museumTrip.checked;
     const current=()=>museumTrip.key===key&&museumTrip.checked===attempt;
     try{
-      const t=(await api('user/travel')).travel;
+      let travel=null;
+      if(ctx.phase!=='agency'){
+        const t=(await api('user/travel')).travel;
+        if(!current())return;
+        if(!museumCountry(t?.destination)||!Number.isFinite(t.time_left)||t.time_left<0)throw Error('Travel unavailable');
+        if(ctx.country&&ctx.country!==museumCountry(t.destination)||ctx.phase==='abroad'&&t.time_left>0)throw Error('Travel context changed');
+        travel=t;
+      }
+      const data=(await api('user/travelinventory')).travelinventory;
       if(!current())return;
-      if(!museumCountry(t?.destination)||!Number.isFinite(t.time_left)||t.time_left<0)throw Error('Travel unavailable');
-      museumTrip.failed=false;
-      if(ctx.country&&ctx.country!==museumCountry(t.destination)||ctx.phase==='abroad'&&t.time_left>0){museumTrip.travel=null;museumTrip.bag=null;return;}
-      if(museumTrip.travel?.departed_at!==t.departed_at){museumTrip.bag=null;museumTrip.used=null;}
-      museumTrip.travel=t;
-      if(t.time_left===0&&museumCountry(t.destination)==='Torn'){museumTrip.bag=null;return;}
-      const slots=(await api('user/travelinventory')).travelinventory?.inventory;
-      if(!Array.isArray(slots)||slots.some(slot=>!slot||slot.item!==null&&
-        (!slot.item||typeof slot.item.name!=='string'||typeof slot.item.is_faction_owned!=='boolean'||
-         typeof slot.item.is_permanent!=='boolean')))throw Error('Travel inventory unavailable');
+      const luggage=parseTravelLuggage(data);
+      if(!luggage)throw Error('Travel inventory unavailable');
+      museumTrip.travel=travel;museumTrip.failed=false;
+      const slots=data.inventory;
       const bag={};
       for(const {item} of slots){
         if(!item||item.is_faction_owned||!RECIPES.some(recipe=>recipe.items.includes(item.name)))continue;
         const counts=bag[item.name]||(bag[item.name]={packed:0,acquired:0});
         counts[item.is_permanent?'packed':'acquired']++;
       }
-      if(current()){museumTrip.bag=bag;museumTrip.used=slots.filter(slot=>slot.item&&!slot.item.is_permanent).length;}
-    }catch(_){if(current()){museumTrip.failed=true;museumTrip.bag=null;museumTrip.used=null;}}
+      if(current()){museumTrip.bag=bag;museumTrip.used=luggage.used;museumTrip.luggage=luggage;}
+    }catch(_){if(current()){museumTrip.failed=true;museumTrip.bag=null;museumTrip.used=null;museumTrip.luggage=null;}}
     finally{if(current())museumTrip.busy=false;}
   }
 
@@ -1803,7 +1826,7 @@
       for(const row of rows)row.need=row.owned===null?null:Math.max(0,target-row.owned);
       return {...recipe,rows,complete,target,gaps:rows.filter(row=>row.need!==0)};
     });
-    return {destination,away,bagKnown:!!trip?.bag,bagUsed:trip?.used??null,cabinetKnown:hasInventory&&!!cabinet,exchanges,hasInventory};
+    return {destination,away,bagKnown:!!trip?.bag,bagUsed:trip?.used??null,luggage:trip?.luggage??null,cabinetKnown:hasInventory&&!!cabinet,exchanges,hasInventory};
   }
 
   const museumTravelStyle=`
@@ -1877,7 +1900,31 @@
       if(!pointFresh||!shop||market!==null&&market<shop.cost||shop.cost>r.points*state.pointsPrice*(1-number(state.settings.pointFee)/100))continue;
       const n=Math.min(left,shop.quantity);if(n<=0)continue;buys[row.name]=(buys[row.name]||0)+n;points+=n*r.points;left-=n;
     }
-    return {country,buys,points,progress,used:remaining-left};
+    const museumUsed=remaining-left;
+    const fillers={};
+    // Use observed, profitable resale stock to fill all remaining ordinary slots.
+    // Never count an unknown market return as profit or spend on a known loss.
+    if(country!=='Torn'&&left>0){
+      const names=new Set(travelState.rows.filter(x=>museumCountry(x.countryName||x.country)===country).map(x=>x.name));
+      for(const name of shelf?.keys()||[])names.add(name);
+      const candidates=[];
+      for(const name of names){
+        const item=getItem(name),shop=museumShopOffer(name,country,shelf),q=item&&freshRouteQuote(item.id);
+        if(!shop||!Number.isFinite(shop.cost)||shop.cost<=0||!Number.isSafeInteger(shop.quantity)||shop.quantity<1||!q||!Number.isFinite(q.reference)||q.reference<=0||item.tradable===false)continue;
+        const profit=Math.floor(q.reference*.95)-shop.cost;
+        if(profit>0)candidates.push({name,shop,profit});
+      }
+      candidates.sort((a,b)=>b.profit-a.profit||a.shop.cost-b.shop.cost||a.name.localeCompare(b.name));
+      let spend=Object.entries(buys).reduce((n,[name,qty])=>n+(museumShopOffer(name,country,shelf)?.cost||0)*qty,0);
+      const limit=Math.max(0,number(state.settings.capital)*number(state.settings.maxTradePct)/100);
+      for(const c of candidates){
+        const n=Math.max(0,Math.min(left,c.shop.quantity-(buys[c.name]||0),Math.floor((limit-spend)/c.shop.cost)));
+        if(!n)continue;
+        buys[c.name]=(buys[c.name]||0)+n;fillers[c.name]=n;left-=n;spend+=n*c.shop.cost;
+        if(!left)break;
+      }
+    }
+    return {country,buys,fillers,points,progress,museumUsed,used:remaining-left,unfilled:left};
   }
   function museumCashPlan(suggested,shelf,bufferPercent=state.settings.museumCashBuffer){
     const buffer=clamp(Number.isFinite(Number(bufferPercent))?Number(bufferPercent):5,0,25);
@@ -1931,7 +1978,10 @@
     try{
       await loadCatalog();await refreshPoints();
       if(!travelState.busy&&!museumShelfPriceBusy){try{travelState.rows=parseTravelFeed(await publicTravelGet());travelState.at=now();}catch(_){}}
-      for(const name of [...new Set(RECIPES.flatMap(r=>r.items))]){
+      const country=museumCountry(museumPreview)||museumTravelContext()?.country||'';
+      const resale=travelState.rows.filter(x=>museumCountry(x.countryName||x.country)===country&&x.quantity>0&&now()-x.observed<30*60000).sort((a,b)=>(number(getItem(b.name)?.value)*.95-b.cost)-(number(getItem(a.name)?.value)*.95-a.cost)).slice(0,12).map(x=>x.name);
+      const local=RECIPES.flatMap(r=>r.items.filter(name=>r.sources[name]===country));
+      for(const name of [...new Set([...local,...resale,...RECIPES.flatMap(r=>r.items)])]){
         if(document.hidden||apiKey()!==key)break;
         const item=getItem(name);if(!item||freshRouteQuote(item.id))continue;
         try{state.quotes[item.id]=normalizeMarket(await api('market/'+item.id+'/itemmarket'),item.id,item.name);}
@@ -1983,17 +2033,27 @@
         html+='<p><b>Closest set · '+esc(nearest.name)+'</b><br>'+nearest.gaps.length+' missing for '+nearest.points+' points · '+esc(names)+(nearest.gaps.length>2?' and '+(nearest.gaps.length-2)+' more':'')+'</p>';
       }else html+='<p>Expand the checklist for every item and where to find it.</p>';
     }
-    const capacity=clamp(Math.floor(number(state.settings.travelCapacity)||10),1,200);
-    const available=plan.away?(plan.bagKnown&&Number.isSafeInteger(plan.bagUsed)?Math.max(0,capacity-plan.bagUsed):null):capacity;
-    const ranked=museumCountries.filter(c=>c!=='Torn').map(c=>museumCountryPlan(plan,c,capacity)).filter(p=>p.used>0).sort((a,b)=>b.points-a.points||b.progress-a.progress);
+    const luggage=plan.luggage;
+    const capacity=luggage?luggage.base:clamp(Math.floor(number(state.settings.travelCapacity)||10),1,200);
+    const available=luggage?luggage.free:ctx?null:capacity;
+    if(luggage){
+      html+='<p><b>Travel inventory:</b> '+luggage.used+' occupied / '+(luggage.base+luggage.special)+' total · '+luggage.free+' ordinary slots free · '+(luggage.used?'Not empty':'Empty')+'</p>';
+      html+='<p><small>'+luggage.groups.weapons+' weapon / temporary · '+luggage.groups.armour+' armour · '+luggage.groups.medical+' medical · '+luggage.groups.other+' other · '+luggage.packed+' packed / '+luggage.acquired+' acquired abroad.</small></p>';
+      if(luggage.special)html+='<p><small>'+luggage.special+' special-purpose slots reported; not allocated to unrestricted purchases.</small></p>';
+      if(luggage.over)html+='<p><b>Over capacity by '+luggage.over+' slots. Review your inventory before returning.</b></p>';
+      if(luggage.used&&!plan.away)html+='<p><small>Review packed items before departure if you want more shopping space. Nothing is removed automatically.</small></p>';
+      if(ctx?.phase==='agency')html+='<p><small>Current API capacity; verify again if changing flight class or perks.</small></p>';
+    }else if(ctx)html+='<p><small>Actual travel inventory unavailable; no verified free-slot count yet.</small></p>';
+    const ranked=museumCountries.filter(c=>c!=='Torn').map(c=>museumCountryPlan(plan,c,available??0)).filter(p=>p.museumUsed>0).sort((a,b)=>b.points-a.points||b.progress-a.progress);
     if(ranked.length){const best=ranked[0],cash=museumCashPlan(best);html+='<p><b>Next trip to consider:</b> '+esc(best.country)+' · '+best.points+' extra points immediately · '+best.progress+' missing pieces addressed'+(cash.carry!==null?' · carry '+fmt(cash.carry):' · cash not fully priced')+' (estimated, before travel costs).</p>';}
     if(country&&available!==null){
       const suggested=museumCountryPlan(plan,country,available,shelf),cash=museumCashPlan(suggested,shelf);
       const wallet=liveWalletCashV113();
       html+='<div style="padding:9px;margin:8px 0;border:1px solid #49708b;border-radius:6px"><small>'+ (plan.away?'Cash needed for remaining purchases':'Recommended cash to take')+'</small><br><strong class="points" style="font-size:20px">'+(cash.carry===null?'Not fully priced':fmt(cash.carry))+'</strong><p><small>Shopping '+fmt(cash.subtotal)+(cash.missing.length?' priced so far · missing '+esc(cash.missing.join(', ')):' · '+cash.buffer+'% buffer '+fmt(cash.extra))+' · excludes fares and unrelated purchases.</small></p>'+(cash.estimated?'<small>Estimated from reported/saved shop prices; verify on arrival.</small>':'')+(wallet!==null&&cash.carry!==null?'<p><small>'+ (wallet<cash.carry?'Cash shortfall '+fmt(cash.carry-wallet):'Current wallet covers this plan')+' · wallet '+fmt(wallet)+'</small></p>':'')+'</div>';
-      html+='<p><b>Suggested bag:</b> '+suggested.used+' / '+available+' '+(plan.away?'estimated remaining':'configured')+' slots'+(suggested.points?' · +'+suggested.points+' pts':'')+'</p>';
-      for(const row of cash.lines)html+=itemRow('Buy '+row.qty+' × '+row.name,row.total===null?'Shop price unavailable':fmt(row.cost)+' each · '+fmt(row.total)+' total · '+row.source+(row.at?' · '+age(row.at):''));
-    }else if(plan.away)html+='<p><small>Remaining luggage unknown; check Torn before buying.</small></p>';
+      html+='<p><b>Suggested bag:</b> '+suggested.used+' / '+available+' '+(luggage?'verified ordinary free':'configured estimate')+' slots'+(suggested.points?' · +'+suggested.points+' pts':'')+'</p>';
+      for(const row of cash.lines)html+=itemRow('Buy '+row.qty+' × '+row.name,(suggested.fillers[row.name]?(suggested.fillers[row.name]===row.qty?'Resale filler · ':suggested.fillers[row.name]+' for resale · '):'Museum · ')+(row.total===null?'Shop price unavailable':fmt(row.cost)+' each · '+fmt(row.total)+' total · '+row.source+(row.at?' · '+age(row.at):'')));
+      if(suggested.unfilled)html+='<p><small>'+suggested.unfilled+' slots unfilled: no further qualifying stocked, freshly priced profitable items within the trading cap. Refresh museum prices to check again.</small></p>';
+    }else if(ctx)html+='<p><small>Remaining luggage unknown; check Torn before buying.</small></p>';
     const source=plan.hasInventory?(now()-state.inventorySourceAt>=3600000?'Saved inventory · ':'Inventory · ')+age(state.inventorySourceAt):
       state.inventoryBusy?'Checking inventory…':Object.keys(state.settings.museumOwned||{}).length?'Manually recorded quantities':'No inventory synced';
     html+='<p><small>'+esc(source)+(plan.hasInventory?(plan.cabinetKnown?' · Display included':' · Display unverified'):'')+(plan.away?(plan.bagKnown?' · Travel bag included':' · Bag unverified, check carried items'):'')+'</small></p>';
@@ -2043,7 +2103,7 @@
     for(const name of Object.keys(museumNative))delete museumNative[name];museumNativeSignature='';
     state.inventoryOwned={};state.inventoryCategoryAt={};state.inventorySourceAt=0;state.inventoryAt=0;state.inventoryError='';
     Object.assign(museumCabinet,{owned:null,at:0,attempt:0});
-    Object.assign(museumTrip,{key:'',checked:0,busy:false,bag:null,used:null,travel:null});
+    Object.assign(museumTrip,{key:'',checked:0,busy:false,bag:null,used:null,luggage:null,travel:null});
     noteAutoAttemptV116('inventory',0);
   }
   function checkMuseumInventory(force=false){
@@ -2060,10 +2120,10 @@
     const ctx=enabled?museumTravelContext():null;
     if(!ctx){
       museumHost?.remove();museumHost=null;museumPreview='';museumContextKey='';
-      if(museumTrip.key)Object.assign(museumTrip,{key:'',checked:0,busy:false,travel:null,bag:null,used:null,failed:false});
+      if(museumTrip.key)Object.assign(museumTrip,{key:'',checked:0,busy:false,travel:null,bag:null,used:null,luggage:null,failed:false});
       return;
     }
-    if(ctx.key!==museumTrip.key)Object.assign(museumTrip,{key:ctx.key,checked:0,busy:false,travel:null,bag:null,used:null,failed:false});
+    if(ctx.key!==museumTrip.key)Object.assign(museumTrip,{key:ctx.key,checked:0,busy:false,travel:null,bag:null,used:null,luggage:null,failed:false});
     const viewKey=ctx.key+'/'+ctx.country;
     if(viewKey!==museumContextKey){museumContextKey=viewKey;museumPreview='';}
     checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumTrip(ctx,force);void refreshMuseumShelfPrices(force);

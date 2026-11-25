@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,museumNative,museumCardCount,museumCountryPlan,museumCashPlan,museumEconomics,museumReadyNotice,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,museumNative,museumCardCount,parseTravelLuggage,museumCountryPlan,museumCashPlan,museumEconomics,museumReadyNotice,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init",replacement+"  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -560,4 +560,24 @@ test('museum cash to carry uses exact suggested quantities and configurable buff
  cash=museumCashPlan(plan,undefined,5);assert.equal(cash.carry,22575);assert.equal(cash.lines[0].source,'Saved shop price');
  travelState.rows[0].observed=now-25*3600000;
  assert.equal(museumCashPlan(plan,undefined,5).carry,null);
+});
+
+test('travel inventory counts permanent gear, faction armour, meds and acquisitions',()=>{
+ const {parseTravelLuggage}=harness();
+ const slots=[{id:1,item:{name:'Weapon',type:'Primary',is_permanent:true,is_faction_owned:false}},{id:2,item:{name:'Armour',type:'Defensive',is_permanent:true,is_faction_owned:true}},{id:3,item:{name:'Medicine',type:'Medical',is_permanent:true,is_faction_owned:false}},{id:4,item:{name:'Dahlia',type:'Flower',is_permanent:false,is_faction_owned:false}},{id:5,item:null}];
+ const x=parseTravelLuggage({capacity:{base:28,special:5},inventory:slots});
+ assert.equal(x.used,4);assert.equal(x.free,24);assert.equal(x.packed,3);assert.equal(x.acquired,1);assert.equal(x.groups.weapons,1);assert.equal(x.groups.armour,1);assert.equal(x.groups.medical,1);
+ assert.equal(parseTravelLuggage({capacity:{base:28,special:0},inventory:[slots[0],slots[0]]}),null);
+ assert.equal(parseTravelLuggage({capacity:{base:2,special:0},inventory:slots}).over,2);
+ assert.equal(parseTravelLuggage({capacity:{base:28,special:0},inventory:[]}).free,28);
+});
+test('remaining ordinary luggage filled with positive-margin resale stock and included in cash',()=>{
+ const {state,travelState,museumCountryPlan,museumCashPlan}=harness(),now=Date.now();
+ state.catalog={dahlia:{id:10,name:'Dahlia',tradable:true},souvenir:{id:11,name:'Souvenir',tradable:true}};
+ state.quotes={10:{at:now,reference:1000,offers:[{price:1000,qty:99}]},11:{at:now,reference:2000,offers:[{price:2000,qty:99}]}};
+ travelState.rows=[{country:'Mexico',id:10,name:'Dahlia',quantity:20,cost:500,observed:now},{country:'Mexico',id:11,name:'Souvenir',quantity:3,cost:100,observed:now}];
+ const plan=museumCountryPlan({exchanges:[]},'Mexico',5);
+ assert.equal(plan.used,5);assert.equal(plan.fillers.Souvenir,3);assert.equal(plan.fillers.Dahlia,2);assert.equal(museumCashPlan(plan,undefined,0).carry,1300);
+ state.quotes[10].reference=100;state.quotes[11].reference=50;
+ assert.equal(museumCountryPlan({exchanges:[]},'Mexico',5).used,0);
 });
