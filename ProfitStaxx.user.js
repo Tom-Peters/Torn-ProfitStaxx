@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.9.2
+// @version      2.9.3
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -12,6 +12,7 @@
 // @grant        GM_xmlhttpRequest
 // @connect      api.torn.com
 // @connect      www.torn-tracker.com
+// @connect      yata.yt
 // @updateURL    https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tom-Peters/Torn-ProfitStaxx/main/ProfitStaxx.user.js
 // ==/UserScript==
@@ -70,7 +71,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.9.2';
+  const VERSION = '2.9.3';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -208,13 +209,14 @@
       if(!entry||!entry.name)continue;
       const id=Number(entry.id||entry.item_id||0);
       if(!id)continue;
-      const shops=Array.isArray(entry.value?.shops)?entry.value.shops.filter(shop=>shop?.country==='Torn'):[];
+      const allShops=Array.isArray(entry.value?.shops)?entry.value.shops:[];
+      const shops=allShops.filter(shop=>shop?.country==='Torn');
       const buys=shops.map(shop=>Number(shop.buy_price)).filter(price=>Number.isFinite(price)&&price>0);
       const sells=shops.map(shop=>Number(shop.sell_price)).filter(price=>Number.isFinite(price)&&price>0);
       output[String(entry.name).toLowerCase()]={id,name:entry.name,
         value:number(entry.value?.market_price||entry.market_value||entry.marketValue||0),type:entry.type||'',
         tradable:entry.is_tradable!==false,shopBuy:buys.length?Math.min(...buys):null,
-        shopSell:sells.length?Math.max(...sells):null};
+        shopSell:sells.length?Math.max(...sells):null,shops:allShops.filter(x=>typeof x?.country==='string'&&Number(x.buy_price)>0).map(x=>({country:x.country,buy:Number(x.buy_price)}))};
     }
     return output;
   }
@@ -324,11 +326,11 @@
       .filter((item,i,all)=>all.findIndex(x=>x.id===item.id)===i);
   }
   async function loadCatalog(){
-    if(Object.keys(state.catalog).length>100)return;
+    if(Object.keys(state.catalog).length>100&&Object.values(state.catalog).some(x=>Array.isArray(x.shops))&&state.settings.museumCatalogAt&&now()-state.settings.museumCatalogAt<86400000)return;
     const payload=await api('torn/items');
     const parsed=normalizeItems(payload);
     if(!Object.keys(parsed).length)throw new Error('Torn item catalog did not match the expected API response.');
-    state.catalog=parsed;persist();
+    state.catalog=parsed;state.settings.museumCatalogAt=now();persist();
   }
   async function refreshPoints(){
     try{
@@ -1557,20 +1559,49 @@
         valid:ageMs>=-5*60000&&ageMs<=30*60000&&quantity>0&&net!==null&&net>0};
     }).sort((a,b)=>(Number(b.valid)-Number(a.valid))||(b.perHour??b.net??-1)-(a.perHour??a.net??-1));
   }
-  async function publicTravelGet(){
+  async function publicTravelGet(url=TRAVEL_FEED){
     if(typeof PDA_httpGet==='function'){
-      try{const r=await PDA_httpGet(TRAVEL_FEED,{});
+      try{const r=await PDA_httpGet(url,{});
         if(r&&r.status===200)return JSON.parse(r.responseText);
         throw Error('Travel feed HTTP '+(r?.status||'unknown'));
       }catch(e){if(typeof GM_xmlhttpRequest!=='function'&&typeof fetch!=='function')throw e;}
     }
     if(typeof GM_xmlhttpRequest==='function')return await new Promise((resolve,reject)=>{
-      GM_xmlhttpRequest({method:'GET',url:TRAVEL_FEED,timeout:15000,
+      GM_xmlhttpRequest({method:'GET',url,timeout:15000,
         onload:r=>{try{if(r.status!==200)throw Error('Travel feed HTTP '+r.status);resolve(JSON.parse(r.responseText));}catch(e){reject(e)}},
         onerror:()=>reject(Error('Travel feed connection failed')),ontimeout:()=>reject(Error('Travel feed timed out'))});
     });
-    const r=await fetch(TRAVEL_FEED,{credentials:'omit',mode:'cors'});if(!r.ok)throw Error('Travel feed HTTP '+r.status);
+    const r=await fetch(url,{credentials:'omit',mode:'cors'});if(!r.ok)throw Error('Travel feed HTTP '+r.status);
     return await r.json();
+  }
+  function parseYataTravel(body){
+    if(!body?.stocks||typeof body.stocks!=='object'||Array.isArray(body.stocks))throw Error('YATA stock format unavailable');
+    const rows=[];
+    for(const [code,group] of Object.entries(body.stocks)){
+      const country=museumCountry(code),observed=Number(group?.update)*1000;
+      if(!country||!Array.isArray(group.stocks)||!Number.isFinite(observed)||observed<=0||observed>now()+60000)continue;
+      for(const x of group.stocks){
+        const id=Number(x.id),cost=Number(x.cost),quantity=Number(x.quantity);
+        if(!Number.isSafeInteger(id)||id<=0||!Number.isFinite(cost)||cost<=0||!Number.isSafeInteger(quantity)||quantity<0||typeof x.name!=='string')continue;
+        rows.push({country,countryName:country,id,name:x.name.slice(0,90),cost,quantity,observed,reporters:0,source:'YATA'});
+      }
+    }
+    return rows.slice(0,1500);
+  }
+  async function readTravelSources(){
+    const results=await Promise.allSettled([publicTravelGet().then(parseTravelFeed),publicTravelGet('https://yata.yt/api/v1/travel/export/').then(parseYataTravel)]);
+    const merged=new Map();
+    // Preserve recent valid observations when a source is temporarily unavailable.
+    const rows=travelState.rows.filter(x=>now()-x.observed>=0&&now()-x.observed<24*3600000);
+    for(const result of results)if(result.status==='fulfilled')rows.push(...result.value);
+    for(const row of rows){
+      const country=museumCountry(row.countryName)||museumCountry(row.country);
+      if(!country)continue;
+      const key=country+'/'+row.id,old=merged.get(key);
+      if(!old||row.observed>=old.observed)merged.set(key,{...row,country,countryName:country});
+    }
+    if(!results.some(r=>r.status==='fulfilled'&&r.value.length))throw Error('Public stock feeds unavailable; using catalogue / published price estimates.');
+    return [...merged.values()];
   }
   function parseTravelFeed(body){
     if(!Array.isArray(body?.countries))throw Error('Foreign stock data unavailable or changed format.');
@@ -1594,8 +1625,7 @@
     if(travelState.busy||museumShelfPriceBusy||state.busy)return;
     travelState.busy=true;travelState.error='';travelState.progress='Loading foreign stock reports…';render();
     try{
-      const feed=await publicTravelGet();
-      const rows=parseTravelFeed(feed);
+      const rows=await readTravelSources();
       if(!rows.length)throw Error('No usable foreign stock observations reported.');
       travelState.rows=rows;travelState.at=now();
       // Scan only a capped, diverse set of fresh shelf candidates: item-market reads remain rate-limited.
@@ -1632,7 +1662,7 @@
 
   function museumCountry(value){
     const name=String(value||'').trim().replace(/[-_]+/g,' ').toLowerCase();
-    const aliases={'united arab emirates':'UAE','uk':'United Kingdom','torn city':'Torn'};
+    const aliases={'united arab emirates':'UAE','uk':'United Kingdom','torn city':'Torn',mex:'Mexico',cay:'Cayman Islands',can:'Canada',haw:'Hawaii',uni:'United Kingdom',arg:'Argentina',swi:'Switzerland',jap:'Japan',chi:'China',sou:'South Africa',cayman:'Cayman Islands'};
     return museumCountries.find(country=>country.toLowerCase()===name)||(Object.hasOwn(aliases,name)?aliases[name]:'');
   }
   function museumTravelContext(){
@@ -1862,12 +1892,24 @@
     const item=getItem(name),q=item&&freshRouteQuote(item.id);
     return q&&q.offers?.length?bookCost(q.offers,qty):null;
   }
+  // Published general-store prices (Torn Wiki, 2026-11-25).
+  // Artifact ranges are variable and the published upper estimate is not a guaranteed maximum.
+  const museumPublished={ 'Jaguar Plushie':10000,'Lion Plushie':400,'Panda Plushie':400,'Monkey Plushie':400,'Chamois Plushie':400,'Wolverine Plushie':20,'Nessie Plushie':200,'Red Fox Plushie':1000,'Camel Plushie':14000,'Stingray Plushie':400,Dahlia:300,Orchid:700,'African Violet':2000,'Cherry Blossom':500,Peony:5000,'Ceibo Flower':500,Edelweiss:900,Crocus:600,Heather:5000,'Tribulus Omanense':6000,'Banana Orchid':4000,'Obsidian Point':152939,'Quartz Point':148657,'Basalt Point':130542,'Chert Point':120570,'Chalcedony Point':132523,'Quartzite Point':117615,'Patagonian Fossil':666306,'Meteorite Fragment':484816};
+  const publishedMarket={'Jaguar Plushie':13082,'Lion Plushie':49951,'Panda Plushie':51560,'Monkey Plushie':31073,'Chamois Plushie':14115,'Wolverine Plushie':4045,'Nessie Plushie':29579,'Red Fox Plushie':30225,'Camel Plushie':69904,'Stingray Plushie':4715,Dahlia:2349,Orchid:3428,'African Violet':50714,'Cherry Blossom':35735,Peony:53113,'Ceibo Flower':30972,Edelweiss:16055,Crocus:3511,Heather:34401,'Tribulus Omanense':59865,'Banana Orchid':7921};
   function museumShopOffer(name,country,shelf){
     const local=shelf?.get(name);
-    if(local&&Number.isFinite(local.cost)&&local.cost>0)return {cost:local.cost,quantity:local.quantity??Infinity,source:'Live shop'};
+    if(local&&Number.isFinite(local.cost)&&local.cost>0)return {cost:local.cost,quantity:local.quantity,source:'Live shop',stockKnown:local.quantity!==null};
     const item=getItem(name);
-    if(country==='Torn')return item?.shopBuy>0?{cost:item.shopBuy,quantity:Infinity,source:'Torn shop catalogue'}:null;
-    return travelState.rows.filter(x=>museumCountry(x.countryName||x.country)===country&&(x.name===name||!!item?.id&&item.id===x.id)&&x.cost>0&&x.quantity>0&&now()-x.observed>=0&&now()-x.observed<30*60000).sort((a,b)=>b.observed-a.observed)[0]||null;
+    if(country==='Torn'&&item?.shopBuy>0)return {cost:item.shopBuy,quantity:null,source:'Torn shop catalogue',stockKnown:false};
+    const recent=travelState.rows.filter(x=>(museumCountry(x.countryName)||museumCountry(x.country))===country&&(x.name===name||!!item?.id&&item.id===x.id)&&x.cost>0&&now()-x.observed>=0&&now()-x.observed<30*60000).sort((a,b)=>b.observed-a.observed)[0];
+    if(recent)return {...recent,source:recent.source==='YATA'?'YATA stock report':'Recent foreign stock report',stockKnown:true};
+    const saved=travelState.rows.filter(x=>(museumCountry(x.countryName)||museumCountry(x.country))===country&&(x.name===name||!!item?.id&&item.id===x.id)&&x.cost>0&&now()-x.observed>=0&&now()-x.observed<24*3600000).sort((a,b)=>b.observed-a.observed)[0];
+    if(saved)return {...saved,quantity:null,stockKnown:false,source:'Saved shop price'};
+    const catalogue=item?.shops?.filter(x=>museumCountry(x.country)===country&&x.buy>0).map(x=>x.buy)||[];
+    if(catalogue.length)return {cost:Math.max(...catalogue),quantity:null,stockKnown:false,source:'Torn shop catalogue'};
+    const recipe=RECIPES.find(r=>r.sources[name]===country);
+    if(recipe&&Object.hasOwn(museumPublished,name))return {cost:museumPublished[name],quantity:null,stockKnown:false,source:recipe.shop==='Black Market'?'Wiki variable-price budget (25 Nov 2026)':'Wiki published shop price'};
+    return null;
   }
   function museumCountryPlan(plan,country,capacity,shelf){
     const remaining=Number.isSafeInteger(capacity)&&capacity>=0?capacity:0;
@@ -1877,7 +1919,7 @@
     const offerLimit=row=>{
       const shop=museumShopOffer(row.name,country,shelf),market=museumMarketPrice(row.name,1);
       if(shop&&market!==null&&market<shop.cost)return 0;
-      return shop?shop.quantity:Infinity;
+      return shop?.stockKnown?shop.quantity:shop?remaining:0;
     };
     while(left>0){
       const candidates=[];
@@ -1898,65 +1940,63 @@
     for(const r of plan.exchanges.filter(r=>r.items.length===1&&r.rows[0].country===country).sort((a,b)=>b.points-a.points)){
       const row=r.rows[0],shop=museumShopOffer(row.name,country,shelf),market=museumMarketPrice(row.name,1);
       if(!pointFresh||!shop||market!==null&&market<shop.cost||shop.cost>r.points*state.pointsPrice*(1-number(state.settings.pointFee)/100))continue;
-      const n=Math.min(left,shop.quantity);if(n<=0)continue;buys[row.name]=(buys[row.name]||0)+n;points+=n*r.points;left-=n;
+      const n=Math.min(left,shop.stockKnown?shop.quantity:0);if(n<=0)continue;buys[row.name]=(buys[row.name]||0)+n;points+=n*r.points;left-=n;
     }
     const museumUsed=remaining-left;
-    const fillers={};
+    const fillers={},conditional={};
     // Use observed, profitable resale stock to fill all remaining ordinary slots.
     // Never count an unknown market return as profit or spend on a known loss.
     if(country!=='Torn'&&left>0){
       const names=new Set(travelState.rows.filter(x=>museumCountry(x.countryName||x.country)===country).map(x=>x.name));
       for(const name of shelf?.keys()||[])names.add(name);
+      for(const r of RECIPES.filter(r=>r.shop==='General Store'))for(const name of r.items)if(r.sources[name]===country)names.add(name);
       const candidates=[];
       for(const name of names){
         const item=getItem(name),shop=museumShopOffer(name,country,shelf),q=item&&freshRouteQuote(item.id);
-        if(!shop||!Number.isFinite(shop.cost)||shop.cost<=0||!Number.isSafeInteger(shop.quantity)||shop.quantity<1||!q||!Number.isFinite(q.reference)||q.reference<=0||item.tradable===false)continue;
-        const profit=Math.floor(q.reference*.95)-shop.cost;
-        if(profit>0)candidates.push({name,shop,profit});
+        if(!shop||!Number.isFinite(shop.cost)||shop.cost<=0||shop.stockKnown&&shop.quantity<1||item?.tradable===false)continue;
+        const reference=q?.reference||item?.value||publishedMarket[name]||0;
+        const profit=Math.floor(reference*.95)-shop.cost;
+        if(profit>0)candidates.push({name,shop,profit,indicative:!q?.reference});
       }
-      candidates.sort((a,b)=>b.profit-a.profit||a.shop.cost-b.shop.cost||a.name.localeCompare(b.name));
+      candidates.sort((a,b)=>Number(b.shop.stockKnown)-Number(a.shop.stockKnown)||Number(a.indicative)-Number(b.indicative)||b.profit-a.profit||a.shop.cost-b.shop.cost||a.name.localeCompare(b.name));
       let spend=Object.entries(buys).reduce((n,[name,qty])=>n+(museumShopOffer(name,country,shelf)?.cost||0)*qty,0);
       const limit=Math.max(0,number(state.settings.capital)*number(state.settings.maxTradePct)/100);
       for(const c of candidates){
-        const n=Math.max(0,Math.min(left,c.shop.quantity-(buys[c.name]||0),Math.floor((limit-spend)/c.shop.cost)));
+        const n=Math.max(0,Math.min(left,(c.shop.stockKnown?c.shop.quantity:remaining)-(buys[c.name]||0),Math.floor((limit-spend)/c.shop.cost)));
         if(!n)continue;
-        buys[c.name]=(buys[c.name]||0)+n;fillers[c.name]=n;left-=n;spend+=n*c.shop.cost;
+        buys[c.name]=(buys[c.name]||0)+n;fillers[c.name]=n;if(!c.shop.stockKnown||c.indicative)conditional[c.name]=n;left-=n;spend+=n*c.shop.cost;
         if(!left)break;
       }
     }
-    return {country,buys,fillers,points,progress,museumUsed,used:remaining-left,unfilled:left};
+    return {country,buys,fillers,conditional,points,progress,museumUsed,used:remaining-left,unfilled:left};
   }
   function museumCashPlan(suggested,shelf,bufferPercent=state.settings.museumCashBuffer){
     const buffer=clamp(Number.isFinite(Number(bufferPercent))?Number(bufferPercent):5,0,25);
     const lines=[],missing=[];let subtotal=0,estimated=false;
     for(const [name,qty] of Object.entries(suggested.buys)){
       if(!Number.isSafeInteger(qty)||qty<=0)continue;
-      let offer=museumShopOffer(name,suggested.country,shelf),source=offer?.source||'Recent foreign stock report';
-      if(!offer){
-        const item=getItem(name);
-        offer=travelState.rows.filter(x=>museumCountry(x.countryName||x.country)===suggested.country&&(x.name===name||!!item?.id&&item.id===x.id)&&Number.isFinite(x.cost)&&x.cost>0&&now()-x.observed>=0&&now()-x.observed<24*3600000).sort((a,b)=>b.observed-a.observed)[0];
-        source='Saved shop price';
-      }
+      const offer=museumShopOffer(name,suggested.country,shelf),source=offer?.source||'Price unavailable';
       if(!offer||!Number.isFinite(offer.cost)||offer.cost<=0){missing.push(name);lines.push({name,qty,cost:null,total:null,source:'Price unavailable'});continue;}
       const total=qty*offer.cost;
       if(!Number.isSafeInteger(total)||!Number.isSafeInteger(subtotal+total)){missing.push(name);continue;}
       subtotal+=total;estimated=estimated||source!=='Live shop';
-      lines.push({name,qty,cost:offer.cost,total,source,at:offer.observed||0});
+      lines.push({name,qty,cost:offer.cost,total,source,stockKnown:offer.stockKnown,at:offer.observed||0});
     }
     const extra=missing.length?null:Math.ceil(subtotal*buffer/100);
     const carry=extra===null?null:subtotal+extra;
     return {lines,missing,subtotal,carry,buffer,extra,estimated};
   }
-  let museumShelfPriceAttempt=0,museumShelfPriceBusy=false;
+  let museumShelfPriceAttempt=0,museumShelfPriceBusy=false,museumCatalogueBusy=false,museumCatalogueAttempt=0;
+  async function checkMuseumCatalogue(){if(!apiKey()||document.hidden||state.busy||museumCatalogueBusy||now()-museumCatalogueAttempt<5*60000)return;museumCatalogueAttempt=now();museumCatalogueBusy=true;try{await loadCatalog();render();}catch(_){}finally{museumCatalogueBusy=false;}}
   async function refreshMuseumShelfPrices(force=false){
     if(document.hidden||museumShelfPriceBusy||travelState.busy||museumPricesBusy)return;
     const time=now();
     if(time-museumShelfPriceAttempt<(force?30000:5*60000)||!force&&travelState.rows.length&&time-travelState.at<15*60000)return;
     museumShelfPriceAttempt=time;museumShelfPriceBusy=true;
     try{
-      const rows=parseTravelFeed(await publicTravelGet());
-      if(rows.length){travelState.rows=rows;travelState.at=now();persist();render();}
-    }catch(_){/* Keep dated prices, never substitute market price for shop price. */}
+      const rows=await readTravelSources();
+      if(rows.length){travelState.rows=rows;travelState.at=now();travelState.error='';persist();render();}
+    }catch(e){travelState.error=String(e.message||e);render();}
     finally{museumShelfPriceBusy=false;}
   }
   function museumEconomics(recipe){
@@ -1977,7 +2017,7 @@
     const key=apiKey();
     try{
       await loadCatalog();await refreshPoints();
-      if(!travelState.busy&&!museumShelfPriceBusy){try{travelState.rows=parseTravelFeed(await publicTravelGet());travelState.at=now();}catch(_){}}
+      if(!travelState.busy&&!museumShelfPriceBusy){try{travelState.rows=await readTravelSources();travelState.at=now();}catch(_){}}
       const country=museumCountry(museumPreview)||museumTravelContext()?.country||'';
       const resale=travelState.rows.filter(x=>museumCountry(x.countryName||x.country)===country&&x.quantity>0&&now()-x.observed<30*60000).sort((a,b)=>(number(getItem(b.name)?.value)*.95-b.cost)-(number(getItem(a.name)?.value)*.95-a.cost)).slice(0,12).map(x=>x.name);
       const local=RECIPES.flatMap(r=>r.items.filter(name=>r.sources[name]===country));
@@ -2049,10 +2089,12 @@
     if(country&&available!==null){
       const suggested=museumCountryPlan(plan,country,available,shelf),cash=museumCashPlan(suggested,shelf);
       const wallet=liveWalletCashV113();
-      html+='<div style="padding:9px;margin:8px 0;border:1px solid #49708b;border-radius:6px"><small>'+ (plan.away?'Cash needed for remaining purchases':'Recommended cash to take')+'</small><br><strong class="points" style="font-size:20px">'+(cash.carry===null?'Not fully priced':fmt(cash.carry))+'</strong><p><small>Shopping '+fmt(cash.subtotal)+(cash.missing.length?' priced so far · missing '+esc(cash.missing.join(', ')):' · '+cash.buffer+'% buffer '+fmt(cash.extra))+' · excludes fares and unrelated purchases.</small></p>'+(cash.estimated?'<small>Estimated from reported/saved shop prices; verify on arrival.</small>':'')+(wallet!==null&&cash.carry!==null?'<p><small>'+ (wallet<cash.carry?'Cash shortfall '+fmt(cash.carry-wallet):'Current wallet covers this plan')+' · wallet '+fmt(wallet)+'</small></p>':'')+'</div>';
+      html+='<div style="padding:9px;margin:8px 0;border:1px solid #49708b;border-radius:6px"><small>'+ (plan.away?'Cash needed for remaining purchases':'Recommended cash to take')+'</small><br><strong class="points" style="font-size:20px">'+(cash.carry===null?'Not fully priced':fmt(cash.carry))+'</strong><p><small>Shopping '+fmt(cash.subtotal)+(cash.missing.length?' priced so far · missing '+esc(cash.missing.join(', ')):' · '+cash.buffer+'% buffer '+fmt(cash.extra))+' · excludes fares and unrelated purchases.</small></p>'+(cash.estimated?'<small>Estimated from reported, catalogue or published prices; variable prices may change. Verify on arrival.</small>':'')+(wallet!==null&&cash.carry!==null?'<p><small>'+ (wallet<cash.carry?'Cash shortfall '+fmt(cash.carry-wallet):'Current wallet covers this plan')+' · wallet '+fmt(wallet)+'</small></p>':'')+'</div>';
       html+='<p><b>Suggested bag:</b> '+suggested.used+' / '+available+' '+(luggage?'verified ordinary free':'configured estimate')+' slots'+(suggested.points?' · +'+suggested.points+' pts':'')+'</p>';
-      for(const row of cash.lines)html+=itemRow('Buy '+row.qty+' × '+row.name,(suggested.fillers[row.name]?(suggested.fillers[row.name]===row.qty?'Resale filler · ':suggested.fillers[row.name]+' for resale · '):'Museum · ')+(row.total===null?'Shop price unavailable':fmt(row.cost)+' each · '+fmt(row.total)+' total · '+row.source+(row.at?' · '+age(row.at):'')));
-      if(suggested.unfilled)html+='<p><small>'+suggested.unfilled+' slots unfilled: no further qualifying stocked, freshly priced profitable items within the trading cap. Refresh museum prices to check again.</small></p>';
+      for(const row of cash.lines)html+=itemRow('Buy '+row.qty+' × '+row.name,(suggested.fillers[row.name]?(suggested.fillers[row.name]===row.qty?'Resale filler · ':suggested.fillers[row.name]+' for resale · '):'Museum · ')+(row.total===null?'Shop price unavailable':fmt(row.cost)+' each · '+fmt(row.total)+' total · '+row.source+(row.stockKnown===false?' · stock unverified':'')+(suggested.conditional[row.name]?' · conditional resale estimate':'')+(row.at?' · '+age(row.at):'')));
+      if(suggested.unfilled)html+='<p><small>'+suggested.unfilled+' slots unfilled: no further qualifying purchases within the trading cap. Refresh prices or check stock on arrival.</small></p>';
+      if(Object.keys(suggested.conditional).length)html+='<p><small>Conditional fillers use indicative market values or unverified stock; buy only if available and still profitable.</small></p>';
+      if(travelState.error)html+='<p><small>'+esc(travelState.error)+'</small></p>';
     }else if(ctx)html+='<p><small>Remaining luggage unknown; check Torn before buying.</small></p>';
     const source=plan.hasInventory?(now()-state.inventorySourceAt>=3600000?'Saved inventory · ':'Inventory · ')+age(state.inventorySourceAt):
       state.inventoryBusy?'Checking inventory…':Object.keys(state.settings.museumOwned||{}).length?'Manually recorded quantities':'No inventory synced';
@@ -2067,7 +2109,7 @@
           row.need===null?' · ownership unknown':' · need '+row.need+' for set #'+r.target)+' · '+row.source);
       }
     }
-    html+='<details data-view-key="museum-owned"><summary>Owned quantities and sources</summary>';
+    html+='</details><details data-view-key="museum-owned"><summary>Owned quantities and sources</summary>';
     for(const r of plan.exchanges){html+='<p><b>'+esc(r.name)+'</b></p>';for(const row of r.rows)html+=itemRow(row.name,(row.owned===null?'Unknown':row.owned+' owned')+' · '+row.source+(row.at?' · '+age(row.at):'')+(row.display?' · '+row.display+' in display estimate':''));}
     html+='</details><details data-view-key="museum-economics"><summary>Sell individually or exchange / cheaper market buys</summary>';
     for(const r of plan.exchanges){
@@ -2081,7 +2123,7 @@
       }
     }
     html+='<p><small>Market sale estimates include a 5% fee. Prices are asking prices, not completed sales. Foreign stock and prices can change. No travel fare assumed.</small></p></details>';
-    html+='<p><small>Exchange at the Torn Museum after completing the History bachelor. Standard points exclude event bonuses. Displayed items can be taken out in Torn. Bazaar listings are excluded. Check shop stock before buying.</small></p></details>';
+    html+='<p><small>Exchange at the Torn Museum after completing the History bachelor. Standard points exclude event bonuses. Displayed items can be taken out in Torn. Bazaar listings are excluded. Check shop stock before buying.</small></p>';
     if(state.inventoryError)html+='<p><small>'+esc(state.inventoryError)+'</small></p>';
     html+='<div>';
     if(ctx&&(!plan.away||!plan.destination)){
@@ -2126,7 +2168,7 @@
     if(ctx.key!==museumTrip.key)Object.assign(museumTrip,{key:ctx.key,checked:0,busy:false,travel:null,bag:null,used:null,luggage:null,failed:false});
     const viewKey=ctx.key+'/'+ctx.country;
     if(viewKey!==museumContextKey){museumContextKey=viewKey;museumPreview='';}
-    checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumTrip(ctx,force);void refreshMuseumShelfPrices(force);
+    checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumTrip(ctx,force);void refreshMuseumShelfPrices(force);void checkMuseumCatalogue();
     if(!museumHost){
       museumHost=document.createElement('div');museumHost.id='ps-museum-travel';
       const shadow=museumHost.attachShadow({mode:'open'});
@@ -2158,7 +2200,7 @@
   function renderTravel(){
     const rows=travelRows(),fresh=rows.filter(x=>x.valid),priced=rows.filter(x=>x.net!==null).length;
     let h='<style>'+museumTravelStyle+'</style>'+museumTravelHTML(null)+'<div class="card"><h3>Foreign-shop profit scanner</h3>'+
-      '<p class="muted">Optional third-party public observation data from Torn Tracker, checked automatically when Torn is in the foreground (or on demand). No API key, identity or stored trading record is sent. <a href="https://torn-tracker.com/guide/website/developer-api/" target="_blank" rel="noopener noreferrer">Data: torn-tracker.com contributors</a> (CC BY 4.0). Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
+      '<p class="muted">Optional third-party public observation data from Torn Tracker, checked automatically when Torn is in the foreground (or on demand). No API key, identity or stored trading record is sent. <a href="https://torn-tracker.com/guide/website/developer-api/" target="_blank" rel="noopener noreferrer">Data: torn-tracker.com contributors</a> (CC BY 4.0) and <a href="https://yata.yt/" target="_blank" rel="noopener noreferrer">YATA</a>. Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
       '<form id="ps_travelsettings"><div class="duo">'+field('travelCapacity','Carry capacity (items)',state.settings.travelCapacity||10)+
       field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+field('museumCashBuffer','Museum cash buffer (%)',state.settings.museumCashBuffer??5)+'</div>'+
       '<div class="field"><label>Round-trip minutes by destination (country=minutes; include shop time)</label>'+
