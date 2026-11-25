@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.8.0
+// @version      2.8.1
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.8.0';
+  const VERSION = '2.8.1';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -96,13 +96,16 @@
     {name:'Patagonian Fossil',points:20,shop:'Black Market',sources:{'Patagonian Fossil':'Argentina'}},
     {name:'Meteorite Fragment',points:15,shop:'Black Market',sources:{'Meteorite Fragment':'Argentina'}}
   ].map(recipe=>({...recipe,items:Object.keys(recipe.sources)}));
+  const museumInventoryCategories=['Flower','Plushie','Artifact'];
+  const coreInventoryCategories=['Drug','Booster','Energy Drink','Alcohol','Medical','Supply Pack','Other','Special','Temporary'];
+  function museumItemCategory(name){const recipe=RECIPES.find(r=>r.items.includes(name));return !recipe?'':recipe.name==='Flower set'?'Flower':recipe.name==='Plushie set'?'Plushie':'Artifact';}
   const museumCountries=[...new Set(RECIPES.flatMap(recipe=>Object.values(recipe.sources)))].sort();
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'daily',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},stockClaimReminders:false,stockLogSync:true,
     travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,inventoryOwned:{},inventoryAt:0,inventorySourceAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,inventoryOwned:{},inventoryAt:0,inventorySourceAt:0,inventoryCategoryAt:{},inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
     tab:'daily',walkthrough:null,dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let routeStoreReady=false;
   let root, fab, badge, shell, routeBar, routeBarHost, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
@@ -142,14 +145,14 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','museumDisplay','walkthrough','pointsCheckedAt']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','inventoryCategoryAt','museumDisplay','walkthrough','pointsCheckedAt']);
         state.storage='TornPDA';
         return data||{};
       }
     } catch(e){console.warn('[ProfitStaxx] Native storage unavailable; falling back');}
     state.storage='browser';
     const data={};
-    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','museumDisplay','walkthrough','pointsCheckedAt']){
+    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','inventoryCategoryAt','museumDisplay','walkthrough','pointsCheckedAt']){
       try{data[key]=JSON.parse(localStorage.getItem(KEY_PREFIX+key)||'null');}catch(e){data[key]=null;}
     }
     return data;
@@ -158,7 +161,7 @@
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
       trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,pointsCheckedAt:state.pointsCheckedAt,lastScan:state.lastScan,
       travelRows:travelState.rows,travelAt:travelState.at,
-      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt,inventorySourceAt:state.inventorySourceAt,
+      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt,inventorySourceAt:state.inventorySourceAt,inventoryCategoryAt:state.inventoryCategoryAt,
       museumDisplay:{at:museumCabinet.at,owned:museumCabinet.owned},walkthrough:state.walkthrough};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
@@ -403,42 +406,56 @@
     const source=liveMuseumOwnedV112()?state.inventoryOwned:(state.settings.museumOwned||{});
     return Math.max(0,Math.floor(number(source[name])));
   }
+  async function readInventoryCategory(category,request=api){
+    const pages=[];let sourceAt=0,expectedTotal=null;
+    for(let offset=0;offset<2000;offset+=250){
+      const response=await request('user/inventory?cat='+encodeURIComponent(category)+'&limit=250&offset='+offset);
+      const rows=response?.inventory?.items;
+      if(!Array.isArray(rows)||rows.length>250||rows.some(x=>!x||!Number.isSafeInteger(x.id)||x.id<=0||typeof x.name!=='string'||
+        !Number.isSafeInteger(x.amount)||x.amount<0||typeof x.faction_owned!=='boolean'))throw Error(category+': incomplete inventory data');
+      const stamp=response.inventory.timestamp*1000;
+      if(!Number.isFinite(stamp)||stamp<=0||stamp>now()+60000||sourceAt&&sourceAt!==stamp)throw Error(category+': inconsistent inventory timestamp');
+      sourceAt=stamp;
+      pages.push(...rows);
+      const total=response._metadata?.total,next=response._metadata?.links?.next;
+      if(total!=null&&(!Number.isSafeInteger(total)||total<pages.length||expectedTotal!==null&&expectedTotal!==total))throw Error(category+': inventory total changed');
+      if(total!=null)expectedTotal=total;
+      if((next||expectedTotal>pages.length)&&rows.length!==250)throw Error(category+': incomplete inventory page');
+      if(!next&&(expectedTotal!==null?pages.length===expectedTotal:rows.length<250))return {pages,sourceAt};
+    }
+    throw Error(category+': inventory exceeds safe page cap');
+  }
   async function refreshInventoryV112(){
     if(state.inventoryBusy||!apiKey()||document.hidden)return;
     state.inventoryBusy=true;state.inventoryError='';render();
+    const key=apiKey();
     try{
-      // Only promote complete inventory; no invented zero quantities on partial responses.
-      const key=apiKey(),pages=[];let complete=false,sourceAt=Infinity;
-      for(let offset=0;offset<2000;offset+=250){
-        const response=await api('user/inventory?limit=250&offset='+offset);
-        const rows=response?.inventory?.items;
-        if(!Array.isArray(rows))throw Error('Inventory API returned no item list.');
-        if(rows.some(x=>!x||!Number.isSafeInteger(x.id)||x.id<=0||typeof x.name!=='string'||
-          !Number.isSafeInteger(x.amount)||x.amount<0||typeof x.faction_owned!=='boolean'))
-          throw Error('Inventory returned incomplete item data.');
-        const stamp=response.inventory.timestamp*1000;
-        if(!Number.isFinite(stamp)||stamp<=0||stamp>now()+60000)throw Error('Inventory timestamp unavailable.');
-        sourceAt=Math.min(sourceAt,stamp);
-        pages.push(...rows);
-        const total=response._metadata?.total,next=response._metadata?.links?.next;
-        if(total!=null&&(!Number.isSafeInteger(total)||total<pages.length))throw Error('Inventory total changed during sync.');
-        if((next||total>pages.length)&&rows.length!==250)throw Error('Inventory page was incomplete.');
-        if(!next&&(total!=null?pages.length===total:rows.length<250)){
-          complete=true;break;
+      // The API requires one category per call. Publish museum counts only when all three succeed.
+      const names=new Map([...RECIPES.flatMap(r=>r.items),...CORE_ITEMS].map(n=>[n.toLowerCase(),n]));
+      const owned={},categoryAt={};
+      const read=async category=>{
+        if(apiKey()!==key)throw Error('API key changed');
+        const result=await readInventoryCategory(category);
+        if(apiKey()!==key)throw Error('API key changed');
+        for(const entry of result.pages){
+          if(entry.faction_owned)continue;
+          const name=names.get(entry.name.toLowerCase());
+          if(name)owned[name]=(owned[name]||0)+entry.amount;
+        }
+        categoryAt[category]=result.sourceAt;
+      };
+      for(const category of museumInventoryCategories)await read(category);
+      // Preserve the market inventory feature without letting an unrelated category block Museum.
+      for(const category of coreInventoryCategories){
+        try{await read(category);}catch(e){
+          if(apiKey()!==key||/limit|rate|HTTP 429|key|permission|access/i.test(String(e.message)))break;
         }
       }
-      if(!complete)throw Error('Inventory exceeds the safe 2,000-entry page cap.');
-      const names=new Map([...RECIPES.flatMap(r=>r.items),...CORE_ITEMS].map(n=>[n.toLowerCase(),n]));
-      const owned={};
-      for(const entry of pages){
-        if(entry.faction_owned)continue;
-        const name=names.get(String(entry.name||'').toLowerCase());
-        if(name)owned[name]=(owned[name]||0)+Math.floor(Number(entry.amount));
-      }
       if(apiKey()!==key)return;
-      state.inventoryOwned=owned;state.inventoryAt=now();state.inventorySourceAt=sourceAt;
+      state.inventoryOwned=owned;state.inventoryCategoryAt=categoryAt;
+      state.inventoryAt=now();state.inventorySourceAt=Math.min(...museumInventoryCategories.map(c=>categoryAt[c]));
       persist();
-    }catch(e){state.inventoryError='Inventory sync unavailable: '+String(e.message||e);}
+    }catch(e){if(apiKey()===key)state.inventoryError='Inventory sync unavailable: '+String(e.message||e);}
     finally{state.inventoryBusy=false;render();}
   }
   function recipeResults(){
@@ -1671,17 +1688,26 @@
     museumCabinet.busy=true;museumCabinet.attempt=now();
     const key=apiKey(),owned={};
     try{
-      for(const category of ['Flower','Plushie','Artifact']){
-        // Each category has fewer than 100 museum item types. Never accept a partial response.
-        const page=await api('user/display?cat='+category+'&limit=100');
-        const rows=page.display?.items,links=page._metadata?.links;
-        if(!Array.isArray(rows)||!links||links.next!==null||rows.some(r=>!r||typeof r.name!=='string'||
-          !Number.isSafeInteger(r.quantity)||r.quantity<0))return;
-        for(const r of rows)if(RECIPES.some(recipe=>recipe.items.includes(r.name)))owned[r.name]=(owned[r.name]||0)+r.quantity;
+      for(const category of museumInventoryCategories){
+        let complete=false;
+        // Display offsets count individual items, not grouped rows.
+        for(let offset=0;offset<2000;){
+          if(apiKey()!==key)return;
+          const page=await api('user/display?cat='+category+'&limit=100&offset='+offset);
+          const rows=page.display?.items,links=page._metadata?.links;
+          if(!Array.isArray(rows)||!links||!Object.hasOwn(links,'next')||rows.some(r=>!r||typeof r.name!=='string'||
+            !Number.isSafeInteger(r.quantity)||r.quantity<1))return;
+          const count=rows.reduce((n,r)=>n+r.quantity,0);
+          if(count>100||links.next&&count!==100)return;
+          for(const r of rows)if(RECIPES.some(recipe=>recipe.items.includes(r.name)))owned[r.name]=(owned[r.name]||0)+r.quantity;
+          if(!links.next){complete=true;break;}
+          offset+=count;
+        }
+        if(!complete)return;
       }
       if(apiKey()===key){museumCabinet.owned=owned;museumCabinet.at=now();persist();}
     }catch(_){/* The inventory-only view still works without display access. */}
-    finally{museumCabinet.busy=false;if(state.open&&state.tab==='travel')render();}
+    finally{museumCabinet.busy=false;if(state.open&&['travel','museum'].includes(state.tab))render();}
   }
 
   function museumShoppingPlan(ctx){
@@ -1690,7 +1716,6 @@
     const travel=trip?.travel;
     const away=ctx?.phase==='flight'||ctx?.phase==='abroad'||(travel&&(travel.time_left>0||museumCountry(travel.destination)!=='Torn'));
     const destination=ctx?.country||museumCountry(travel?.destination);
-    const observed=state.inventorySourceAt;
     const cabinet=now()-museumCabinet.at<30*60000?museumCabinet.owned:null;
     function owned(name){
       const source=hasInventory?state.inventoryOwned:state.settings.museumOwned||{};
@@ -1702,6 +1727,7 @@
       if(!carried)return base;
       // Before outbound departure the home inventory already included packed items. On
       // the return leg a snapshot older than departure can be from either location.
+      const observed=state.inventoryCategoryAt[museumItemCategory(name)]||state.inventorySourceAt;
       const departed=Number(travel.departed_at)*1000;
       if(carried.packed&&(!hasInventory||!departed||destination==='Torn'&&observed<=departed))return null;
       return base+carried.acquired+(observed>departed?carried.packed:0);
@@ -1815,7 +1841,7 @@
     const before=apiKey();
     state.settings.key=key;
     if(apiKey()===before)return;
-    state.inventoryOwned={};state.inventorySourceAt=0;state.inventoryAt=0;state.inventoryError='';
+    state.inventoryOwned={};state.inventoryCategoryAt={};state.inventorySourceAt=0;state.inventoryAt=0;state.inventoryError='';
     Object.assign(museumCabinet,{owned:null,at:0,attempt:0});
     Object.assign(museumTrip,{key:'',checked:0,busy:false,bag:null,travel:null});
     noteAutoAttemptV116('inventory',0);
@@ -1828,7 +1854,7 @@
   }
   function syncMuseumTravel(force=false){
     if(!routeStoreReady||document.hidden)return;
-    if(state.open&&state.tab==='travel'){checkMuseumInventory(force);void checkMuseumCabinet(force);}
+    if(state.open&&['travel','museum'].includes(state.tab)){checkMuseumInventory(force);void checkMuseumCabinet(force);}
     let enabled=true;try{enabled=JSON.parse(localStorage.getItem('staxx-hub-context-v1')||'true')!==false;}catch(_){}
     const ctx=enabled?museumTravelContext():null;
     if(!ctx){
@@ -2462,7 +2488,12 @@
       (list.length?list.slice(0,30).map(x=>'<div class="card" id="ps-alert-deal-'+Number(x.id)+'"><h3>BUY · '+esc(x.name)+'</h3><p><b>Quantity:</b> up to '+Math.floor(x.qty)+' · <b>maximum:</b> '+fmt(x.buy)+'/unit.</p><p><b>Capital required:</b> '+fmt(x.buy*x.qty)+' · <b>Score:</b> '+Math.floor(x.score)+'/100</p><p class="positive">Potential profit '+fmt(x.profit)+' · '+pct(x.roi)+' estimated ROI after modelled fees</p><p class="muted">Buy only at or below the suggested cap. Re-check inventory, listings and prices.</p><button class="btn" data-action="market-buy" data-id="'+Number(x.id)+'">Open market · prepare '+Math.floor(x.qty)+'</button></div>').join(''):'<div class="empty">No fresh qualifying buy opportunities — do not force a trade.</div>')+
       (exits.length?'<div class="card"><h3>Positions worth reviewing for sale</h3><p class="muted">Estimated from current asking prices, less a 5% market selling fee. Not an executable bid.</p></div>'+exits.slice(0,10).map(x=>'<div class="card" id="ps-alert-exit-'+Number(x.itemId)+'"><h3>SELL REVIEW · '+esc(x.name)+'</h3><p><b>Recorded holdings:</b> '+Math.floor(x.qty)+' · <b>breakeven ask:</b> '+fmt(x.breakeven)+'/unit</p><p class="positive">Indicative gain '+fmt(x.upside)+' · '+pct(x.roi)+' based on asking prices</p><button class="btn secondary" data-action="market-view" data-id="'+Number(x.itemId)+'">Inspect live market listings</button></div>').join(''):'');
   }
-  function verifiedOwnedV114(name){return state.inventoryAt>0&&now()-state.inventoryAt<60*60000?Math.floor(number(state.inventoryOwned[name])):null;}
+  function verifiedOwnedV114(name){
+    if(!liveMuseumOwnedV112()||!RECIPES.some(r=>r.items.includes(name))&&!CORE_ITEMS.includes(name))return null;
+    const category=museumItemCategory(name)||getItem(name)?.type;
+    if(category&&state.inventoryCategoryAt[category]&&now()-state.inventoryCategoryAt[category]<60*60000)return Math.floor(number(state.inventoryOwned[name]));
+    return Object.hasOwn(state.inventoryOwned,name)?Math.floor(number(state.inventoryOwned[name])):null;
+  }
 
   // Asking-price observations, never completed sales or guaranteed opportunities.
   function renderMarketPulseV115(){
@@ -2542,7 +2573,7 @@
     return html;
   }
   function renderMuseum(){
-    let html='<div class="statrow"><div class="stat"><small>Cheapest point ask</small><b>'+fmt(state.pointsPrice)+'</b></div>'+
+    let html='<style>'+museumTravelStyle+'</style>'+museumTravelHTML(null)+'<div class="statrow"><div class="stat"><small>Cheapest point ask</small><b>'+fmt(state.pointsPrice)+'</b></div>'+
       '<div class="stat"><small>Museum access</small><b>Check in Torn</b></div></div>';
     html+=notice('Flowers and plushies earn 10 points per set, arrowheads earn 25. Fossils earn 20 each and meteorite fragments earn 15 each. Standard exchange values. Cash cost assumes Item Market purchases; points revenue uses the lowest ASK, not guaranteed proceeds.');
     html+='<div class="toolbar"><button class="btn secondary" data-action="inventoryscan" '+(state.inventoryBusy?'disabled':'')+'>'+
@@ -2830,7 +2861,7 @@
       case 'stock-reminders':state.settings.stockClaimReminders=state.settings.stockClaimReminders!==true;persist();render();break;
       case 'travelscan':scanTravel();break;
       case 'museum-travel-refresh':checkMuseumInventory(true);void checkMuseumCabinet(true);break;
-      case 'inventoryscan':refreshInventoryV112();break;
+      case 'inventoryscan':refreshInventoryV112();void checkMuseumCabinet(true);break;
       case 'rank-open':{
         const row=incomeCandidates().find(x=>x.id===el.dataset.rankId);
         if(row)startWalkthrough(row.route,row);
@@ -3230,8 +3261,12 @@
        state.dailyReviews=loaded.dailyReviews&&typeof loaded.dailyReviews==='object'&&!Array.isArray(loaded.dailyReviews)?loaded.dailyReviews:{};
        state.inventoryOwned=loaded.inventoryOwned&&typeof loaded.inventoryOwned==='object'&&!Array.isArray(loaded.inventoryOwned)?loaded.inventoryOwned:{};
        state.inventorySourceAt=number(loaded.inventorySourceAt);
-       // Older snapshots only tracked flowers and plushies. Refresh before inferring absent artifacts.
-       state.inventoryAt=state.inventorySourceAt?number(loaded.inventoryAt):0;
+       // Do not infer absent items from pre-category snapshots or invalid storage.
+       const categoryAt=loaded.inventoryCategoryAt;
+       state.inventoryCategoryAt=categoryAt&&typeof categoryAt==='object'&&!Array.isArray(categoryAt)?categoryAt:{};
+       const categoryValid=museumInventoryCategories.every(c=>Number.isFinite(state.inventoryCategoryAt[c])&&state.inventoryCategoryAt[c]>0&&state.inventoryCategoryAt[c]<=now()+60000);
+       state.inventoryAt=categoryValid&&state.inventorySourceAt?number(loaded.inventoryAt):0;
+       if(!state.inventoryAt){state.inventoryOwned={};state.inventorySourceAt=0;state.inventoryCategoryAt={};}
        const display=loaded.museumDisplay;
        if(display?.at>0&&display.at<=now()&&now()-display.at<30*60000&&display.owned&&
          Object.values(display.owned).every(q=>Number.isSafeInteger(q)&&q>=0)){

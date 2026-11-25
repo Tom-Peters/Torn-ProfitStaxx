@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init",replacement+"  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -493,4 +493,28 @@ test('museum travel distinguishes missing holdings from zero and covers all trav
   state.inventoryAt=state.inventorySourceAt=Date.now();
   assert.match(museumTravelHTML(ctx).split('<details')[0],/Need 1 × Crocus/);
   assert.match(museumTravelHTML({...ctx,country:'Torn'}),/Bits &#39;n&#39; Bobs/);
+});
+
+test('museum inventory requests a category on every page and rejects partial results',async()=>{
+ const {readInventoryCategory}=harness(), calls=[], timestamp=Math.floor(Date.now()/1000);
+ const rows=Array.from({length:250},(_,i)=>({id:i+1,name:'Crocus',amount:1,faction_owned:false}));
+ const request=async url=>{
+   calls.push(url);
+   return {inventory:{items:calls.length===1?rows:[{id:251,name:'Crocus',amount:3,faction_owned:true}],timestamp},_metadata:{total:251,links:{next:calls.length===1?'next':null}}};
+ };
+ const result=await readInventoryCategory('Flower',request);
+ assert.deepEqual(calls,['user/inventory?cat=Flower&limit=250&offset=0','user/inventory?cat=Flower&limit=250&offset=250']);
+ assert.equal(result.pages.length,251);
+ assert.equal(result.sourceAt,timestamp*1000);
+ await assert.rejects(readInventoryCategory('Artifact',async()=>({inventory:{items:[],timestamp},_metadata:{total:1,links:{next:'next'}}})),/incomplete inventory page/);
+});
+test('market ownership does not infer zero outside the synced category scope',()=>{
+ const {state,verifiedOwnedV114}=harness();
+ state.inventoryAt=Date.now();
+ state.inventoryCategoryAt={Flower:Date.now()};
+ state.inventoryOwned={Crocus:4};
+ assert.equal(verifiedOwnedV114('Crocus'),4);
+ assert.equal(verifiedOwnedV114('Heather'),0);
+ assert.equal(verifiedOwnedV114('Xanax'),null);
+ assert.equal(verifiedOwnedV114('Untracked item'),null);
 });

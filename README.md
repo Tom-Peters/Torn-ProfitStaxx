@@ -1,3 +1,7 @@
+## 2.8.1 - Museum inventory repair
+
+Inventory is requested by Flower, Plushie and Artifact category using Torn API v2. All three categories must complete before replacing the museum snapshot. Failed or partial responses retain previous counts; category timestamps are stored separately for travel-bag reconciliation. Market watch items are checked separately on a best-effort basis and unverified quantities are not displayed as zero. Display case reads follow individual-item pagination. The Museum workspace also shows the shopping checklist and starts a refresh on opening. Older, unscoped inventory snapshots are invalidated once on upgrade.
+
 ## 2.8.0 - Museum shopping while travelling
 
 The Travel Agency, flight and overseas shop screens show the pieces you still need for the next plushie, flower or arrowhead set. Select a destination in Torn to see its shopping list. In Argentina the same panel shows the individual fossil and meteorite exchanges. Expand **All missing pieces and destinations** to plan other stops, including Bits 'n' Bobs in Torn. The points total uses standard exchange rates. A visible shop row can supply its shelf quantity and unit price.
