@@ -1,3 +1,7 @@
+## 2.9.1 - Museum cash to carry
+
+The travel panel prices the exact capacity-limited shopping list using visible shop prices first, then recent public stock observations, then saved shop prices younger than 24 hours (explicitly dated estimates). It shows item subtotals, a configurable 0–25% buffer (default 5%), recommended shopping cash rounded up to the dollar, and the shortfall against a recent wallet observation if available. Unknown prices prevent a complete cash recommendation. Fares and unrelated purchases are excluded. Opening the travel screen automatically refreshes public stock reports with throttling; no API key is sent to the provider. The next-country suggestion includes shopping cash where fully priced.
+
 ## 2.9.0 - Museum verification and collection planning
 
 Recent complete observations from the native Museum exchange grid take precedence over cached API estimates and are not added to cabinet counts. Visit each exchange tab to record its quantities. Unsupported layouts retain explicitly labelled API estimates. The checklist exposes quantities, source and age. Capacity-limited heuristic ranks destinations by additional points and progress, excludes market-cheaper pieces when both prices are known, and uses configured luggage capacity and observed non-permanent bag entries. Price refresh loads points, foreign stock reports and item market asks. Individual resale estimates include 5% fee; travel fare is not assumed. Recently verified complete sets generate a hub review notification. No automatic purchases or exchanges.

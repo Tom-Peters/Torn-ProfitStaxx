@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,museumNative,museumCardCount,museumCountryPlan,museumEconomics,museumReadyNotice,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,museumNative,museumCardCount,museumCountryPlan,museumCashPlan,museumEconomics,museumReadyNotice,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init",replacement+"  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -544,4 +544,20 @@ test('destination suggestions stay within remaining slots',()=>{
  assert.equal(result.points,10);assert.ok(result.used<=3);
  assert.equal(result.buys['Nessie Plushie'],1);assert.equal(result.buys['Red Fox Plushie'],1);
  assert.equal(museumCountryPlan(plan,'United Kingdom',0).used,0);
+});
+
+test('museum cash to carry uses exact suggested quantities and configurable buffer',()=>{
+ const {museumCashPlan,travelState}=harness(),now=Date.now();
+ travelState.rows=[{country:'Mexico',name:'Jaguar Plushie',cost:10000,quantity:50,observed:now},{country:'Mexico',name:'Dahlia',cost:500,quantity:100,observed:now}];
+ const plan={country:'Mexico',buys:{'Jaguar Plushie':2,Dahlia:3}};
+ let cash=museumCashPlan(plan,undefined,5);
+ assert.equal(cash.subtotal,21500);assert.equal(cash.carry,22575);assert.equal(cash.extra,1075);
+ cash=museumCashPlan(plan,new Map([['Jaguar Plushie',{cost:9000,quantity:10}]]),0);
+ assert.equal(cash.subtotal,19500);assert.equal(cash.carry,19500);
+ cash=museumCashPlan({country:'Mexico',buys:{...plan.buys,'Obsidian Point':1}},undefined,5);
+ assert.equal(cash.carry,null);assert.equal(cash.subtotal,21500);
+ travelState.rows[0].observed=now-2*3600000;
+ cash=museumCashPlan(plan,undefined,5);assert.equal(cash.carry,22575);assert.equal(cash.lines[0].source,'Saved shop price');
+ travelState.rows[0].observed=now-25*3600000;
+ assert.equal(museumCashPlan(plan,undefined,5).carry,null);
 });
