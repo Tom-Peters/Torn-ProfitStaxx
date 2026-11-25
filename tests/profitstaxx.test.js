@@ -349,7 +349,7 @@ test('automatic read-only data scheduler enforces independent cooldowns and visi
  assert.match(source,/time-autoChecksV112\.stocks>=10\*60000/);
  assert.match(source,/time-autoChecksV112\.inventory>=30\*60000/);
  assert.match(source,/for\(let offset=0;offset<2000;offset\+=250\)/);
- assert.match(source,/if\(!complete\)throw Error/);
+ assert.match(source,/throw Error\(category\+': inventory exceeds safe page cap'\)/);
  assert.match(source,/if\(entry\.faction_owned\)continue/);
 });
 
@@ -542,7 +542,7 @@ test('destination suggestions stay within remaining slots',()=>{
  const recipe=RECIPES[0];museumNative[recipe.name]={at:Date.now(),owned:Object.fromEntries(recipe.items.map(n=>[n,n==='Nessie Plushie'||n==='Red Fox Plushie'?0:10]))};
  const plan=museumShoppingPlan(null),result=museumCountryPlan(plan,'United Kingdom',3);
  assert.equal(result.points,10);assert.ok(result.used<=3);
- assert.equal(result.buys['Nessie Plushie'],1);assert.equal(result.buys['Red Fox Plushie'],1);
+ assert.equal(result.buys['Nessie Plushie']-(result.fillers['Nessie Plushie']||0),1);assert.equal(result.buys['Red Fox Plushie']-(result.fillers['Red Fox Plushie']||0),1);
  assert.equal(museumCountryPlan(plan,'United Kingdom',0).used,0);
 });
 
@@ -579,7 +579,8 @@ test('remaining ordinary luggage filled with positive-margin resale stock and in
  const plan=museumCountryPlan({exchanges:[]},'Mexico',5);
  assert.equal(plan.used,5);assert.equal(plan.fillers.Souvenir,3);assert.equal(plan.fillers.Dahlia,2);assert.equal(museumCashPlan(plan,undefined,0).carry,1300);
  state.quotes[10].reference=100;state.quotes[11].reference=50;
- assert.equal(museumCountryPlan({exchanges:[]},'Mexico',5).used,0);
+ const fallback=museumCountryPlan({exchanges:[]},'Mexico',5);
+ assert.equal(fallback.fillers.Dahlia,undefined);assert.equal(fallback.fillers.Souvenir,undefined);assert.equal(fallback.fillers['Jaguar Plushie'],5);
 });
 
 test('country codes and published prices produce a 17 slot Argentina budget without either stock feed',()=>{
