@@ -1,3 +1,9 @@
+## 2.8.0 - Museum shopping while travelling
+
+The Travel Agency, flight and overseas shop screens show the pieces you still need for the next plushie, flower or arrowhead set. Select a destination in Torn to see its shopping list. In Argentina the same panel shows the individual fossil and meteorite exchanges. Expand **All missing pieces and destinations** to plan other stops, including Bits 'n' Bobs in Torn. The points total uses standard exchange rates. A visible shop row can supply its shelf quantity and unit price.
+
+Profit uses Torn's read-only inventory, display case and travel information. The bag check uses the Limited-access travel inventory selection. The panel labels unverified sources, dates the inventory snapshot and keeps the last successful counts if a refresh fails. The shopping list is also available under **Profit → Travel**. The separate Museum pricing workspace uses ordinary inventory and retains its own batch setting.
+
 ## 2.7.0 - FFScouter Premium route support
 
 Bounty, mugging, war and NPC walkthroughs now link to WarStaxx’s FFScouter intelligence screen. Requires WarStaxx 2.7.0 and your registered Premium key configured there. Player badges on supported Torn lists lead to distributions, dated spy snapshots, flight windows and activity checks. ProfitStaxx does not copy the key or treat strength estimates as guaranteed earnings. NPC availability is subject to provider coverage.
@@ -250,7 +256,7 @@ Torn's official API does not provide a comprehensive, reliably fresh listing fee
 
 There is no verifiable historical sold-price feed in this script; score and confidence are heuristic. Limited item market depth may exclude items from suggestions. The script does not estimate time-to-sell with scientific confidence.
 
-Museum set membership currently uses the known flower/plushie recipes, matched against the live Torn item catalog. If a component is missing from the catalog or API does not return quotes, its set is reported as incomplete.
+The Museum planner covers the five exchanges with components sold in travel shops, matched against the Torn item catalogue. If a component is missing from the catalog or API does not return quotes, its set is reported as incomplete.
 
 ## Technical
 

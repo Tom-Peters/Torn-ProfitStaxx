@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init",replacement+"  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -434,4 +434,63 @@ test('3.4 independently verified stock cash stays separate from manually recorde
  assert.match(revenue,/manual income entries/i);
  assert.match(revenue,/do not add|NOT added|NOT added together/i,
   'manual and API receipts must never be summed as a fake combined total');
+});
+
+
+test('museum travel shopping identifies local bottlenecks and counts complete exchanges once',()=>{
+  const {state,RECIPES,museumTravelHTML,museumCabinet}=harness();
+  const ctx={phase:'agency',country:'United Kingdom',key:'agency'};
+  state.inventoryAt=state.inventorySourceAt=Date.now();
+  state.inventoryOwned=Object.fromEntries(RECIPES[0].items.map(name=>[name,4]));
+  state.inventoryOwned['Nessie Plushie']=0;
+  state.inventoryOwned['Red Fox Plushie']=1;
+  museumCabinet.owned={'Nessie Plushie':1};
+  museumCabinet.at=Date.now();
+  state.inventoryOwned['Patagonian Fossil']=2;
+  state.inventoryOwned['Meteorite Fragment']=1;
+  const html=museumTravelHTML(ctx),local=html.split('<details')[0];
+  assert.match(local,/65 pts at standard rates/);
+  assert.match(local,/Need 1 × Nessie Plushie/);
+  assert.match(local,/Need 1 × Red Fox Plushie/);
+  assert.match(local,/For 30 pts.*3 × Nessie Plushie \+ 3 × Red Fox Plushie total would finish 3 more sets/);
+  assert.doesNotMatch(local,/Kitten Plushie/);
+  const home=museumTravelHTML({...ctx,country:'Torn'});
+  assert.match(home,/Your inventory covers the local pieces/);
+  assert.match(museumTravelHTML({...ctx,country:'Argentina'}),/Black Market · 20 pts each · 2 owned/);
+  assert.match(museumTravelHTML({...ctx,country:'Hawaii'}).split('<details')[0],/Basalt Point/);
+});
+
+test('travel bag adds acquisitions and avoids counting pre-packed or uncertain return items twice',()=>{
+  const {state,museumShoppingPlan,museumTrip}=harness();
+  const departure=Math.floor(Date.now()/1000)-300;
+  const ctx={phase:'flight',country:'Canada',key:'flight/Canada'};
+  Object.assign(museumTrip,{key:ctx.key,checked:Date.now(),travel:{departed_at:departure,destination:'Canada',time_left:10},
+    bag:{Crocus:{packed:1,acquired:2}}});
+  state.inventoryOwned={Crocus:3};
+  state.inventoryAt=Date.now();
+  const crocus=()=>museumShoppingPlan(ctx).exchanges[1].rows.find(r=>r.name==='Crocus').owned;
+  state.inventorySourceAt=(departure-5)*1000;
+  assert.equal(crocus(),5);
+  state.inventorySourceAt=(departure+5)*1000;
+  state.inventoryOwned.Crocus=2;
+  assert.equal(crocus(),5);
+  ctx.country='Torn';museumTrip.travel.destination='Torn';state.inventorySourceAt=(departure-5)*1000;
+  assert.equal(crocus(),null);
+  assert.equal(museumShoppingPlan({phase:'agency',key:'agency'}).exchanges[1].rows.find(r=>r.name==='Crocus').owned,2);
+});
+
+test('museum travel distinguishes missing holdings from zero and covers all travel exchanges',()=>{
+  const {state,RECIPES,museumShoppingPlan,museumTravelHTML}=harness();
+  assert.deepEqual(Array.from(RECIPES,r=>[r.items.length,r.points]),[[13,10],[11,10],[6,25],[1,20],[1,15]]);
+  const ctx={phase:'agency',country:'Canada',key:'agency'};
+  const unknown=museumTravelHTML(ctx).split('<details')[0];
+  assert.match(unknown,/Holdings incomplete/);
+  assert.match(unknown,/Crocus/);assert.doesNotMatch(unknown,/Need 1|0 pts/);
+  state.settings.museumOwned={Crocus:1};
+  const partial=museumShoppingPlan(ctx).exchanges[1];
+  assert.equal(partial.complete,null);
+  assert.equal(partial.rows.find(r=>r.name==='Dahlia').owned,null);
+  state.inventoryAt=state.inventorySourceAt=Date.now();
+  assert.match(museumTravelHTML(ctx).split('<details')[0],/Need 1 × Crocus/);
+  assert.match(museumTravelHTML({...ctx,country:'Torn'}),/Bits &#39;n&#39; Bobs/);
 });

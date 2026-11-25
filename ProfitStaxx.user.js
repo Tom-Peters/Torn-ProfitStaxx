@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.7.0
+// @version      2.8.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -70,7 +70,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.7.0';
+  const VERSION = '2.8.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -79,16 +79,30 @@
     'Box of Medical Supplies', 'First Aid Kit', 'Small First Aid Kit',
     'Morphine', 'Blood Bag', 'Donator Pack', 'Drug Pack',
     'Bottle of Whiskey', 'Ecstasy', 'Cannabis'];
+  // Travel-shop exchanges from Torn's Museum and destination catalogues.
   const RECIPES = [
-    {name:'Plushie set',points:10,items:['Jaguar Plushie','Lion Plushie','Panda Plushie','Monkey Plushie','Chamois Plushie','Wolverine Plushie','Nessie Plushie','Red Fox Plushie','Camel Plushie','Kitten Plushie','Teddy Bear Plushie','Sheep Plushie','Stingray Plushie']},
-    {name:'Flower set',points:10,items:['Dahlia','Orchid','African Violet','Cherry Blossom','Peony','Ceibo Flower','Edelweiss','Crocus','Heather','Tribulus Omanense','Banana Orchid']}
-  ];
+    {name:'Plushie set',points:10,shop:'General Store',sources:{
+      'Jaguar Plushie':'Mexico','Lion Plushie':'South Africa','Panda Plushie':'China','Monkey Plushie':'Argentina',
+      'Chamois Plushie':'Switzerland','Wolverine Plushie':'Canada','Nessie Plushie':'United Kingdom',
+      'Red Fox Plushie':'United Kingdom','Camel Plushie':'UAE','Kitten Plushie':'Torn','Teddy Bear Plushie':'Torn',
+      'Sheep Plushie':'Torn','Stingray Plushie':'Cayman Islands'}},
+    {name:'Flower set',points:10,shop:'General Store',sources:{
+      'Dahlia':'Mexico','Orchid':'Hawaii','African Violet':'South Africa','Cherry Blossom':'Japan','Peony':'China',
+      'Ceibo Flower':'Argentina','Edelweiss':'Switzerland','Crocus':'Canada','Heather':'United Kingdom',
+      'Tribulus Omanense':'UAE','Banana Orchid':'Cayman Islands'}},
+    {name:'Arrowhead set',points:25,shop:'Black Market',sources:{
+      'Obsidian Point':'Mexico','Quartz Point':'Canada','Basalt Point':'Hawaii','Chert Point':'United Kingdom',
+      'Chalcedony Point':'Argentina','Quartzite Point':'South Africa'}},
+    {name:'Patagonian Fossil',points:20,shop:'Black Market',sources:{'Patagonian Fossil':'Argentina'}},
+    {name:'Meteorite Fragment',points:15,shop:'Black Market',sources:{'Meteorite Fragment':'Argentina'}}
+  ].map(recipe=>({...recipe,items:Object.keys(recipe.sources)}));
+  const museumCountries=[...new Set(RECIPES.flatMap(recipe=>Object.values(recipe.sources)))].sort();
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'daily',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},stockClaimReminders:false,stockLogSync:true,
     travelCapacity:10,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,inventoryOwned:{},inventoryAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,inventoryOwned:{},inventoryAt:0,inventorySourceAt:0,inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
     tab:'daily',walkthrough:null,dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let routeStoreReady=false;
   let root, fab, badge, shell, routeBar, routeBarHost, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
@@ -128,14 +142,14 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough','pointsCheckedAt']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','museumDisplay','walkthrough','pointsCheckedAt']);
         state.storage='TornPDA';
         return data||{};
       }
     } catch(e){console.warn('[ProfitStaxx] Native storage unavailable; falling back');}
     state.storage='browser';
     const data={};
-    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','walkthrough','pointsCheckedAt']){
+    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','museumDisplay','walkthrough','pointsCheckedAt']){
       try{data[key]=JSON.parse(localStorage.getItem(KEY_PREFIX+key)||'null');}catch(e){data[key]=null;}
     }
     return data;
@@ -144,7 +158,8 @@
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
       trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,pointsCheckedAt:state.pointsCheckedAt,lastScan:state.lastScan,
       travelRows:travelState.rows,travelAt:travelState.at,
-      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt,walkthrough:state.walkthrough};
+      stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt,inventorySourceAt:state.inventorySourceAt,
+      museumDisplay:{at:museumCabinet.at,owned:museumCabinet.owned},walkthrough:state.walkthrough};
     saveChain=saveChain.catch(()=>{}).then(async()=>{
       if(state.storage==='TornPDA' && typeof PDA_storage!=='undefined'){
         await PDA_storage.setMany(data);
@@ -393,16 +408,22 @@
     state.inventoryBusy=true;state.inventoryError='';render();
     try{
       // Only promote complete inventory; no invented zero quantities on partial responses.
-      const pages=[];let complete=false;
+      const key=apiKey(),pages=[];let complete=false,sourceAt=Infinity;
       for(let offset=0;offset<2000;offset+=250){
         const response=await api('user/inventory?limit=250&offset='+offset);
         const rows=response?.inventory?.items;
         if(!Array.isArray(rows))throw Error('Inventory API returned no item list.');
-        if(rows.some(x=>!x||!Number.isFinite(Number(x.id))||!Number.isFinite(Number(x.amount))||Number(x.amount)<0))
-          throw Error('Inventory returned invalid item quantities.');
+        if(rows.some(x=>!x||!Number.isSafeInteger(x.id)||x.id<=0||typeof x.name!=='string'||
+          !Number.isSafeInteger(x.amount)||x.amount<0||typeof x.faction_owned!=='boolean'))
+          throw Error('Inventory returned incomplete item data.');
+        const stamp=response.inventory.timestamp*1000;
+        if(!Number.isFinite(stamp)||stamp<=0||stamp>now()+60000)throw Error('Inventory timestamp unavailable.');
+        sourceAt=Math.min(sourceAt,stamp);
         pages.push(...rows);
-        const total=Number(response?._metadata?.total);
-        if(rows.length<250||(Number.isFinite(total)&&total>=0&&pages.length>=total)){
+        const total=response._metadata?.total,next=response._metadata?.links?.next;
+        if(total!=null&&(!Number.isSafeInteger(total)||total<pages.length))throw Error('Inventory total changed during sync.');
+        if((next||total>pages.length)&&rows.length!==250)throw Error('Inventory page was incomplete.');
+        if(!next&&(total!=null?pages.length===total:rows.length<250)){
           complete=true;break;
         }
       }
@@ -414,9 +435,10 @@
         const name=names.get(String(entry.name||'').toLowerCase());
         if(name)owned[name]=(owned[name]||0)+Math.floor(Number(entry.amount));
       }
-      state.inventoryOwned=owned;state.inventoryAt=now();
+      if(apiKey()!==key)return;
+      state.inventoryOwned=owned;state.inventoryAt=now();state.inventorySourceAt=sourceAt;
       persist();
-    }catch(e){state.inventoryError='Inventory auto-sync unavailable; using saved manual counts: '+String(e.message||e);}
+    }catch(e){state.inventoryError='Inventory sync unavailable: '+String(e.message||e);}
     finally{state.inventoryBusy=false;render();}
   }
   function recipeResults(){
@@ -1587,9 +1609,267 @@
     }catch(e){travelState.error=String(e.message||e);}
     finally{travelState.busy=false;travelState.progress='';render();}
   }
+  const museumTrip={key:'',checked:0,busy:false,travel:null,bag:null,failed:false};
+  let museumHost=null,museumPreview='',museumContextKey='',museumMarkup='';
+
+  function museumCountry(value){
+    const name=String(value||'').trim().replace(/[-_]+/g,' ').toLowerCase();
+    const aliases={'united arab emirates':'UAE','uk':'United Kingdom','torn city':'Torn'};
+    return museumCountries.find(country=>country.toLowerCase()===name)||(Object.hasOwn(aliases,name)?aliases[name]:'');
+  }
+  function museumTravelContext(){
+    const path=location.pathname,sid=new URLSearchParams(location.search).get('sid');
+    if(!(path==='/travelagency.php'||path==='/page.php'&&sid==='travel'||path==='/index.php'||path==='/'))return null;
+    const anchor=document.querySelector('#travel-root,.travel-agency-market,.travel-agency-wrap');
+    if(!anchor)return null;
+    const flags=document.body.dataset;
+    const flying=flags.traveling==='true'||!!anchor.querySelector('[class*="progressTextLineBreaker___"]');
+    const abroad=flags.abroad==='true'||anchor.matches('.travel-agency-market')||!!anchor.querySelector('[class*="stockTableWrapper___"]');
+    const selected=anchor.querySelector('[class*="dest___"] [class*="fromToValue___"]');
+    const phase=flying?'flight':abroad?'abroad':selected||path==='/travelagency.php'?'agency':'unknown';
+    const flightTitle=flying?anchor.querySelector('[class*="progressTextLineBreaker___"]')?.textContent||'':'';
+    const flightDestination=flightTitle.match(/(?:returning to|flying to|travel(?:l)?ing to|destination)\s*:?\s*(?:the )?(United Arab Emirates|United Kingdom|Cayman Islands|South Africa|Switzerland|Argentina|Canada|China|Japan|Mexico|Hawaii|UAE|Torn)\b/i)?.[1];
+    const country=phase==='abroad'?museumCountry(flags.country):phase==='agency'?museumCountry(selected?.textContent):museumCountry(flightDestination);
+    return {anchor,phase,country,key:phase+(phase==='agency'?'':'/'+country)};
+  }
+
+  async function refreshMuseumTrip(ctx,force=false){
+    if(!apiKey()||document.hidden||ctx.phase==='agency')return;
+    const key=ctx.key;
+    if(museumTrip.busy||now()-museumTrip.checked<(force?30000:museumTrip.failed?300000:60000))return;
+    museumTrip.busy=true;museumTrip.checked=now();
+    const attempt=museumTrip.checked;
+    const current=()=>museumTrip.key===key&&museumTrip.checked===attempt;
+    try{
+      const t=(await api('user/travel')).travel;
+      if(!current())return;
+      if(!museumCountry(t?.destination)||!Number.isFinite(t.time_left)||t.time_left<0)throw Error('Travel unavailable');
+      museumTrip.failed=false;
+      if(ctx.country&&ctx.country!==museumCountry(t.destination)||ctx.phase==='abroad'&&t.time_left>0){museumTrip.travel=null;museumTrip.bag=null;return;}
+      if(museumTrip.travel?.departed_at!==t.departed_at)museumTrip.bag=null;
+      museumTrip.travel=t;
+      if(t.time_left===0&&museumCountry(t.destination)==='Torn'){museumTrip.bag=null;return;}
+      const slots=(await api('user/travelinventory')).travelinventory?.inventory;
+      if(!Array.isArray(slots)||slots.some(slot=>!slot||slot.item!==null&&
+        (!slot.item||typeof slot.item.name!=='string'||typeof slot.item.is_faction_owned!=='boolean'||
+         typeof slot.item.is_permanent!=='boolean')))throw Error('Travel inventory unavailable');
+      const bag={};
+      for(const {item} of slots){
+        if(!item||item.is_faction_owned||!RECIPES.some(recipe=>recipe.items.includes(item.name)))continue;
+        const counts=bag[item.name]||(bag[item.name]={packed:0,acquired:0});
+        counts[item.is_permanent?'packed':'acquired']++;
+      }
+      if(current())museumTrip.bag=bag;
+    }catch(_){if(current()){museumTrip.failed=true;museumTrip.bag=null;}}
+    finally{if(current())museumTrip.busy=false;}
+  }
+
+  const museumCabinet={at:0,owned:null,attempt:0,busy:false};
+  async function checkMuseumCabinet(force=false){
+    if(!apiKey()||document.hidden||museumCabinet.busy||now()-museumCabinet.at<(force?30000:15*60000)||
+      now()-museumCabinet.attempt<(force?30000:5*60000))return;
+    museumCabinet.busy=true;museumCabinet.attempt=now();
+    const key=apiKey(),owned={};
+    try{
+      for(const category of ['Flower','Plushie','Artifact']){
+        // Each category has fewer than 100 museum item types. Never accept a partial response.
+        const page=await api('user/display?cat='+category+'&limit=100');
+        const rows=page.display?.items,links=page._metadata?.links;
+        if(!Array.isArray(rows)||!links||links.next!==null||rows.some(r=>!r||typeof r.name!=='string'||
+          !Number.isSafeInteger(r.quantity)||r.quantity<0))return;
+        for(const r of rows)if(RECIPES.some(recipe=>recipe.items.includes(r.name)))owned[r.name]=(owned[r.name]||0)+r.quantity;
+      }
+      if(apiKey()===key){museumCabinet.owned=owned;museumCabinet.at=now();persist();}
+    }catch(_){/* The inventory-only view still works without display access. */}
+    finally{museumCabinet.busy=false;if(state.open&&state.tab==='travel')render();}
+  }
+
+  function museumShoppingPlan(ctx){
+    const hasInventory=state.inventoryAt>0&&state.inventorySourceAt>0;
+    const trip=ctx&&ctx.key===museumTrip.key&&now()-museumTrip.checked<5*60000?museumTrip:null;
+    const travel=trip?.travel;
+    const away=ctx?.phase==='flight'||ctx?.phase==='abroad'||(travel&&(travel.time_left>0||museumCountry(travel.destination)!=='Torn'));
+    const destination=ctx?.country||museumCountry(travel?.destination);
+    const observed=state.inventorySourceAt;
+    const cabinet=now()-museumCabinet.at<30*60000?museumCabinet.owned:null;
+    function owned(name){
+      const source=hasInventory?state.inventoryOwned:state.settings.museumOwned||{};
+      if(!hasInventory&&!Object.hasOwn(source,name))return null;
+      const quantity=Object.hasOwn(source,name)?source[name]:0;
+      if(!Number.isSafeInteger(quantity)||quantity<0)return null;
+      const carried=away&&trip?.bag?.[name];
+      const base=quantity+(hasInventory?cabinet?.[name]||0:0);
+      if(!carried)return base;
+      // Before outbound departure the home inventory already included packed items. On
+      // the return leg a snapshot older than departure can be from either location.
+      const departed=Number(travel.departed_at)*1000;
+      if(carried.packed&&(!hasInventory||!departed||destination==='Torn'&&observed<=departed))return null;
+      return base+carried.acquired+(observed>departed?carried.packed:0);
+    }
+    const exchanges=RECIPES.map(recipe=>{
+      const rows=recipe.items.map(name=>({name,country:recipe.sources[name],owned:owned(name)}));
+      const known=rows.every(row=>row.owned!==null);
+      const complete=known?Math.min(...rows.map(row=>row.owned)):null;
+      const target=(complete??0)+1;
+      for(const row of rows)row.need=row.owned===null?null:Math.max(0,target-row.owned);
+      return {...recipe,rows,complete,target,gaps:rows.filter(row=>row.need!==0)};
+    });
+    return {destination,away,bagKnown:!!trip?.bag,cabinetKnown:hasInventory&&!!cabinet,exchanges,hasInventory};
+  }
+
+  const museumTravelStyle=`
+    .ps-museum-travel{box-sizing:border-box;max-width:100%;padding:11px 13px;margin:7px 0 11px;border:1px solid #35536d;border-radius:9px;background:#101f30;color:#eaf3fa;font:13px/1.45 system-ui,sans-serif;overflow-wrap:anywhere}
+    .ps-museum-travel header,.ps-museum-travel .ps-museum-row{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 10px}
+    .ps-museum-travel header strong{font-size:15px}.ps-museum-travel .points{color:#8be2fa;font-weight:700}
+    .ps-museum-travel p{margin:5px 0}.ps-museum-travel .ps-museum-row{padding:4px 0;border-bottom:1px solid #294054}
+    .ps-museum-travel small{color:#b1c7d8;font-size:12px}.ps-museum-travel details{margin-top:7px}.ps-museum-travel summary{cursor:pointer;color:#a1e4fa}
+    .ps-museum-travel select,.ps-museum-travel button{font:inherit;color:#eaf3fa;background:#182e43;border:1px solid #49708b;border-radius:5px;padding:5px 8px;margin:4px 4px 0 0}
+    .ps-museum-travel a{color:#a1e4fa}.ps-museum-travel .group{margin-top:8px}
+  `;
+
+  function museumShelf(ctx){
+    const shelf=new Map();
+    if(ctx?.phase!=='abroad')return shelf;
+    for(const row of ctx.anchor.querySelectorAll('[class*="stockTableWrapper___"] [class*="row___"]')){
+      if(!row.getClientRects().length)continue;
+      const name=row.querySelector('[class*="itemName___"]')?.textContent.trim();
+      if(!name)continue;
+      const cells=[...row.children].map(el=>el.textContent.trim());
+      const stock=cells.map(t=>t.match(/^stock\s*:?\s*([\d,]+)$/i)).find(Boolean);
+      const price=cells.map(t=>t.match(/^(?:cost\s*:?\s*)?\$\s*([\d,]+)$/i)).find(Boolean);
+      const quantity=stock?Number(stock[1].replace(/,/g,'')):null;
+      const details=[];
+      if(quantity!==null)details.push(quantity===0?'Sold out':quantity.toLocaleString('en-US')+' in stock');
+      if(price)details.push(fmt(Number(price[1].replace(/,/g,'')))+' each');
+      if(details.length)shelf.set(name,details.join(' · '));
+    }
+    return shelf;
+  }
+
+  function museumTravelHTML(ctx,countryOverride=''){
+    const plan=museumShoppingPlan(ctx);
+    const country=countryOverride||plan.destination;
+    const known=plan.exchanges.every(r=>r.complete!==null);
+    const points=plan.exchanges.reduce((n,r)=>n+(r.complete||0)*r.points,0);
+    const sets=plan.exchanges.filter(r=>r.items.length>1);
+    const itemRow=(name,detail)=>'<div class="ps-museum-row"><b>'+esc(name)+'</b><small>'+esc(detail)+'</small></div>';
+    let html='<section class="ps-museum-travel" aria-label="Museum shopping list"><header><strong>Museum shopping list</strong>'+
+      '<span class="points">'+(known?points+' pts at standard rates':'Holdings incomplete')+'</span></header>';
+    if(country){
+      const shops=plan.exchanges.flatMap(r=>r.rows.filter(row=>row.country===country).map(row=>({r,row})));
+      const local=[],shelf=museumShelf(ctx);
+      for(const {r,row} of shops){
+        if(r.items.length>1&&row.need===0)continue;
+        const shop=country==='Torn'?"Bits 'n' Bobs":r.shop;
+        const finishes=r.items.length>1&&r.complete!==null&&r.gaps.every(g=>g.country===country);
+        const detail=r.items.length===1?r.points+' pts each'+(row.owned!==null?' · '+row.owned+' owned':''):
+          row.need===null?'Owned quantity unknown':(finishes&&r.gaps.length===1?'Completes set #'+r.target+' · +'+r.points+' pts':
+          finishes?'Finishes set with other local piece'+(r.gaps.length>2?'s':''):r.name+' #'+r.target);
+        local.push(itemRow((r.items.length>1&&row.need!==null?'Need '+row.need+' × ':'')+row.name,[shop,detail,shelf.get(row.name)].filter(Boolean).join(' · ')));
+      }
+      for(const r of sets){
+        if(r.complete===null)continue;
+        const here=r.rows.filter(row=>row.country===country);
+        if(!here.length)continue;
+        const ceiling=Math.min(...r.rows.filter(row=>row.country!==country).map(row=>row.owned));
+        const extra=ceiling-r.complete;
+        if(extra<2)continue;
+        const buys=here.filter(row=>row.owned<ceiling).map(row=>(ceiling-row.owned)+' × '+row.name);
+        local.push('<p><b>For '+extra*r.points+' pts</b> · '+esc(buys.join(' + '))+' total would finish '+extra+' more sets.</p>');
+      }
+      const prefix=countryOverride?'Preview · ':ctx?.phase==='flight'?'On arrival · ':'';
+      html+='<p><b>'+prefix+esc(country)+'</b></p>'+(local.join('')||'<p>Your inventory covers the local pieces for each next set.</p>');
+    }else{
+      const nearest=sets.filter(r=>r.complete!==null).sort((a,b)=>a.gaps.length-b.gaps.length)[0];
+      if(nearest){
+        const names=nearest.gaps.slice(0,2).map(row=>row.name+' ('+row.country+')').join(', ');
+        html+='<p><b>Closest set · '+esc(nearest.name)+'</b><br>'+nearest.gaps.length+' missing for '+nearest.points+' points · '+esc(names)+(nearest.gaps.length>2?' and '+(nearest.gaps.length-2)+' more':'')+'</p>';
+      }else html+='<p>Expand the checklist for every item and where to find it.</p>';
+    }
+    const source=plan.hasInventory?(now()-state.inventorySourceAt>=3600000?'Saved inventory · ':'Inventory · ')+age(state.inventorySourceAt):
+      state.inventoryBusy?'Checking inventory…':Object.keys(state.settings.museumOwned||{}).length?'Manually recorded quantities':'No inventory synced';
+    html+='<p><small>'+esc(source)+(plan.hasInventory?(plan.cabinetKnown?' · Display included':' · Display unverified'):'')+(plan.away?(plan.bagKnown?' · Travel bag included':' · Bag unverified, check carried items'):'')+'</small></p>';
+    html+='<details data-view-key="museum-travel-gaps"><summary>All missing pieces and destinations</summary>';
+    for(const r of plan.exchanges){
+      const single=r.items.length===1;
+      html+='<p class="group"><b>'+esc(r.name)+'</b> · '+r.points+' pts'+(r.complete!==null?' · '+r.complete+(single?' owned':' complete'):'')+'</p>';
+      for(const row of r.gaps){
+        html+=itemRow(row.name,(row.country==='Torn'?"Torn · Bits 'n' Bobs":row.country)+(single?' · single exchange':
+          row.need===null?' · ownership unknown':' · need '+row.need+' for set #'+r.target));
+      }
+    }
+    html+='<p><small>Exchange at the Torn Museum after completing the History bachelor. Standard points exclude event bonuses. Displayed items can be taken out in Torn. Bazaar listings are excluded. Check shop stock before buying.</small></p></details>';
+    if(state.inventoryError)html+='<p><small>'+esc(state.inventoryError)+'</small></p>';
+    html+='<div>';
+    if(ctx&&(!plan.away||!plan.destination)){
+      html+='<select aria-label="Preview museum items by destination" data-museum-preview><option value="">'+(plan.destination?'Follow Torn destination':'Preview a destination')+'</option>'+
+        museumCountries.map(c=>'<option'+(c===countryOverride?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select>';
+    }
+    if(ctx)html+='<button type="button" data-museum-open="'+(apiKey()?'museum':'settings')+'">'+(apiKey()?'Museum planner':'Connect inventory')+'</button>';
+    if(apiKey())html+='<button type="button" data-action="museum-travel-refresh"'+(state.inventoryBusy?' disabled':'')+'>Refresh</button>';
+    if(ctx?.phase==='agency')html+='<a href="/museum.php">Open Museum</a>';
+    return html+'</div></section>';
+  }
+
+  function setProfitKey(key){
+    const before=apiKey();
+    state.settings.key=key;
+    if(apiKey()===before)return;
+    state.inventoryOwned={};state.inventorySourceAt=0;state.inventoryAt=0;state.inventoryError='';
+    Object.assign(museumCabinet,{owned:null,at:0,attempt:0});
+    Object.assign(museumTrip,{key:'',checked:0,busy:false,bag:null,travel:null});
+    noteAutoAttemptV116('inventory',0);
+  }
+  function checkMuseumInventory(force=false){
+    if(!routeStoreReady||document.hidden||!apiKey()||state.inventoryBusy)return;
+    const elapsed=now()-autoChecksV112.inventory;
+    if(elapsed<(force?30000:5*60000)||!force&&liveMuseumOwnedV112()&&now()-state.inventoryAt<15*60000)return;
+    noteAutoAttemptV116('inventory',now());void refreshInventoryV112();
+  }
+  function syncMuseumTravel(force=false){
+    if(!routeStoreReady||document.hidden)return;
+    if(state.open&&state.tab==='travel'){checkMuseumInventory(force);void checkMuseumCabinet(force);}
+    let enabled=true;try{enabled=JSON.parse(localStorage.getItem('staxx-hub-context-v1')||'true')!==false;}catch(_){}
+    const ctx=enabled?museumTravelContext():null;
+    if(!ctx){
+      museumHost?.remove();museumHost=null;museumPreview='';museumContextKey='';
+      if(museumTrip.key)Object.assign(museumTrip,{key:'',checked:0,busy:false,travel:null,bag:null,failed:false});
+      return;
+    }
+    if(ctx.key!==museumTrip.key)Object.assign(museumTrip,{key:ctx.key,checked:0,busy:false,travel:null,bag:null,failed:false});
+    const viewKey=ctx.key+'/'+ctx.country;
+    if(viewKey!==museumContextKey){museumContextKey=viewKey;museumPreview='';}
+    checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumTrip(ctx,force);
+    if(!museumHost){
+      museumHost=document.createElement('div');museumHost.id='ps-museum-travel';
+      const shadow=museumHost.attachShadow({mode:'open'});
+      const style=document.createElement('style');style.textContent=museumTravelStyle;
+      shadow.append(style,document.createElement('div'));
+      shadow.addEventListener('click',event=>{
+        const button=event.target.closest('button');
+        if(button?.dataset.museumOpen){state.tab=button.dataset.museumOpen;state.open=true;render();}
+        if(button?.dataset.action==='museum-travel-refresh')syncMuseumTravel(true);
+      });
+      shadow.addEventListener('change',event=>{
+        if(event.target.matches('[data-museum-preview]')){museumPreview=museumCountry(event.target.value);syncMuseumTravel();}
+      });
+      museumMarkup='';
+    }
+    if(museumHost.nextElementSibling!==ctx.anchor||!museumHost.isConnected)ctx.anchor.before(museumHost);
+    if(ctx.phase!=='agency'&&museumTrip.travel&&(museumTrip.travel.time_left>0||museumCountry(museumTrip.travel.destination)!=='Torn'))museumPreview='';
+    const html=museumTravelHTML(ctx,museumPreview);
+    if(html===museumMarkup)return;
+    museumMarkup=html;
+    const shadow=museumHost.shadowRoot,body=shadow.lastElementChild;
+    const open=body.querySelector('details')?.open,focus=shadow.activeElement;
+    const focusIndex=[...body.querySelectorAll('summary,select,button,a')].indexOf(focus);
+    body.innerHTML=html;body.querySelector('details').open=!!open;
+    if(focusIndex>=0)body.querySelectorAll('summary,select,button,a')[focusIndex]?.focus({preventScroll:true});
+  }
+
   function renderTravel(){
     const rows=travelRows(),fresh=rows.filter(x=>x.valid),priced=rows.filter(x=>x.net!==null).length;
-    let h='<div class="card"><h3>Foreign-shop profit scanner</h3>'+
+    let h='<style>'+museumTravelStyle+'</style>'+museumTravelHTML(null)+'<div class="card"><h3>Foreign-shop profit scanner</h3>'+
       '<p class="muted">Optional third-party public observation data from Torn Tracker, checked automatically when Torn is in the foreground (or on demand). No API key, identity or stored trading record is sent. <a href="https://torn-tracker.com/guide/website/developer-api/" target="_blank" rel="noopener noreferrer">Data: torn-tracker.com contributors</a> (CC BY 4.0). Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
       '<form id="ps_travelsettings"><div class="duo">'+field('travelCapacity','Carry capacity (items)',state.settings.travelCapacity||10)+
       field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+'</div>'+
@@ -2264,9 +2544,9 @@
   function renderMuseum(){
     let html='<div class="statrow"><div class="stat"><small>Cheapest point ask</small><b>'+fmt(state.pointsPrice)+'</b></div>'+
       '<div class="stat"><small>Museum access</small><b>Check in Torn</b></div></div>';
-    html+=notice('Each complete flower or plushie set = 10 points. Cash cost assumes Item Market purchases; points revenue uses the lowest ASK, not guaranteed proceeds.');
+    html+=notice('Flowers and plushies earn 10 points per set, arrowheads earn 25. Fossils earn 20 each and meteorite fragments earn 15 each. Standard exchange values. Cash cost assumes Item Market purchases; points revenue uses the lowest ASK, not guaranteed proceeds.');
     html+='<div class="toolbar"><button class="btn secondary" data-action="inventoryscan" '+(state.inventoryBusy?'disabled':'')+'>'+
-      (state.inventoryBusy?'Checking Torn inventory…':'Sync owned flowers & plushies')+'</button></div>';
+      (state.inventoryBusy?'Checking Torn inventory…':'Sync museum inventory')+'</button></div>';
     html+=notice(liveMuseumOwnedV112()?'Torn inventory quantities synced '+age(state.inventoryAt)+'; faction-owned and items kept elsewhere are excluded.':
       'Using locally recorded counts until a complete Torn inventory sync succeeds.');
     if(state.inventoryError)html+=notice(state.inventoryError,true);
@@ -2549,6 +2829,7 @@
       case 'stock-log-toggle':state.settings.stockLogSync=state.settings.stockLogSync===false;state.stockLogRetryAt=0;state.stockLogCheckedAt=0;persist();render();if(state.settings.stockLogSync)void refreshStockCashLogs(true);break;
       case 'stock-reminders':state.settings.stockClaimReminders=state.settings.stockClaimReminders!==true;persist();render();break;
       case 'travelscan':scanTravel();break;
+      case 'museum-travel-refresh':checkMuseumInventory(true);void checkMuseumCabinet(true);break;
       case 'inventoryscan':refreshInventoryV112();break;
       case 'rank-open':{
         const row=incomeCandidates().find(x=>x.id===el.dataset.rankId);
@@ -2618,9 +2899,9 @@
       case 'savekey':{
         const key=shell.querySelector('#ps_key').value.trim();
         if(!key){alert('Enter an API key first.');return;}
-        state.settings.key=key;persist();render();break;
+        setProfitKey(key);persist();render();break;
       }
-      case 'clearkey':state.settings.key='';persist();render();break;
+      case 'clearkey':setProfitKey('');persist();render();break;
     }
   }
   function onSubmit(event){
@@ -2930,7 +3211,7 @@
   async function init(){
     mount();
     window.addEventListener("hashchange",()=>{nativeMarketQuote();marketAssist();});
-    setInterval(()=>{nativeMarketQuote();syncRouteBar();},2000);
+    setInterval(()=>{nativeMarketQuote();syncRouteBar();syncMuseumTravel();},2000);
     document.dispatchEvent(new CustomEvent('staxx:register',{detail:{id:'profit',label:'Profit-TornStaxx',icon:'PS',desc:'Daily profit · Markets · Stocks',trendMetric:'Fresh deals',freshnessMs:600000}}));
     try{
       const loaded=await readStore();
@@ -2948,7 +3229,14 @@
        state.stockLogRetryAt=number(loaded.stockLogRetryAt);
        state.dailyReviews=loaded.dailyReviews&&typeof loaded.dailyReviews==='object'&&!Array.isArray(loaded.dailyReviews)?loaded.dailyReviews:{};
        state.inventoryOwned=loaded.inventoryOwned&&typeof loaded.inventoryOwned==='object'&&!Array.isArray(loaded.inventoryOwned)?loaded.inventoryOwned:{};
-       state.inventoryAt=number(loaded.inventoryAt);
+       state.inventorySourceAt=number(loaded.inventorySourceAt);
+       // Older snapshots only tracked flowers and plushies. Refresh before inferring absent artifacts.
+       state.inventoryAt=state.inventorySourceAt?number(loaded.inventoryAt):0;
+       const display=loaded.museumDisplay;
+       if(display?.at>0&&display.at<=now()&&now()-display.at<30*60000&&display.owned&&
+         Object.values(display.owned).every(q=>Number.isSafeInteger(q)&&q>=0)){
+         museumCabinet.at=display.at;museumCabinet.owned=display.owned;
+       }
        stockState.all=state.stockCache;stockState.at=state.stockCacheAt;
        if(!state.income.length){try{const prev=JSON.parse(localStorage.getItem('profitstaxx_income_v1')||'[]');if(Array.isArray(prev)&&prev.length){state.income=prev.slice(-1000);persist();}}catch(_){}}
       state.catalog=loaded.catalog||{};
@@ -2960,6 +3248,7 @@
       state.status='Ready · '+state.storage+' storage';
     }catch(e){state.error='Could not restore local data: '+e.message;}
     routeStoreReady=true;
+    syncMuseumTravel();
     marketAssist();
     render();
     // Read-only autopilot: one bounded data task at a time, while Torn is foregrounded.
