@@ -1,3 +1,7 @@
+## 2.9.0 - Museum verification and collection planning
+
+Recent complete observations from the native Museum exchange grid take precedence over cached API estimates and are not added to cabinet counts. Visit each exchange tab to record its quantities. Unsupported layouts retain explicitly labelled API estimates. The checklist exposes quantities, source and age. Capacity-limited heuristic ranks destinations by additional points and progress, excludes market-cheaper pieces when both prices are known, and uses configured luggage capacity and observed non-permanent bag entries. Price refresh loads points, foreign stock reports and item market asks. Individual resale estimates include 5% fee; travel fare is not assumed. Recently verified complete sets generate a hub review notification. No automatic purchases or exchanges.
+
 ## 2.8.1 - Museum inventory repair
 
 Inventory is requested by Flower, Plushie and Artifact category using Torn API v2. All three categories must complete before replacing the museum snapshot. Failed or partial responses retain previous counts; category timestamps are stored separately for travel-bag reconciliation. Market watch items are checked separately on a best-effort basis and unverified quantities are not displayed as zero. Display case reads follow individual-item pagination. The Museum workspace also shows the shopping checklist and starts a refresh on opening. Older, unscoped inventory snapshots are invalidated once on upgrade.

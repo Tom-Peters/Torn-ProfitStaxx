@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,museumNative,museumCardCount,museumCountryPlan,museumEconomics,museumReadyNotice,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init",replacement+"  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -517,4 +517,31 @@ test('market ownership does not infer zero outside the synced category scope',()
  assert.equal(verifiedOwnedV114('Heather'),0);
  assert.equal(verifiedOwnedV114('Xanax'),null);
  assert.equal(verifiedOwnedV114('Untracked item'),null);
+});
+
+test('native snapshot overrides cached inventory and display including zero',()=>{
+ const {state,RECIPES,museumNative,museumCabinet,museumShoppingPlan,museumReadyNotice,museumCardCount}=harness();
+ const recipe=RECIPES[0];state.inventoryAt=state.inventorySourceAt=Date.now()-240000;
+ state.inventoryOwned=Object.fromEntries(recipe.items.map(n=>[n,9]));
+ museumCabinet.at=Date.now();museumCabinet.owned={'Sheep Plushie':5};
+ const positive={'Jaguar Plushie':131,'Wolverine Plushie':23,'Nessie Plushie':7,'Chamois Plushie':51,'Lion Plushie':6,'Camel Plushie':1};
+ museumNative[recipe.name]={at:Date.now(),owned:Object.fromEntries(recipe.items.map(n=>[n,positive[n]||0]))};
+ const plan=museumShoppingPlan(null).exchanges[0];
+ assert.equal(plan.complete,0);assert.equal(plan.gaps.length,7);
+ assert.equal(plan.rows.find(r=>r.name==='Jaguar Plushie').owned,131);
+ assert.equal(plan.rows.find(r=>r.name==='Sheep Plushie').owned,0);
+ assert.equal(museumCardCount('Sheep Plushie','Sheep Plushie',true),0);
+ assert.equal(museumCardCount('Jaguar Plushie','Jaguar Plushie131',true),131);
+ assert.equal(museumCardCount('Jaguar Plushie','Jaguar Plushie',false),null);
+ assert.equal(museumReadyNotice(),null);
+ for(const n of recipe.items)museumNative[recipe.name].owned[n]=2;
+ assert.equal(museumReadyNotice().id,'museum-ready');
+});
+test('destination suggestions stay within remaining slots',()=>{
+ const {RECIPES,museumNative,museumShoppingPlan,museumCountryPlan}=harness();
+ const recipe=RECIPES[0];museumNative[recipe.name]={at:Date.now(),owned:Object.fromEntries(recipe.items.map(n=>[n,n==='Nessie Plushie'||n==='Red Fox Plushie'?0:10]))};
+ const plan=museumShoppingPlan(null),result=museumCountryPlan(plan,'United Kingdom',3);
+ assert.equal(result.points,10);assert.ok(result.used<=3);
+ assert.equal(result.buys['Nessie Plushie'],1);assert.equal(result.buys['Red Fox Plushie'],1);
+ assert.equal(museumCountryPlan(plan,'United Kingdom',0).used,0);
 });
