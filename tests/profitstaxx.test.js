@@ -7,7 +7,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','ProfitStaxx.user.js'),'utf8');
 
 function harness(){
-  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,museumNative,museumCardCount,parseYataTravel,parseTravelLuggage,museumCountryPlan,museumCashPlan,museumEconomics,museumReadyNotice,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
+  const replacement='  window.__PS_TEST__ = {state,RECIPES,museumShoppingPlan,museumTravelHTML,museumCabinet,museumTrip,parseOffers,normalizeItems,listingReference,methodQuote,scoreDeal,positions,portfolio,recipeResults,esc,priceHistoryQuality,marketLiquiditySignal,allocationPlan,dealRisk,stockState,stockRows,dueDividends,reportedReadyDividends,profitNextActions,renderStockPanel,parseStockCashReceipt,stockCashReceipts,stockBlockOpportunities,renderStockCashReceipts,renderRevenuePanel,incomeComparisonPanel,moneyRecords,travelState,parseTravelFeed,travelRows,stockSignals,incomeCandidates,multiCapitalPlan,realisedEvents,profitHistory,dailyPlanV111,safeProfitDiagnosticsV111,liveMuseumOwnedV112,museumOwnedCountV112,museumNative,museumCardCount,parseYataTravel,parseTravelLuggage,museumCountryPlan,museumCashPlan,museumComparison,wholePointBasket,recordPointLots,museumTripCost,museumEconomics,museumReadyNotice,readInventoryCategory,verifiedOwnedV114,parseMoneyV113,liveWalletCashV113};\n';
   const modified=source.replace("  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init",replacement+"  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init");
   assert.notEqual(modified,source,'Expected test injection point was missing');
   const window={};window.top=window;window.self=window;
@@ -594,4 +594,58 @@ test('country codes and published prices produce a 17 slot Argentina budget with
  travelState.rows=data;
  const other=museumCountryPlan({exchanges:[]},'Argentina',17);
  assert.equal(other.fillers['Ceibo Flower'],17);assert.equal(other.fillers['Monkey Plushie'],undefined);
+});
+
+test('whole Points Market listings minimise cash, retain surplus, and expire',()=>{
+  const {state,recordPointLots,wholePointBasket}=harness();
+  recordPointLots({pointsmarket:[{quantity:120,cost:33499},{quantity:1000,cost:33500},{quantity:210,cost:33799}]});
+  const basket=wholePointBasket(240);
+  assert.equal(basket.cash,11117670);
+  assert.equal(basket.qty,330);
+  assert.equal(basket.equivalent,8085578);
+  assert.equal(wholePointBasket(120).cash,4019880);
+  assert.equal(wholePointBasket(1331),null);
+  state.pointsCheckedAt=Date.now()-480001;assert.equal(wholePointBasket(240),null);
+  recordPointLots({pointsmarket:[{quantity:240,cost:33000}]});
+  assert.equal(wholePointBasket(240).cash,7920000);
+});
+
+test('Argentina recommendation changes with time, travel stage and each actual purchase',()=>{
+  const {state,travelState,recordPointLots,museumComparison,museumShoppingPlan,museumCountryPlan,museumCashPlan,museumTravelHTML,museumTrip}=harness();
+  state.inventoryAt=state.inventorySourceAt=Date.now();
+  recordPointLots({pointsmarket:[{quantity:120,cost:33499},{quantity:1000,cost:33500},{quantity:210,cost:33799}]});
+  const shop=new Map([['Ceibo Flower',{cost:500,quantity:0}],['Monkey Plushie',{cost:400,quantity:0}],
+    ['Chalcedony Point',{cost:100900,quantity:1}],['Patagonian Fossil',{cost:700000,quantity:10}],['Meteorite Fragment',{cost:474267,quantity:100}]]);
+  travelState.rows=[...shop].map(([name,x],i)=>({...x,id:i+1,name,country:'arg',observed:Date.now()}));
+  const ctx={phase:'agency',country:'Argentina',key:'agency',method:'standard'};
+  const plan=museumShoppingPlan(ctx),bag=museumCountryPlan(plan,'Argentina',17,shop),cash=museumCashPlan(bag,shop);
+  const compare=(away=false)=>museumComparison(plan,bag,cash,ctx,away);
+  assert.equal(bag.points,240);assert.equal(cash.subtotal,7689172);assert.equal(cash.carry,8073631);
+  let c=compare();assert.equal(c.decision,'market');assert.equal(c.pointSpend,7588272);assert.equal(c.otherSpend,100900);
+  assert.equal(c.eventPoints,272);assert.equal(c.trip.minutes,321);assert.equal(c.trip.fare,21000);
+  assert.equal(c.saving,-58694);assert.equal(Math.round(c.breakEven),89029);
+  assert.equal(compare(true).decision,'museum');assert.equal(compare(true).trip.minutes,5);
+  Object.assign(museumTrip,{key:'agency',checked:Date.now(),luggage:{base:18,special:0,used:1,free:17,groups:{medical:1}}});
+  let html=museumTravelHTML(ctx);assert.match(html,/Points Market favoured/);assert.match(html,/Shopping list if you travel anyway/);
+  assert.doesNotMatch(html,/Next trip to consider/);
+  state.settings.museumHourValue=0;assert.equal(compare().decision,'museum');
+  html=museumTravelHTML(ctx);assert.match(html,/Exchange the museum items/);
+  assert.doesNotMatch(html,/Shopping list if you travel anyway/);
+});
+
+test('owned set pieces, the selected flight and configured round trip affect the comparison',()=>{
+  const {state,recordPointLots,museumTripCost,museumComparison}=harness();
+  recordPointLots({pointsmarket:[{quantity:10,cost:33500}]});
+  const ctx={method:'2',country:'Argentina',duration:'1h 23m'};
+  assert.equal(museumTripCost('Argentina',ctx,false).minutes,171);
+  assert.equal(museumTripCost('Canada',ctx,false).minutes,59);
+  assert.equal(museumTripCost('Argentina',ctx,false).fare,0);
+  state.settings.travelMinutes='arg=200';assert.equal(museumTripCost('Argentina',ctx,false).minutes,200);
+  assert.equal(museumTripCost('Argentina',{method:'business'},false).fare,null);
+  const recipe={name:'example',items:['a','b'],points:10,complete:0,rows:[{name:'a',owned:1},{name:'b',owned:0}]};
+  const bag={points:10,country:'Argentina',exchanges:{example:1}};
+  const cash={missing:[],subtotal:1000,lines:[{name:'b',cost:1000}]};
+  const compare=()=>museumComparison({exchanges:[recipe]},bag,cash,ctx,true);
+  assert.equal(compare().decision,'unknown');state.catalog.a={id:2,value:400000};
+  assert.equal(compare().ownedValue,380000);assert.equal(compare().decision,'market');
 });

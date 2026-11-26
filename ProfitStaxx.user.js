@@ -3,7 +3,7 @@
 // @namespace    https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @homepageURL  https://github.com/Tom-Peters/Torn-ProfitStaxx
 // @supportURL   https://github.com/Tom-Peters/Torn-ProfitStaxx/issues
-// @version      2.9.3
+// @version      2.10.0
 // @description  Torn stock benefits, market deals, passive income scenarios and manual income ledger for TornPDA.
 // @author       IamEEKY
 // @match        https://www.torn.com/*
@@ -71,7 +71,7 @@
   if (window.top !== window.self || window.__profitStaxxBooted) return;
   window.__profitStaxxBooted = true;
 
-  const VERSION = '2.9.3';
+  const VERSION = '2.10.0';
   const PDA_KEY = '###PDA-APIKEY###';
   const KEY_PREFIX = 'profitstaxx_v1_';
   const API_ROOT = 'https://api.torn.com/v2/';
@@ -104,9 +104,9 @@
   const DEFAULTS = {capital:300000000,maxTradePct:3,maxItemPct:10,reservePct:40,minRoi:3,minProfit:40000,reviewMinutes:3,
     bazaarDiscount:2,pointFee:0,method:'best',scanInterval:180,watchNames:CORE_ITEMS.slice(),museumOwned:{},museumBatch:1,
     key:'',alertThreshold:100000,tab:'daily',allocMarket:55,allocTravel:20,allocStock:20,allocBank:5,bankPrincipal:0,bankApr:0,rentalAssetValue:0,rentalNetWeekly:0,stockTargets:{},stockClaimReminders:false,stockLogSync:true,
-    travelCapacity:10,museumCashBuffer:5,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
+    travelCapacity:10,museumCashBuffer:5,museumHourValue:100000,museumStopMinutes:5,travelMinProfit:100000,travelMinutes:'',dailyReviewMinutes:15};
   const state={alertFocus:'',settings:Object.assign({},DEFAULTS),catalog:{},quotes:{},snapshots:{},
-    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,inventoryOwned:{},inventoryAt:0,inventorySourceAt:0,inventoryCategoryAt:{},inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
+    trades:[],income:[],stockHistory:{},stockCache:[],stockCacheAt:0,stockReceipts:[],stockLogCheckedAt:0,stockLogRetryAt:0,status:'Ready',error:'',busy:false,cancelScan:false,scanMode:'full',lastScan:0,pointsPrice:0,pointsCheckedAt:0,pointsLots:[],inventoryOwned:{},inventoryAt:0,inventorySourceAt:0,inventoryCategoryAt:{},inventoryBusy:false,inventoryError:'',walletCash:null,walletAt:0,walletError:'',walletBusy:false,
     tab:'daily',walkthrough:null,dailyReviews:{},rankFilter:'all',chartDays:30,open:false,storage:'browser',watchCount:0,scanDone:0,scanTotal:0};
   let routeStoreReady=false;
   let root, fab, badge, shell, routeBar, routeBarHost, saveChain=Promise.resolve(), scanTimer=null, lastHubPanelState=null;
@@ -146,21 +146,21 @@
   async function readStore() {
     try {
       if (typeof PDA_storage!=='undefined' && typeof PDA_storage.getMany==='function') {
-        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','inventoryCategoryAt','museumDisplay','museumNative','walkthrough','pointsCheckedAt']);
+        const data=await PDA_storage.getMany(['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','inventoryCategoryAt','museumDisplay','museumNative','walkthrough','pointsCheckedAt','pointsLots']);
         state.storage='TornPDA';
         return data||{};
       }
     } catch(e){console.warn('[ProfitStaxx] Native storage unavailable; falling back');}
     state.storage='browser';
     const data={};
-    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','inventoryCategoryAt','museumDisplay','museumNative','walkthrough','pointsCheckedAt']){
+    for(const key of ['settings','quotes','snapshots','trades','catalog','pointsPrice','lastScan','income','travelRows','travelAt','stockHistory','stockCache','stockCacheAt','stockReceipts','stockLogCheckedAt','stockLogRetryAt','dailyReviews','inventoryOwned','inventoryAt','inventorySourceAt','inventoryCategoryAt','museumDisplay','museumNative','walkthrough','pointsCheckedAt','pointsLots']){
       try{data[key]=JSON.parse(localStorage.getItem(KEY_PREFIX+key)||'null');}catch(e){data[key]=null;}
     }
     return data;
   }
   function persist() {
     const data={settings:state.settings,quotes:state.quotes,snapshots:state.snapshots,
-      trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,pointsCheckedAt:state.pointsCheckedAt,lastScan:state.lastScan,
+      trades:state.trades,income:state.income,catalog:state.catalog,pointsPrice:state.pointsPrice,pointsCheckedAt:state.pointsCheckedAt,pointsLots:state.pointsLots,lastScan:state.lastScan,
       travelRows:travelState.rows,travelAt:travelState.at,
       stockHistory:state.stockHistory,stockCache:state.stockCache,stockCacheAt:state.stockCacheAt,stockReceipts:state.stockReceipts,stockLogCheckedAt:state.stockLogCheckedAt,stockLogRetryAt:state.stockLogRetryAt,dailyReviews:state.dailyReviews,inventoryOwned:state.inventoryOwned,inventoryAt:state.inventoryAt,inventorySourceAt:state.inventorySourceAt,inventoryCategoryAt:state.inventoryCategoryAt,
       museumDisplay:{at:museumCabinet.at,owned:museumCabinet.owned},museumNative,walkthrough:state.walkthrough};
@@ -332,13 +332,24 @@
     if(!Object.keys(parsed).length)throw new Error('Torn item catalog did not match the expected API response.');
     state.catalog=parsed;state.settings.museumCatalogAt=now();persist();
   }
-  async function refreshPoints(){
-    try{
-      const p=await api('market/pointsmarket');
-      const rows=parseOffers(p,'pointsmarket');
-      state.pointsPrice=rows.length?rows[0].price:0;
-      state.pointsCheckedAt=now();
-    }catch(e){state.error='Points pricing unavailable: '+e.message;}
+  const validPointLot=lot=>Number.isSafeInteger(lot?.price)&&lot.price>0&&Number.isSafeInteger(lot.qty)&&lot.qty>0&&Number.isSafeInteger(lot.qty*lot.price);
+  function recordPointLots(payload){
+    const lots=parseOffers(payload,'pointsmarket').filter(validPointLot);
+    state.pointsLots=lots;state.pointsPrice=lots[0]?.price||0;state.pointsCheckedAt=now();
+  }
+  let pointRequest=null,lastPointAttempt=0;
+  function refreshPoints(){
+    if(pointRequest)return pointRequest;
+    lastPointAttempt=now();
+    pointRequest=api('market/pointsmarket').then(recordPointLots)
+      .catch(e=>{state.error='Points pricing unavailable: '+e.message;})
+      .finally(()=>{pointRequest=null;});
+    return pointRequest;
+  }
+  function checkMuseumPoints(force){
+    if(!apiKey()||document.hidden||pointRequest||now()-lastPointAttempt<(force?30000:60000))return;
+    if(!force&&state.pointsLots.length&&state.pointsCheckedAt<=now()&&now()-state.pointsCheckedAt<quoteWindow)return;
+    void refreshPoints().then(()=>{persist();if(state.open)render();});
   }
   async function scan({manual=false,quick=false}={}){
     if(state.busy)return;
@@ -795,8 +806,7 @@
           if(force||!state.pointsCheckedAt||now()-state.pointsCheckedAt>=quoteWindow){
             const result=await routeGet('market/pointsmarket');
             if(result){
-              state.pointsPrice=parseOffers(result,'pointsmarket')[0]?.price||0;
-              state.pointsCheckedAt=now();
+              recordPointLots(result);
             }
           }
         }
@@ -1666,6 +1676,7 @@
     return museumCountries.find(country=>country.toLowerCase()===name)||(Object.hasOwn(aliases,name)?aliases[name]:'');
   }
   function museumTravelContext(){
+    if(typeof location==='undefined')return null;
     const path=location.pathname,sid=new URLSearchParams(location.search).get('sid');
     if(!(path==='/travelagency.php'||path==='/page.php'&&sid==='travel'||path==='/index.php'||path==='/'))return null;
     const anchor=document.querySelector('#travel-root,.travel-agency-market,.travel-agency-wrap');
@@ -1678,7 +1689,10 @@
     const flightTitle=flying?anchor.querySelector('[class*="progressTextLineBreaker___"]')?.textContent||'':'';
     const flightDestination=flightTitle.match(/(?:returning to|flying to|travel(?:l)?ing to|destination)\s*:?\s*(?:the )?(United Arab Emirates|United Kingdom|Cayman Islands|South Africa|Switzerland|Argentina|Canada|China|Japan|Mexico|Hawaii|UAE|Torn)\b/i)?.[1];
     const country=phase==='abroad'?museumCountry(flags.country):phase==='agency'?museumCountry(selected?.textContent):museumCountry(flightDestination);
-    return {anchor,phase,country,key:phase+(phase==='agency'?'':'/'+country)};
+    const method=anchor.querySelector('input[name="travelType"][aria-checked="true"],input[name="travelType"]:checked')?.value||
+      anchor.querySelector('[class*="flightTypeOption___"] [class*="label___"]')?.textContent;
+    const duration=anchor.querySelector('[class*="flightType___"] [class*="duration___"]')?.textContent;
+    return {anchor,phase,country,method,duration,key:phase+(phase==='agency'?'':'/'+country)};
   }
 
   function parseTravelLuggage(data){
@@ -1866,6 +1880,7 @@
     .ps-museum-travel p{margin:5px 0}.ps-museum-travel .ps-museum-row{padding:4px 0;border-bottom:1px solid #294054}
     .ps-museum-travel small{color:#b1c7d8;font-size:12px}.ps-museum-travel details{margin-top:7px}.ps-museum-travel summary{cursor:pointer;color:#a1e4fa}
     .ps-museum-travel select,.ps-museum-travel button{font:inherit;color:#eaf3fa;background:#182e43;border:1px solid #49708b;border-radius:5px;padding:5px 8px;margin:4px 4px 0 0}
+    .ps-museum-choice{padding:8px 10px;margin:6px 0;border-left:3px solid #83d9ef;background:#132c40}.ps-museum-choice>strong{color:#a1e4fa}
     .ps-museum-travel a{color:#a1e4fa}.ps-museum-travel .group{margin-top:8px}
   `;
 
@@ -1914,7 +1929,7 @@
   function museumCountryPlan(plan,country,capacity,shelf){
     const remaining=Number.isSafeInteger(capacity)&&capacity>=0?capacity:0;
     let left=remaining,points=0,progress=0;
-    const buys={},sets=plan.exchanges.filter(r=>r.items.length>1&&r.complete!==null);
+    const exchanges={},buys={},sets=plan.exchanges.filter(r=>r.items.length>1&&r.complete!==null);
     const have=Object.fromEntries(sets.flatMap(r=>r.rows.map(row=>[row.name,row.owned])));
     const offerLimit=row=>{
       const shop=museumShopOffer(row.name,country,shelf),market=museumMarketPrice(row.name,1);
@@ -1929,18 +1944,19 @@
         const local=gaps.filter(row=>row.country===country&&(buys[row.name]||0)<offerLimit(row));
         if(!local.length)continue;
         const completes=local.length===gaps.length;
-        if(completes&&local.length<=left)candidates.push({rows:local,points:r.points,score:r.points/local.length+100});
+        if(completes&&local.length<=left)candidates.push({rows:local,recipe:r.name,points:r.points,score:r.points/local.length+100});
         else if(!completes)candidates.push({rows:[local[0]],points:0,score:r.points/gaps.length});
       }
       const best=candidates.sort((a,b)=>b.score-a.score)[0];if(!best)break;
       for(const row of best.rows){have[row.name]++;buys[row.name]=(buys[row.name]||0)+1;left--;progress++;}
       points+=best.points;
+      if(best.points)exchanges[best.recipe]=(exchanges[best.recipe]||0)+1;
     }
-    const pointFresh=state.pointsCheckedAt>0&&now()-state.pointsCheckedAt<quoteWindow&&state.pointsPrice>0;
+    const pointFresh=state.pointsCheckedAt>0&&state.pointsCheckedAt<=now()&&now()-state.pointsCheckedAt<quoteWindow&&state.pointsPrice>0;
     for(const r of plan.exchanges.filter(r=>r.items.length===1&&r.rows[0].country===country).sort((a,b)=>b.points-a.points)){
       const row=r.rows[0],shop=museumShopOffer(row.name,country,shelf),market=museumMarketPrice(row.name,1);
-      if(!pointFresh||!shop||market!==null&&market<shop.cost||shop.cost>r.points*state.pointsPrice*(1-number(state.settings.pointFee)/100))continue;
-      const n=Math.min(left,shop.stockKnown?shop.quantity:0);if(n<=0)continue;buys[row.name]=(buys[row.name]||0)+n;points+=n*r.points;left-=n;
+      if(!pointFresh||!shop||market!==null&&market<shop.cost||shop.cost>r.points*state.pointsPrice)continue;
+      const n=Math.min(left,shop.stockKnown?shop.quantity:0);if(n<=0)continue;buys[row.name]=(buys[row.name]||0)+n;exchanges[r.name]=n;points+=n*r.points;left-=n;
     }
     const museumUsed=remaining-left;
     const fillers={},conditional={};
@@ -1968,7 +1984,7 @@
         if(!left)break;
       }
     }
-    return {country,buys,fillers,conditional,points,progress,museumUsed,used:remaining-left,unfilled:left};
+    return {country,buys,exchanges,fillers,conditional,points,progress,museumUsed,used:remaining-left,unfilled:left};
   }
   function museumCashPlan(suggested,shelf,bufferPercent=state.settings.museumCashBuffer){
     const buffer=clamp(Number.isFinite(Number(bufferPercent))?Number(bufferPercent):5,0,25);
@@ -1985,6 +2001,116 @@
     const extra=missing.length?null:Math.ceil(subtotal*buffer/100);
     const carry=extra===null?null:subtotal+extra;
     return {lines,missing,subtotal,carry,buffer,extra,estimated};
+  }
+  // Base one-way minutes by class, then standard fare (Torn Wiki, Travel).
+  const museumFlights={
+    Mexico:[24,17,12,7,6500],'Cayman Islands':[33,23,17,10,10000],Canada:[39,27,19,12,9000],
+    Hawaii:[127,89,63,38,11000],'United Kingdom':[151,106,75,45,18000],Argentina:[158,111,79,47,21000],
+    Switzerland:[166,116,83,50,27000],Japan:[213,149,107,64,32000],China:[229,160,114,69,35000],
+    UAE:[257,180,128,77,32000],'South Africa':[282,197,141,85,40000]
+  };
+  function shownFlightMinutes(text){
+    const value=String(text||'').trim().toLowerCase();
+    const clock=value.match(/^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?$/);
+    if(clock)return Number(clock[1])*60+Number(clock[2]);
+    const duration=value.match(/^(?:(\d+)\s*h(?:ours?|rs?)?\s*)?(?:(\d+)\s*m(?:in(?:ute)?s?)?)?$/);
+    return duration?Number(duration[1]||0)*60+Number(duration[2]||0):0;
+  }
+  function museumTripCost(country,ctx,away){
+    const stop=clamp(number(state.settings.museumStopMinutes),0,240);
+    if(away)return {minutes:stop,fare:0,description:'Already travelling · only extra shop and exchange time counted'};
+    const route=museumFlights[country];
+    if(!route)return null;
+    const methods=['standard','airstrip','private','business'],raw=String(ctx?.method||'').trim().toLowerCase();
+    const selected=/^[1-4]$/.test(raw)?Number(raw)-1:methods.indexOf(raw.replace(/ class$/,''));
+    const method=Math.max(0,selected);
+    const codes={Mexico:'mex','Cayman Islands':'cay',Canada:'can',Hawaii:'haw','United Kingdom':'uni',Argentina:'arg',Switzerland:'swi',Japan:'jap',China:'chi',UAE:'uae','South Africa':'sou'};
+    const override=countryMinutes(country)||countryMinutes(codes[country]);
+    const shown=ctx?.country===country?shownFlightMinutes(ctx.duration):0;
+    const minutes=override||2*(shown||route[method])+stop;
+    return {minutes,fare:method===3?null:method===0?route[4]:0,
+      description:(selected<0?'Standard class assumed':methods[method]+' class')+' · '+(override?'configured round trip incl. stop':(shown?'displayed':'base')+' flight time + '+stop+' min to shop and exchange')};
+  }
+
+  // Minimise actual cash outlay across whole listings. Descending iteration uses each listing once.
+  let lastLotBook=null;
+  const pointBasketCache=new Map();
+  function wholePointBasket(target){
+    if(!Number.isSafeInteger(target)||target<1||target>5000||!state.pointsCheckedAt||state.pointsCheckedAt>now()||now()-state.pointsCheckedAt>=quoteWindow)return null;
+    if(state.pointsLots!==lastLotBook){pointBasketCache.clear();lastLotBook=state.pointsLots;}
+    if(pointBasketCache.has(target))return pointBasketCache.get(target);
+    const best=Array(target+1).fill(null);best[0]={cash:0,qty:0};
+    for(const lot of state.pointsLots){
+      if(!validPointLot(lot))continue;
+      for(let i=target-1;i>=0;i--){
+        if(!best[i])continue;
+        const qty=i+lot.qty,slot=Math.min(target,qty),cash=best[i].cash+lot.qty*lot.price;
+        if(Number.isSafeInteger(cash)&&(!best[slot]||cash<best[slot].cash||cash===best[slot].cash&&qty>best[slot].qty))best[slot]={cash,qty};
+      }
+    }
+    const result=best[target];
+    if(result)result.equivalent=Math.round(result.cash/result.qty*target);
+    pointBasketCache.set(target,result);return result;
+  }
+  function museumComparison(plan,bag,cash,ctx,away){
+    const market=wholePointBasket(bag.points),trip=museumTripCost(bag.country,ctx,away);
+    const result={market,trip,decision:'unknown',ownedValue:0,pointSpend:0,otherSpend:0,unpricedOwned:false,eventPoints:0};
+    if(!bag.points||cash.missing.length||!trip)return result;
+    for(const recipe of plan.exchanges){
+      const count=bag.exchanges[recipe.name]||0;
+      if(!count)continue;
+      result.eventPoints+=count*Math.round(recipe.points*11/10);
+      for(const row of recipe.rows){
+        // Use existing complete sets as the baseline; only value components consumed by new exchanges.
+        const needed=recipe.items.length===1?count:Math.max(0,count+recipe.complete-row.owned);
+        if(needed)result.pointSpend+=needed*cash.lines.find(line=>line.name===row.name).cost;
+        if(count<=needed)continue;
+        const item=getItem(row.name),quote=item&&freshRouteQuote(item.id);
+        const unit=quote?.reference||item?.value;
+        if(unit>0)result.ownedValue+=(count-needed)*Math.floor(unit*.95);
+        else result.unpricedOwned=true;
+      }
+    }
+    result.otherSpend=cash.subtotal-result.pointSpend;
+    if(!market)return result;
+    result.rate=clamp(number(state.settings.museumHourValue),0,1000000000);
+    result.timeValue=Math.round(result.rate*trip.minutes/60);
+    const advantage=market.equivalent-result.pointSpend-(trip.fare||0)-result.ownedValue;
+    result.breakEven=trip.minutes?Math.max(0,advantage*60/trip.minutes):null;
+    result.saving=advantage-result.timeValue;
+    // An unknown ticket cost or owned component can only increase the cost of exchanging.
+    if(result.saving<=0)result.decision='market';
+    else if(trip.fare!==null&&!result.unpricedOwned)result.decision='museum';
+    return result;
+  }
+  function museumDecisionHTML(bag,c){
+    const location=esc(bag.country),points=bag.points,market=c.market;
+    if(!points){
+      const current=state.pointsCheckedAt>0&&state.pointsCheckedAt<=now()&&now()-state.pointsCheckedAt<quoteWindow&&state.pointsLots.length;
+      return '<p><b>'+location+' · '+(current?'no immediate points identified for this bag':'waiting for a fresh points comparison')+'.</b> <a href="/pmarket.php">View Points Market</a></p>';
+    }
+    let title=c.decision==='market'?'Buy points in Torn':c.decision==='museum'?'Exchange the museum items':'Compare before buying';
+    if(c.decision==='market'&&market.qty>points)title='Points Market favoured if you want the extra points';
+    let html='<div class="ps-museum-choice"><strong>'+title+'</strong><p>'+location+' · '+points+' exchange points';
+    if(c.saving!==undefined&&c.decision!=='unknown')html+=' · '+fmt(Math.abs(c.saving))+' estimated advantage including time';
+    html+='.</p>';
+    if(!market)return html+'<small>Fresh whole Points Market listings covering '+points+' points are needed for a comparison.</small> <a href="/pmarket.php">View Points Market</a></div>';
+    html+='<p><a href="/pmarket.php">Points Market</a> · '+fmt(market.cash)+' for '+market.qty+' pts';
+    if(market.qty>points)html+=' · '+(market.qty-points)+' extra. At the same unit rate, '+points+' pts are worth '+fmt(market.equivalent);
+    html+='.</p>';
+    const wallet=liveWalletCashV113();
+    if(wallet!==null&&wallet<market.cash)html+='<p><small>Current wallet is '+fmt(market.cash-wallet)+' short of those listings.</small></p>';
+    if(c.saving===undefined)return html+'<small>Trip costs are incomplete.</small></div>';
+    html+='<p>Museum · '+fmt(c.pointSpend)+' for the exchange items';
+    if(c.ownedValue)html+=' + '+fmt(c.ownedValue)+' estimated resale value of owned pieces';
+    html+=c.trip.fare===null?' + business ticket if used':' + '+fmt(c.trip.fare)+' fare';
+    html+=' + '+fmt(c.timeValue)+' for '+c.trip.minutes+' min at '+fmt(c.rate)+'/h.</p>';
+    if(c.otherSpend)html+='<p><small>Other bag purchases '+fmt(c.otherSpend)+' advance later sets or fill resale slots.</small></p>';
+    html+='<small>'+esc(c.trip.description)+'. ';
+    if(c.unpricedOwned)html+='Some owned pieces have unknown resale value. ';
+    if(c.breakEven!==null&&c.trip.fare!==null&&!c.unpricedOwned)html+='Break-even time value '+fmt(c.breakEven)+'/h. ';
+    if(c.eventPoints>points)html+='Museum Day would give '+c.eventPoints+' pts. ';
+    return html+'Market checked '+age(state.pointsCheckedAt)+'.</small> <button type="button" data-action="museum-time-settings">Change time value</button></div>';
   }
   let museumShelfPriceAttempt=0,museumShelfPriceBusy=false,museumCatalogueBusy=false,museumCatalogueAttempt=0;
   async function checkMuseumCatalogue(){if(!apiKey()||document.hidden||state.busy||museumCatalogueBusy||now()-museumCatalogueAttempt<5*60000)return;museumCatalogueAttempt=now();museumCatalogueBusy=true;try{await loadCatalog();render();}catch(_){}finally{museumCatalogueBusy=false;}}
@@ -2032,7 +2158,7 @@
     }catch(e){museumPricesError=String(e.message||e);}
     finally{museumPricesBusy=false;render();}
   }
-  function museumTravelHTML(ctx,countryOverride=''){
+  function museumTravelHTML(ctx,countryOverride='',workspace=false){
     const plan=museumShoppingPlan(ctx);
     const country=countryOverride||plan.destination;
     const known=plan.exchanges.every(r=>r.complete!==null);
@@ -2084,10 +2210,25 @@
       if(luggage.used&&!plan.away)html+='<p><small>Review packed items before departure if you want more shopping space. Nothing is removed automatically.</small></p>';
       if(ctx?.phase==='agency')html+='<p><small>Current API capacity; verify again if changing flight class or perks.</small></p>';
     }else if(ctx)html+='<p><small>Actual travel inventory unavailable; no verified free-slot count yet.</small></p>';
-    const ranked=museumCountries.filter(c=>c!=='Torn').map(c=>museumCountryPlan(plan,c,available??0)).filter(p=>p.museumUsed>0).sort((a,b)=>b.points-a.points||b.progress-a.progress);
-    if(ranked.length){const best=ranked[0],cash=museumCashPlan(best);html+='<p><b>Next trip to consider:</b> '+esc(best.country)+' · '+best.points+' extra points immediately · '+best.progress+' missing pieces addressed'+(cash.carry!==null?' · carry '+fmt(cash.carry):' · cash not fully priced')+' (estimated, before travel costs).</p>';}
-    if(country&&available!==null){
-      const suggested=museumCountryPlan(plan,country,available,shelf),cash=museumCashPlan(suggested,shelf);
+    const candidates=country?[country]:plan.away?[]:museumCountries.filter(c=>c!=='Torn');
+    const options=available===null?[]:candidates.filter(c=>c!=='Torn').map(c=>{
+      const bag=museumCountryPlan(plan,c,available,shelf),cash=museumCashPlan(bag,shelf);
+      return {bag,cash,comparison:museumComparison(plan,bag,cash,ctx,plan.away)};
+    });
+    const best=options.filter(o=>country||o.bag.museumUsed).sort((a,b)=>{
+      const profitable=Number(b.comparison.decision==='museum')-Number(a.comparison.decision==='museum');
+      if(profitable)return profitable;
+      if(a.comparison.decision==='museum'&&b.comparison.decision==='museum')return b.comparison.saving-a.comparison.saving;
+      return b.bag.points-a.bag.points||b.bag.progress-a.bag.progress;
+    })[0];
+    if(best){
+      const pos=html.indexOf('</header>')+9;
+      html=html.slice(0,pos)+museumDecisionHTML(best.bag,best.comparison)+html.slice(pos);
+    }
+    if(best&&country&&available!==null){
+      const {bag:suggested,cash,comparison}=best;
+      const optional=comparison.decision==='market';
+      if(optional)html+='<details data-view-key="museum-alternative-bag"><summary>Shopping list if you travel anyway</summary>';
       const wallet=liveWalletCashV113();
       html+='<div style="padding:9px;margin:8px 0;border:1px solid #49708b;border-radius:6px"><small>'+ (plan.away?'Cash needed for remaining purchases':'Recommended cash to take')+'</small><br><strong class="points" style="font-size:20px">'+(cash.carry===null?'Not fully priced':fmt(cash.carry))+'</strong><p><small>Shopping '+fmt(cash.subtotal)+(cash.missing.length?' priced so far · missing '+esc(cash.missing.join(', ')):' · '+cash.buffer+'% buffer '+fmt(cash.extra))+' · excludes fares and unrelated purchases.</small></p>'+(cash.estimated?'<small>Estimated from reported, catalogue or published prices; variable prices may change. Verify on arrival.</small>':'')+(wallet!==null&&cash.carry!==null?'<p><small>'+ (wallet<cash.carry?'Cash shortfall '+fmt(cash.carry-wallet):'Current wallet covers this plan')+' · wallet '+fmt(wallet)+'</small></p>':'')+'</div>';
       html+='<p><b>Suggested bag:</b> '+suggested.used+' / '+available+' '+(luggage?'verified ordinary free':'configured estimate')+' slots'+(suggested.points?' · +'+suggested.points+' pts':'')+'</p>';
@@ -2095,7 +2236,8 @@
       if(suggested.unfilled)html+='<p><small>'+suggested.unfilled+' slots unfilled: no further qualifying purchases within the trading cap. Refresh prices or check stock on arrival.</small></p>';
       if(Object.keys(suggested.conditional).length)html+='<p><small>Conditional fillers use indicative market values or unverified stock; buy only if available and still profitable.</small></p>';
       if(travelState.error)html+='<p><small>'+esc(travelState.error)+'</small></p>';
-    }else if(ctx)html+='<p><small>Remaining luggage unknown; check Torn before buying.</small></p>';
+      if(optional)html+='</details>';
+    }else if(ctx&&available===null)html+='<p><small>Remaining luggage unknown; check Torn before buying.</small></p>';
     const source=plan.hasInventory?(now()-state.inventorySourceAt>=3600000?'Saved inventory · ':'Inventory · ')+age(state.inventorySourceAt):
       state.inventoryBusy?'Checking inventory…':Object.keys(state.settings.museumOwned||{}).length?'Manually recorded quantities':'No inventory synced';
     html+='<p><small>'+esc(source)+(plan.hasInventory?(plan.cabinetKnown?' · Display included':' · Display unverified'):'')+(plan.away?(plan.bagKnown?' · Travel bag included':' · Bag unverified, check carried items'):'')+'</small></p>';
@@ -2126,11 +2268,11 @@
     html+='<p><small>Exchange at the Torn Museum after completing the History bachelor. Standard points exclude event bonuses. Displayed items can be taken out in Torn. Bazaar listings are excluded. Check shop stock before buying.</small></p>';
     if(state.inventoryError)html+='<p><small>'+esc(state.inventoryError)+'</small></p>';
     html+='<div>';
-    if(ctx&&(!plan.away||!plan.destination)){
+    if(ctx&&!workspace&&(!plan.away||!plan.destination)){
       html+='<select aria-label="Preview museum items by destination" data-museum-preview><option value="">'+(plan.destination?'Follow Torn destination':'Preview a destination')+'</option>'+
         museumCountries.map(c=>'<option'+(c===countryOverride?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select>';
     }
-    if(ctx)html+='<button type="button" data-museum-open="'+(apiKey()?'museum':'settings')+'">'+(apiKey()?'Museum planner':'Connect inventory')+'</button>';
+    if(ctx&&!workspace)html+='<button type="button" data-museum-open="'+(apiKey()?'museum':'settings')+'">'+(apiKey()?'Museum planner':'Connect inventory')+'</button>';
     if(apiKey())html+='<button type="button" data-action="museum-travel-refresh"'+(state.inventoryBusy?' disabled':'')+'>Refresh</button>';
     if(apiKey())html+='<button type="button" data-action="museum-price-refresh"'+(museumPricesBusy?' disabled':'')+'>'+(museumPricesBusy?'Checking prices...':'Refresh museum prices')+'</button>';
     if(museumPricesError)html+='<small>'+esc(museumPricesError)+'</small>';
@@ -2157,7 +2299,7 @@
   function syncMuseumTravel(force=false){
     if(!routeStoreReady||document.hidden)return;
     captureMuseumNative();
-    if(state.open&&['travel','museum'].includes(state.tab)){checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumShelfPrices(force);}
+    if(state.open&&['travel','museum'].includes(state.tab)){checkMuseumPoints(force);checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumShelfPrices(force);}
     let enabled=true;try{enabled=JSON.parse(localStorage.getItem('staxx-hub-context-v1')||'true')!==false;}catch(_){}
     const ctx=enabled?museumTravelContext():null;
     if(!ctx){
@@ -2168,7 +2310,7 @@
     if(ctx.key!==museumTrip.key)Object.assign(museumTrip,{key:ctx.key,checked:0,busy:false,travel:null,bag:null,used:null,luggage:null,failed:false});
     const viewKey=ctx.key+'/'+ctx.country;
     if(viewKey!==museumContextKey){museumContextKey=viewKey;museumPreview='';}
-    checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumTrip(ctx,force);void refreshMuseumShelfPrices(force);void checkMuseumCatalogue();
+    checkMuseumPoints(force);checkMuseumInventory(force);void checkMuseumCabinet(force);void refreshMuseumTrip(ctx,force);void refreshMuseumShelfPrices(force);void checkMuseumCatalogue();
     if(!museumHost){
       museumHost=document.createElement('div');museumHost.id='ps-museum-travel';
       const shadow=museumHost.attachShadow({mode:'open'});
@@ -2178,6 +2320,7 @@
         const button=event.target.closest('button');
         if(button?.dataset.museumOpen){state.tab=button.dataset.museumOpen;state.open=true;render();}
         if(button?.dataset.action==='museum-travel-refresh')syncMuseumTravel(true);
+        if(button?.dataset.action==='museum-time-settings')openMuseumTimeSettings();
         if(button?.dataset.action==='museum-price-refresh')void refreshMuseumPrices();
       });
       shadow.addEventListener('change',event=>{
@@ -2191,18 +2334,26 @@
     if(html===museumMarkup)return;
     museumMarkup=html;
     const shadow=museumHost.shadowRoot,body=shadow.lastElementChild;
-    const open=body.querySelector('details')?.open,focus=shadow.activeElement;
+    const open=new Set([...body.querySelectorAll('details[open]')].map(el=>el.dataset.viewKey)),focus=shadow.activeElement;
     const focusIndex=[...body.querySelectorAll('summary,select,button,a')].indexOf(focus);
-    body.innerHTML=html;body.querySelector('details').open=!!open;
+    body.innerHTML=html;for(const el of body.querySelectorAll('details'))el.open=open.has(el.dataset.viewKey);
     if(focusIndex>=0)body.querySelectorAll('summary,select,button,a')[focusIndex]?.focus({preventScroll:true});
+  }
+
+  function openMuseumTimeSettings(){
+    state.tab='travel';state.open=true;render();
+    const input=shell?.querySelector('#ps_museumHourValue');
+    input?.scrollIntoView({block:'center'});input?.focus({preventScroll:true});
   }
 
   function renderTravel(){
     const rows=travelRows(),fresh=rows.filter(x=>x.valid),priced=rows.filter(x=>x.net!==null).length;
-    let h='<style>'+museumTravelStyle+'</style>'+museumTravelHTML(null)+'<div class="card"><h3>Foreign-shop profit scanner</h3>'+
+    let h='<style>'+museumTravelStyle+'</style>'+museumTravelHTML(museumTravelContext(),museumPreview,true)+'<div class="card"><h3>Foreign-shop profit scanner</h3>'+
       '<p class="muted">Optional third-party public observation data from Torn Tracker, checked automatically when Torn is in the foreground (or on demand). No API key, identity or stored trading record is sent. <a href="https://torn-tracker.com/guide/website/developer-api/" target="_blank" rel="noopener noreferrer">Data: torn-tracker.com contributors</a> (CC BY 4.0) and <a href="https://yata.yt/" target="_blank" rel="noopener noreferrer">YATA</a>. Shelf stock is reported by players and may disappear before arrival. Estimated resale uses recent Torn Item Market asking prices less 5%.</p>'+
       '<form id="ps_travelsettings"><div class="duo">'+field('travelCapacity','Carry capacity (items)',state.settings.travelCapacity||10)+
-      field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+field('museumCashBuffer','Museum cash buffer (%)',state.settings.museumCashBuffer??5)+'</div>'+
+      field('travelMinProfit','Minimum trip profit ($)',state.settings.travelMinProfit||0)+field('museumCashBuffer','Museum cash buffer (%)',state.settings.museumCashBuffer??5)+
+      field('museumHourValue','Value of time away ($/hour)',state.settings.museumHourValue,'number','min="0" max="1000000000"')+
+      field('museumStopMinutes','Extra minutes to shop and exchange',state.settings.museumStopMinutes,'number','min="0" max="240"')+'</div>'+
       '<div class="field"><label>Round-trip minutes by destination (country=minutes; include shop time)</label>'+
       '<textarea name="travelMinutes" rows="3" style="width:100%;background:#061b31;color:white;border:1px solid #325c79;border-radius:8px;padding:9px" placeholder="mex=180">'+esc(state.settings.travelMinutes||'')+'</textarea></div>'+
       '<button class="btn secondary" type="submit">Save travel limits</button></form></div>'+
@@ -2878,7 +3029,7 @@
     return html;
   }
   function renderMuseum(){
-    let html='<style>'+museumTravelStyle+'</style>'+museumTravelHTML(null)+'<div class="statrow"><div class="stat"><small>Cheapest point ask</small><b>'+fmt(state.pointsPrice)+'</b></div>'+
+    let html='<style>'+museumTravelStyle+'</style>'+museumTravelHTML(museumTravelContext(),museumPreview,true)+'<div class="statrow"><div class="stat"><small>Cheapest point ask</small><b>'+fmt(state.pointsPrice)+'</b></div>'+
       '<div class="stat"><small>Museum access</small><b>Check in Torn</b></div></div>';
     html+=notice('Flowers and plushies earn 10 points per set, arrowheads earn 25. Fossils earn 20 each and meteorite fragments earn 15 each. Standard exchange values. Cash cost assumes Item Market purchases; points revenue uses the lowest ASK, not guaranteed proceeds.');
     html+='<div class="toolbar"><button class="btn secondary" data-action="inventoryscan" '+(state.inventoryBusy?'disabled':'')+'>'+
@@ -3165,7 +3316,8 @@
       case 'stock-log-toggle':state.settings.stockLogSync=state.settings.stockLogSync===false;state.stockLogRetryAt=0;state.stockLogCheckedAt=0;persist();render();if(state.settings.stockLogSync)void refreshStockCashLogs(true);break;
       case 'stock-reminders':state.settings.stockClaimReminders=state.settings.stockClaimReminders!==true;persist();render();break;
       case 'travelscan':scanTravel();break;
-      case 'museum-travel-refresh':checkMuseumInventory(true);void checkMuseumCabinet(true);void refreshMuseumShelfPrices(true);break;
+      case 'museum-travel-refresh':syncMuseumTravel(true);break;
+      case 'museum-time-settings':openMuseumTimeSettings();break;
       case 'museum-price-refresh':void refreshMuseumPrices();break;
       case 'inventoryscan':refreshInventoryV112();void checkMuseumCabinet(true);break;
       case 'rank-open':{
@@ -3314,6 +3466,8 @@
       event.preventDefault();const f=new FormData(event.target);
       state.settings.travelCapacity=clamp(Math.floor(number(f.get('travelCapacity'))||10),1,200);
       state.settings.travelMinProfit=clamp(number(f.get('travelMinProfit')),0,1e12);
+      state.settings.museumHourValue=clamp(number(f.get('museumHourValue')),0,1000000000);
+      state.settings.museumStopMinutes=clamp(number(f.get('museumStopMinutes')),0,240);
       state.settings.museumCashBuffer=clamp(number(f.get('museumCashBuffer')),0,25);
       state.settings.travelMinutes=String(f.get('travelMinutes')||'').slice(0,1500);persist();render();
     }else if(event.target.id==='ps_passive'){
@@ -3588,6 +3742,7 @@
       state.snapshots=loaded.snapshots||{};
       state.pointsPrice=number(loaded.pointsPrice);
       state.pointsCheckedAt=number(loaded.pointsCheckedAt);
+      state.pointsLots=Array.isArray(loaded.pointsLots)?loaded.pointsLots.filter(validPointLot):[];
       state.lastScan=number(loaded.lastScan);
       state.status='Ready · '+state.storage+' storage';
     }catch(e){state.error='Could not restore local data: '+e.message;}
